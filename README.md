@@ -137,22 +137,22 @@ Both team members work together on:
 
 # 🛠️ Technology Stack
 
-| Area | Technology |
-|---|---|
-| Satellite Data | NASA VIIRS VNP46A2 |
-| Additional Baseline Data | NOAA VCMSLCFG |
-| Satellite Processing | Google Earth Engine |
-| Data Processing | Python / Pandas |
-| Backend | FastAPI |
-| Database | SQLite |
-| API Server | Uvicorn |
-| Frontend | HTML / CSS / Vanilla JavaScript |
-| Mapping | Leaflet.js |
-| Geographic Data | GeoJSON |
-| Charts | Chart.js |
-| AI | Gemini API |
-| Containerization | Docker |
-| Source Control | Git / GitHub |
+| Area                     | Technology                      |
+| ------------------------ | ------------------------------- |
+| Satellite Data           | NASA VIIRS VNP46A2              |
+| Additional Baseline Data | NOAA VCMSLCFG                   |
+| Satellite Processing     | Google Earth Engine             |
+| Data Processing          | Python / Pandas                 |
+| Backend                  | FastAPI                         |
+| Database                 | SQLite                          |
+| API Server               | Uvicorn                         |
+| Frontend                 | HTML / CSS / Vanilla JavaScript |
+| Mapping                  | Leaflet.js                      |
+| Geographic Data          | GeoJSON                         |
+| Charts                   | Chart.js                        |
+| AI                       | Gemini API                      |
+| Containerization         | Docker                          |
+| Source Control           | Git / GitHub                    |
 
 ---
 
@@ -666,34 +666,34 @@ The project should prioritize **correct data and a working system over extra fea
 
 # 👥 Responsibility Summary
 
-| Area | James | Katherine |
-|---|:---:|:---:|
-| Requirements | 🤝 | 🤝 |
-| Architecture | 🤝 | 🤝 |
-| GEE | ✅ | |
-| VIIRS Data | ✅ | |
-| Data Cleaning | ✅ | |
-| Municipality Aggregation | ✅ | |
-| Recovery Calculation | ✅ | |
-| Recovery Engine | ✅ | |
-| SQLite | ✅ | |
-| FastAPI | ✅ | |
-| API Testing | ✅ | 🤝 |
-| GeoJSON | | ✅ |
-| Leaflet | | ✅ |
-| HTML/CSS | | ✅ |
-| Responsive UI | | ✅ |
-| Chart.js | | ✅ |
-| Recovery Map | | 🤝 |
-| Recovery Charts | | 🤝 |
-| Gemini Backend | ✅ | |
-| Gemini UI | | ✅ |
-| Integration | 🤝 | 🤝 |
-| Testing | 🤝 | 🤝 |
-| Deployment | 🤝 | 🤝 |
-| Documentation | 🤝 | 🤝 |
-| Video | 🤝 | 🤝 |
-| Final Submission | 🤝 | 🤝 |
+| Area                     | James | Katherine |
+| ------------------------ | :---: | :-------: |
+| Requirements             |   🤝   |     🤝     |
+| Architecture             |   🤝   |     🤝     |
+| GEE                      |   ✅   |           |
+| VIIRS Data               |   ✅   |           |
+| Data Cleaning            |   ✅   |           |
+| Municipality Aggregation |   ✅   |           |
+| Recovery Calculation     |   ✅   |           |
+| Recovery Engine          |   ✅   |           |
+| SQLite                   |   ✅   |           |
+| FastAPI                  |   ✅   |           |
+| API Testing              |   ✅   |     🤝     |
+| GeoJSON                  |       |     ✅     |
+| Leaflet                  |       |     ✅     |
+| HTML/CSS                 |       |     ✅     |
+| Responsive UI            |       |     ✅     |
+| Chart.js                 |       |     ✅     |
+| Recovery Map             |       |     🤝     |
+| Recovery Charts          |       |     🤝     |
+| Gemini Backend           |   ✅   |           |
+| Gemini UI                |       |     ✅     |
+| Integration              |   🤝   |     🤝     |
+| Testing                  |   🤝   |     🤝     |
+| Deployment               |   🤝   |     🤝     |
+| Documentation            |   🤝   |     🤝     |
+| Video                    |   🤝   |     🤝     |
+| Final Submission         |   🤝   |     🤝     |
 
 ---
 
@@ -744,3 +744,14 @@ SANAG is complete when:
 ## 🏁 SANAG in One Sentence
 
 > **SANAG uses satellite nighttime-light data to help visualize and measure how Panay Island municipalities recover from major disasters and power disruptions.**
+>
+> # James Phillip De Guzman
+
+> **Favorite Quote 1 (Alma 37:6):** Now, ye may suppose that this is foolishness in me; but behold I say unto you, that by small and simple things are great things brought to pass; and small means in many instances doth confound the wise.
+> 
+> **Favorite Quote 2 (Mosiah 2:17):** And behold, I tell you these things that ye may learn wisdom; that ye may learn that when ye are in the service of your fellow beings ye are only in the service of your God.
+
+
+# Katherine Cendana
+
+> **Favorite Quote (3 Nephi 13:24):** No man can serve two masters; for either he will hate the one and love the other, or else he will hold to the one and despise the other.
