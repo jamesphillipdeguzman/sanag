@@ -1,0 +1,38 @@
+# ==============================================================================
+# SANAG Project .gitignore
+# ==============================================================================
+
+# 1. Environment Variables & Secrets
+# NEVER commit the Gemini API key or Google Earth Engine credentials
+.env
+.env.*
+*.pem
+credentials.json
+
+# 2. Python & Virtual Environments
+# Ignore the local sandbox we just built
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 3. SQLite Database
+# Prevent local testing data from overwriting the production database
+*.db
+*.sqlite
+*.sqlite3
+backend/db/*.db
+
+# 4. OS & IDE Configuration
+# Ignore Mac/Windows system files and personal editor settings
+.DS_Store
+Thumbs.db
+.vscode/
+
+# 5. Docker (Optional local volume data)
+# Ignore local Docker volume mounts if you add them later
+.docker/
+docker-data/
