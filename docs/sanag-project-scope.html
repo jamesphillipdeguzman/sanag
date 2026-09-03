@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SANAG — Team Scope & Sprint Plan</title>
+  <style>
+    :root {
+      --primary: #0f172a;
+      --accent: #0284c7;
+      --accent-light: #e0f2fe;
+      --text: #334155;
+      --text-dark: #0f172a;
+      --border: #cbd5e1;
+      --bg-light: #f8fafc;
+      --bg-subtle: #f1f5f9;
+      --success: #16a34a;
+      --success-bg: #dcfce7;
+      --warning: #ca8a04;
+      --danger: #dc2626;
+    }
+
+    @page {
+      size: letter;
+      margin: 16mm 14mm;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 10pt;
+      background-color: #fff;
+      margin: 0;
+      padding: 24px;
+    }
+
+    .doc-container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .header-card {
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 16px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 22pt;
+      color: var(--text-dark);
+      margin: 0 0 4px 0;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 13pt;
+      color: var(--accent);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .doc-meta {
+      font-size: 9.5pt;
+      color: #64748b;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 8px;
+    }
+
+    h2 {
+      font-size: 13pt;
+      color: var(--text-dark);
+      border-bottom: 1.5px solid var(--border);
+      padding-bottom: 4px;
+      margin-top: 26px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h3 {
+      font-size: 11pt;
+      color: var(--accent);
+      margin: 14px 0 6px 0;
+    }
+
+    p {
+      margin: 6px 0 10px 0;
+    }
+
+    ul {
+      margin: 6px 0 12px 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 3px;
+    }
+
+    .pipeline-bar {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 9pt;
+      font-weight: 600;
+      color: var(--accent);
+      text-align: center;
+      margin: 12px 0 16px 0;
+    }
+
+    .rule-box {
+      background-color: #eff6ff;
+      border-left: 4px solid var(--accent);
+      padding: 10px 14px;
+      margin: 12px 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 9.5pt;
+    }
+
+    .formula-box {
+      background-color: var(--bg-light);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 10px 0 14px 0;
+    }
+
+    .formula-title {
+      font-weight: bold;
+      color: var(--text-dark);
+      font-size: 10.5pt;
+      margin-bottom: 4px;
+    }
+
+    .formula-code {
+      font-family: "Courier New", Courier, monospace;
+      font-weight: bold;
+      color: #0369a1;
+      font-size: 11pt;
+    }
+
+    .directory-tree {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 9pt;
+      line-height: 1.4;
+      white-space: pre;
+      overflow-x: auto;
+      color: #334155;
+    }
+
+    .dir-comment {
+      color: #64748b;
+      font-style: italic;
+    }
+
+    /* Tables */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      margin: 12px 0 18px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9pt;
+      text-align: left;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background-color: var(--bg-subtle);
+      color: var(--text-dark);
+      font-weight: 600;
+    }
+
+    tr:nth-child(even) {
+      background-color: var(--bg-light);
+    }
+
+    .check {
+      color: var(--success);
+      font-weight: bold;
+      text-align: center;
+      display: block;
+      font-size: 11pt;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 8pt;
+      font-weight: 600;
+    }
+
+    .badge-james {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+
+    .badge-katherine {
+      background-color: #fce7f3;
+      color: #9d174d;
+    }
+
+    .badge-shared {
+      background-color: #ede9fe;
+      color: #5b21b6;
+    }
+
+    .dod-box {
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-top: 10px;
+    }
+
+    .dod-title {
+      font-weight: bold;
+      color: #166534;
+      margin-bottom: 4px;
+      font-size: 9pt;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .dod-box ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .dod-box li {
+      color: #15803d;
+      margin-bottom: 2px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+      .page-break {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="doc-container">
+
+  <!-- Document Header -->
+  <div class="header-card">
+    <h1>SANAG — Senior Project</h1>
+    <div class="subtitle">Satellite Analytics for Nightlight &amp; Assessment Grid</div>
+    <div style="font-weight: 600; color: var(--text-dark); margin-top: 4px;">Team Scope &amp; Sprint Plan</div>
+    <div class="doc-meta">
+      <span><strong>Team:</strong> James (Data &amp; Backend Lead) | Katherine (Frontend &amp; UI/UX Lead)</span>
+      <span><strong>Focus:</strong> Panay Island, Philippines</span>
+    </div>
+  </div>
+
+  <!-- Section 1 -->
+  <h2>1. Project Overview</h2>
+  <p>
+    <strong>SANAG (Satellite Analytics for Nightlight &amp; Assessment Grid)</strong> is a satellite-based disaster and power-recovery dashboard focused on Panay Island, covering the four provinces of <strong>Aklan, Antique, Capiz, and Iloilo</strong>.
+  </p>
+  <p>
+    The system uses freely available NASA VIIRS nighttime-light satellite data to analyze changes in nighttime brightness before, during, and after a disaster or major power disruption. The ultimate goal is to provide an understandable, data-driven way to examine how quickly municipalities bounce back from widespread infrastructure failures.
+  </p>
+
+  <div class="pipeline-bar">
+    Core Concept: Satellite Data → Data Processing → Recovery Calculation → Database → API → Map &amp; Charts → AI Explanation
+  </div>
+
+  <!-- Section 2 & 3: Team Roles -->
+  <h2>2. Team Roles &amp; Responsibilities</h2>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 25%;">Role &amp; Core Question</th>
+          <th style="width: 35%;">Primary Responsibilities</th>
+          <th style="width: 40%;">Core Mission</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>James</strong><br>
+            <span class="badge badge-james">Data &amp; Backend Lead</span>
+            <p style="font-size: 8.5pt; margin-top: 8px; font-style: italic;">
+              "Can we trust the data and calculations behind SANAG?"
+            </p>
+          </td>
+          <td>
+            <ul>
+              <li>Google Earth Engine authentication &amp; ingestion</li>
+              <li>NASA VIIRS satellite processing &amp; cleaning</li>
+              <li>Data validation &amp; municipal aggregation</li>
+              <li>Baseline &amp; post-event metric equations</li>
+              <li>Recovery Ratio &amp; classification logic</li>
+              <li>SQLite schema &amp; FastAPI/Flask service</li>
+              <li>REST endpoints &amp; error handling</li>
+              <li>Gemini API analytical integration</li>
+              <li>Pipeline reproducibility &amp; backend deployment</li>
+            </ul>
+          </td>
+          <td>
+            James is responsible for the technical, analytical, and data-heavy side of SANAG. He handles the difficult backend algorithms and ensures all numbers displayed across the system are statistically sound, reproducible, and verifiable against ground truths.
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <strong>Katherine</strong><br>
+            <span class="badge badge-katherine">Frontend &amp; UI/UX Lead</span>
+            <p style="font-size: 8.5pt; margin-top: 8px; font-style: italic;">
+              "Can users easily understand what the data is telling them?"
+            </p>
+          </td>
+          <td>
+            <ul>
+              <li>HTML semantic structure &amp; CSS styling</li>
+              <li>Responsive mobile/low-bandwidth layout</li>
+              <li>Leaflet.js Panay map implementation</li>
+              <li>Municipal boundaries &amp; GeoJSON integration</li>
+              <li>Choropleth tiers (Red / Yellow / Green)</li>
+              <li>Chart.js recovery bounce-back curves</li>
+              <li>Municipality &amp; event selector controls</li>
+              <li>System loading &amp; error application states</li>
+              <li>Gemini situational briefing UI panel</li>
+              <li>Interface polish &amp; frontend deployment</li>
+            </ul>
+          </td>
+          <td>
+            Katherine is responsible for the user-facing presentation of SANAG. Her mission is to transform raw numbers into intuitive, scannable visualizations, ensuring municipal planners, response units, and the public can immediately digest recovery statuses.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rule-box">
+    <strong>Team Golden Rule:</strong> James makes the data trustworthy. Katherine makes the data understandable. Both make sure the complete system works.
+  </div>
+
+  <h3>Shared Responsibilities</h3>
+  <p>Both team members actively participate in project planning, architecture reviews, GitHub version control (branching, PRs, code reviews), integration testing, cross-browser validation, final documentation, the demonstration video, and capstone presentation defense.</p>
+
+  <!-- Section 5: Functional Requirements -->
+  <h2>3. Functional Requirements</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 12%;">ID</th>
+          <th style="width: 68%;">Requirement Description</th>
+          <th style="width: 20%;">Primary Lead</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>FR-01</strong></td><td>Users can view an interactive map of Panay municipalities.</td><td><span class="badge badge-katherine">Katherine</span></td></tr>
+        <tr><td><strong>FR-02</strong></td><td>Users can view satellite nighttime-light information.</td><td><span class="badge badge-james">James</span></td></tr>
+        <tr><td><strong>FR-03</strong></td><td>Users can select a historical disaster or power disruption event.</td><td><span class="badge badge-shared">Shared</span></td></tr>
+        <tr><td><strong>FR-04</strong></td><td>The system compares baseline and post-event radiance conditions.</td><td><span class="badge badge-james">James</span></td></tr>
+        <tr><td><strong>FR-05</strong></td><td>The system calculates an objective municipal Recovery Ratio.</td><td><span class="badge badge-james">James</span></td></tr>
+        <tr><td><strong>FR-06</strong></td><td>Municipalities receive recovery-status classifications (Red / Yellow / Green).</td><td><span class="badge badge-shared">Shared</span></td></tr>
+        <tr><td><strong>FR-07</strong></td><td>Users can view day-by-day recovery trends on time-series charts.</td><td><span class="badge badge-katherine">Katherine</span></td></tr>
+        <tr><td><strong>FR-08</strong></td><td>Users can compare recovery velocity between municipalities.</td><td><span class="badge badge-katherine">Katherine</span></td></tr>
+        <tr><td><strong>FR-09</strong></td><td>The system provides an automated Gemini AI situational briefing.</td><td><span class="badge badge-shared">Shared</span></td></tr>
+        <tr><td><strong>FR-10</strong></td><td>The interface is fully responsive and optimized for low-bandwidth mobile data.</td><td><span class="badge badge-katherine">Katherine</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Section 6: Recovery Formula -->
+  <h2>4. Scientific Recovery Formula</h2>
+  <div class="formula-box">
+    <div class="formula-title">Mathematical Definition:</div>
+    <div class="formula-code">Recovery Ratio = Post-Event Light ÷ Baseline Light</div>
+    <p style="margin: 6px 0 0 0; font-size: 9pt;">
+      <strong>Example:</strong> If a municipality normally registers a nighttime radiance value of <strong>100</strong> and falls to <strong>80</strong> post-disaster:<br>
+      <code>Recovery Ratio = 80 ÷ 100 = 0.80 (80% of normal baseline).</code>
+    </p>
+  </div>
+  <div class="rule-box" style="border-left-color: #dc2626; background-color: #fef2f2;">
+    <strong>Important Architecture Rule:</strong> The application backend calculates all scientific metrics. Gemini only explains the results in plain text. Gemini must never be used to compute or derive numerical Recovery Ratios.
+  </div>
+
+  <!-- Section 7: User Stories -->
+  <h2>5. User Stories</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 10%;">ID</th>
+          <th style="width: 70%;">User Story</th>
+          <th style="width: 20%;">Ownership</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>US-01</strong></td>
+          <td><strong>As a data analyst</strong>, I want to retrieve VIIRS nighttime-light data for Panay so that I can measure changes associated with disasters and power disruptions.</td>
+          <td><span class="badge badge-james">James</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-02</strong></td>
+          <td><strong>As a user</strong>, I want to see Panay's municipalities on a map so that I can understand where recovery measurements are occurring.</td>
+          <td><span class="badge badge-katherine">Katherine</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-03</strong></td>
+          <td><strong>As a user</strong>, I want to select a historical disaster or blackout event so that I can examine how nighttime-light conditions changed around the event.</td>
+          <td><span class="badge badge-james">James (Lead)</span><br><span class="badge badge-katherine">Katherine</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-04</strong></td>
+          <td><strong>As a disaster analyst</strong>, I want a consistent recovery score so that I can compare municipalities objectively.</td>
+          <td><span class="badge badge-james">James</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-05</strong></td>
+          <td><strong>As a user</strong>, I want municipalities colored according to recovery status so that I can quickly identify areas that may still be affected.</td>
+          <td><span class="badge badge-katherine">Katherine (Lead)</span><br><span class="badge badge-james">James</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-06</strong></td>
+          <td><strong>As a user</strong>, I want to see a day-by-day recovery curve so that I can understand how quickly an area returned toward its baseline.</td>
+          <td><span class="badge badge-katherine">Katherine (Lead)</span><br><span class="badge badge-james">James</span></td>
+        </tr>
+        <tr>
+          <td><strong>US-07</strong></td>
+          <td><strong>As an LGU or general user</strong>, I want a plain-English summary of the recovery data so that I can understand key findings without interpreting charts myself.</td>
+          <td><span class="badge badge-james">James (Backend)</span><br><span class="badge badge-katherine">Katherine (UI)</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- Section 8: Week 1 Foundation -->
+  <h2>6. Sprint Schedule &amp; Execution Roadmap</h2>
+
+  <h3>Week 1 — Requirements, Architecture &amp; Environment Foundation</h3>
+  <p><em>Focus: Establish working developer toolchains, align on data schemas, and freeze project scope.</em></p>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 33%;">James (Data &amp; Backend)</th>
+          <th style="width: 33%;">Katherine (Frontend &amp; UI)</th>
+          <th style="width: 34%;">Shared Foundation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li>Review project requirements</li>
+              <li>Finalize recovery methodology</li>
+              <li>Set up Python virtual environment</li>
+              <li>Configure Google Earth Engine</li>
+              <li>Test GEE authentication</li>
+              <li>Execute sample VIIRS query</li>
+              <li>Confirm VNP46A2 collection access</li>
+              <li>Research Jan 2024 Panay outage data</li>
+              <li>Draft database &amp; API schemas</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Review UI/UX requirements</li>
+              <li>Draft dashboard layout wireframe</li>
+              <li>Acquire Panay municipal GeoJSON</li>
+              <li>Validate municipality names &amp; IDs</li>
+              <li>Initialize semantic HTML scaffold</li>
+              <li>Set up responsive CSS layout</li>
+              <li>Research Leaflet.js implementation</li>
+              <li>Plan map and chart UI regions</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Freeze scope and technical architecture</li>
+              <li>Initialize GitHub repo &amp; branch rules</li>
+              <li>Establish common folder structure</li>
+              <li>Document Recovery Ratio methodology</li>
+              <li>Define minimum viable product limits</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dod-box">
+    <div class="dod-title">Week 1 Definition of Done</div>
+    <ul>
+      <li>Project scope is frozen and GitHub repository is configured.</li>
+      <li>James successfully authenticates with GEE and pulls test VIIRS arrays.</li>
+      <li>Katherine integrates validated Panay GeoJSON into an initial HTML/CSS shell.</li>
+      <li>Recovery methodology is documented and understood by both team members.</li>
+    </ul>
+  </div>
+
+  <!-- Section 9: Sprint 1 -->
+  <h3>Sprint 1 (Week 2) — Historical VIIRS Data &amp; Panay Base Map</h3>
+  <p><em>Sprint Goal: Prove that SANAG can obtain satellite data and display the Panay geographic foundation.</em></p>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50%;">James: Historical VIIRS Ingestion</th>
+          <th style="width: 50%;">Katherine: Panay Base Map &amp; Responsive UI</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li>Authenticate GEE automated service</li>
+              <li>Query NASA VIIRS VNP46A2 for Panay boundary</li>
+              <li>Retrieve observations for January 2024 window</li>
+              <li>Filter noise, stray moonlight, and clouded tiles</li>
+              <li>Format extracted values for municipality aggregation</li>
+            </ul>
+            <strong>Output:</strong> Executable Python process delivering clean nighttime-light observations.
+          </td>
+          <td>
+            <ul>
+              <li>Build base <code>index.html</code> and mobile-ready CSS</li>
+              <li>Initialize Leaflet.js centered on Panay Island</li>
+              <li>Load and render municipal GeoJSON boundaries</li>
+              <li>Verify boundary identifiers match backend keys</li>
+            </ul>
+            <strong>Output:</strong> Responsive web application displaying Panay municipal boundaries.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dod-box">
+    <div class="dod-title">Sprint 1 Definition of Done</div>
+    <ul>
+      <li>GEE ingestion queries successfully return January 2024 Panay observations.</li>
+      <li>Leaflet.js renders all Panay municipalities with clean, validated ID mappings.</li>
+      <li>Team demonstrates functional integration: Satellite Data → Municipality → Map.</li>
+    </ul>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- Section 10: Sprint 2 -->
+  <h3>Sprint 2 (Week 3) — Recovery Engine &amp; Backend API</h3>
+  <p><em>Sprint Goal: Turn raw satellite observations into reproducible municipality-level recovery metrics.</em></p>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50%;">James: Engine, SQLite &amp; REST Endpoints</th>
+          <th style="width: 50%;">Katherine: API Integration &amp; UI States</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li>Define pre-disaster baseline, impact, and post-event windows</li>
+              <li>Implement scientific Recovery Ratio formula</li>
+              <li>Design SQLite schema and persist historical indices</li>
+              <li>Build FastAPI endpoints (<code>/events</code>, <code>/resilience/timeline</code>)</li>
+              <li>Implement error handling and input validation</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Define expected API response contracts with James</li>
+              <li>Build asynchronous fetch handlers for REST endpoints</li>
+              <li>Implement UI loading spinners and error state containers</li>
+              <li>Construct dropdown selectors for historical events and towns</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dod-box">
+    <div class="dod-title">Sprint 2 Definition of Done</div>
+    <ul>
+      <li>Recovery pipeline calculates valid recovery scores across January 2024 blackout dates.</li>
+      <li>SQLite database stores structured records; REST API serves JSON to client requests.</li>
+      <li>Frontend successfully fetches and parses backend responses without crashes.</li>
+    </ul>
+  </div>
+
+  <!-- Section 11: Sprint 3 -->
+  <h3>Sprint 3 (Week 4) — Visualization &amp; UI Analytics</h3>
+  <p><em>Sprint Goal: Turn the analytical results into understandable, interactive visualizations.</em></p>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50%;">James: Data Verification &amp; Aggregation</th>
+          <th style="width: 50%;">Katherine: Choropleth Map &amp; Chart.js Curves</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li>Validate timeline series against ground-truth logs</li>
+              <li>Verify municipal recovery scores and ranking order</li>
+              <li>Format multi-town comparative payload responses</li>
+              <li>Resolve edge-case backend data anomalies</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Bind Leaflet boundaries to Recovery Tiers (Red / Yellow / Green)</li>
+              <li>Build interactive map tooltips and dynamic legends</li>
+              <li>Render Chart.js bounce-back curves with baseline reference lines</li>
+              <li>Enable cross-filtering between clicked map polygons and charts</li>
+              <li>Execute mobile viewport and performance audits</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dod-box">
+    <div class="dod-title">Sprint 3 Definition of Done</div>
+    <ul>
+      <li>Choropleth map reflects real recovery tiers; charts plot day-by-day bounce-back curves.</li>
+      <li>Event and town selectors update both map and charts dynamically.</li>
+      <li>UI values strictly match numbers stored in the SQLite database.</li>
+    </ul>
+  </div>
+
+  <!-- Section 12: Sprint 4 -->
+  <h3>Sprint 4 (Week 5) — Gemini AI, Integration, Polish &amp; Deployment</h3>
+  <p><em>Sprint Goal: Turn individual subsystems into an integrated, deployed SANAG application.</em></p>
+  
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 50%;">James: Gemini API Backend &amp; Production Prep</th>
+          <th style="width: 50%;">Katherine: AI Summary Card &amp; UI Polishing</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <ul>
+              <li>Connect Gemini 2.5 Flash API via Google AI Studio</li>
+              <li>Engineer prompt templates injecting verified metrics</li>
+              <li>Enforce guardrails: Gemini describes data, does not compute</li>
+              <li>Configure production environment variables and CORS</li>
+              <li>Deploy backend service to staging/cloud host</li>
+            </ul>
+          </td>
+          <td>
+            <ul>
+              <li>Build responsive AI situational briefing UI panel</li>
+              <li>Add loading skeletons and graceful AI fallback states</li>
+              <li>Refine typography, spacing, and mobile data consumption</li>
+              <li>Conduct cross-browser and mobile responsive audits</li>
+              <li>Deploy frontend client to production CDN</li>
+            </ul>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="dod-box">
+    <div class="dod-title">Sprint 4 Definition of Done</div>
+    <ul>
+      <li>End-to-end user journey works: Select Event → View Map → Inspect Chart → Read AI Briefing.</li>
+      <li>Application deployed with verified environment secrets and active HTTPS endpoints.</li>
+    </ul>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- Section 13: Proposed Project Structure -->
+  <h2>7. Proposed Project Directory Structure</h2>
+  <p>This structure isolates the FastAPI backend from the Vanilla JS frontend, preventing deployment entanglement. It also incorporates Docker definitions, enabling seamless containerized testing and deployment on Windows host systems.</p>
+  
+  <div class="directory-tree">
+sanag-project/
+├── backend/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes.py          <span class="dir-comment"># FastAPI endpoints (/events, /timeline)</span>
+│   │   └── models.py          <span class="dir-comment"># Pydantic schemas for data validation</span>
+│   ├── engine/
+│   │   ├── __init__.py
+│   │   ├── gee_client.py      <span class="dir-comment"># Google Earth Engine authentication & extraction</span>
+│   │   └── calculator.py      <span class="dir-comment"># Recovery Ratio R(t) mathematics</span>
+│   ├── db/
+│   │   ├── database.py        <span class="dir-comment"># SQLite connection driver</span>
+│   │   └── schema.sql         <span class="dir-comment"># Table definitions for disaster events & indices</span>
+│   ├── requirements.txt       <span class="dir-comment"># Python dependencies (FastAPI, Pandas, earthengine-api)</span>
+│   └── main.py                <span class="dir-comment"># Application entry point (Uvicorn server)</span>
+│
+├── frontend/
+│   ├── index.html             <span class="dir-comment"># Main responsive UI shell</span>
+│   ├── css/
+│   │   └── style.css          <span class="dir-comment"># Vanilla CSS (no heavy frameworks)</span>
+│   ├── js/
+│   │   ├── app.js             <span class="dir-comment"># Global state, fetch API wrappers, and event listeners</span>
+│   │   ├── map.js             <span class="dir-comment"># Leaflet.js instantiation and choropleth rendering</span>
+│   │   └── charts.js          <span class="dir-comment"># Chart.js time-series bounce-back curves</span>
+│   └── data/
+│       └── panay_lgu.geojson  <span class="dir-comment"># Static geographic boundary vectors</span>
+│
+├── docs/
+│   └── architecture.pdf       <span class="dir-comment"># System documentation and scope</span>
+│
+├── Dockerfile                 <span class="dir-comment"># Container build instructions for the Python backend</span>
+├── docker-compose.yml         <span class="dir-comment"># Orchestrates backend and UI containers for local Windows/Docker testing</span>
+└── README.md                  <span class="dir-comment"># Setup, installation, and run instructions</span>
+  </div>
+
+  <!-- Section 14: Glossary of Terms -->
+  <h2>8. Glossary of Terms</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 20%;">Term</th>
+          <th style="width: 80%;">Definition</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Choropleth Map</strong></td>
+          <td>A thematic map in which geographical areas are shaded or patterned in proportion to a statistical variable (e.g., Red/Yellow/Green to represent recovery status).</td>
+        </tr>
+        <tr>
+          <td><strong>DNB (Day/Night Band)</strong></td>
+          <td>A highly sensitive sensor on the VIIRS satellite that measures raw optical radiance (photons) rather than standard RGB color pixels.<br><em>Concrete Example:</em> Unlike a standard camera that captures a white pixel for a glowing streetlamp, the DNB measures the actual physical energy and intensity of the light emitted by that streetlamp.</td>
+        </tr>
+        <tr>
+          <td><strong>GeoJSON</strong></td>
+          <td>An open standard format designed for representing simple geographical features, along with their non-spatial attributes, using JavaScript Object Notation. Used to draw the Panay municipal boundaries.</td>
+        </tr>
+        <tr>
+          <td><strong>Google Earth Engine (GEE)</strong></td>
+          <td>A cloud-based geospatial processing platform that allows developers to run algorithms on petabytes of satellite imagery without downloading massive files locally.</td>
+        </tr>
+        <tr>
+          <td><strong>LGU</strong></td>
+          <td>Local Government Unit. The foundational administrative divisions in the Philippines (provinces, cities, municipalities, and barangays).</td>
+        </tr>
+        <tr>
+          <td><strong>Radiance</strong></td>
+          <td>The scientific measurement of the amount of light emitted or reflected by a specific area, captured by the satellite's sensors.</td>
+        </tr>
+        <tr>
+          <td><strong>Recovery Ratio (R(t))</strong></td>
+          <td>The calculated mathematical metric defined as the post-event radiance divided by the baseline (normal) radiance.</td>
+        </tr>
+        <tr>
+          <td><strong>VCMSLCFG</strong></td>
+          <td>Stands for <strong>V</strong>IIRS <strong>C</strong>loud <strong>M</strong>ask <strong>S</strong>tray <strong>L</strong>ight <strong>C</strong>orrected. It is the NASA/NOAA monthly nighttime lights composite dataset used in this project to establish the "normal" baseline light levels before a disaster hits.</td>
+        </tr>
+        <tr>
+          <td><strong>VIIRS</strong></td>
+          <td>Visible Infrared Imaging Radiometer Suite. A sensor aboard the Suomi NPP and NOAA-20 weather satellites that detects nighttime lights and tracks power outages.</td>
+        </tr>
+        <tr>
+          <td><strong>VNP46A2</strong></td>
+          <td>Stands for <strong>V</strong>IIRS/<strong>N</strong>PP <strong>P</strong>roduct 46A2 (Daily Nighttime Lights). The specific NASA Earth observation dataset providing daily, lunar-adjusted, cloud-masked nighttime light metrics at a 500-meter resolution used to track day-to-day power dips and recovery.</td>
+        </tr>
+        <tr>
+          <td><strong>Zonal Statistics</strong></td>
+          <td>The process of calculating aggregate values (such as averages) for data pixels that fall within a specific geographic boundary.<br><em>Concrete Example:</em> Taking all the individual radiance measurements inside the map boundary for Iloilo City and averaging them together to determine the city's overall light level for the night.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Section 15: Helpful Links & References -->
+  <h2>9. Reference &amp; Helpful Links</h2>
+  
+  <h3>Academic References</h3>
+  <ul>
+    <li>Dariagan, J. D., Atando, R. B., &amp; Asis, J. L. B. (2021). Disaster preparedness of local governments in Panay Island, Philippines. <em>Natural Hazards</em>, 105(2), 1923–1944. <a href="https://doi.org/10.1007/s11069-020-04383-0" target="_blank">https://doi.org/10.1007/s11069-020-04383-0</a></li>
+    <li>Lum, T., &amp; Margesson, R. (2014). <em>Typhoon Haiyan (Yolanda): U.S. and international response to Philippines disaster</em>. Congressional Research Service Report R43309.</li>
+  </ul>
+
+  <h3>Developer Documentation &amp; Data Catalogs</h3>
+  <ul>
+    <li><strong>NASA Daily Nighttime Lights (VNP46A2):</strong> <a href="https://developers.google.com/earth-engine/datasets/catalog/NASA_VIIRS_002_VNP46A2" target="_blank">Google Earth Engine Data Catalog - VNP46A2</a></li>
+    <li><strong>NOAA Monthly Baseline Composites (VCMSLCFG):</strong> <a href="https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_DNB_MONTHLY_V1_VCMSLCFG" target="_blank">Google Earth Engine Data Catalog - VCMSLCFG</a></li>
+    <li><strong>Earth Engine API (Python):</strong> <a href="https://developers.google.com/earth-engine/guides/python_install" target="_blank">Python Installation and Authentication Guide</a></li>
+    <li><strong>FastAPI:</strong> <a href="https://fastapi.tiangolo.com/" target="_blank">Official FastAPI Documentation</a></li>
+    <li><strong>Leaflet.js:</strong> <a href="https://leafletjs.com/reference.html" target="_blank">Interactive Map API Reference</a></li>
+    <li><strong>Chart.js:</strong> <a href="https://www.chartjs.org/docs/latest/" target="_blank">Time-Series Line Chart Documentation</a></li>
+    <li><strong>Docker Desktop (Windows):</strong> <a href="https://docs.docker.com/desktop/windows/" target="_blank">Containerization deployment setup for local Windows environments</a></li>
+  </ul>
+
+</div>
+</body>
+</html>
