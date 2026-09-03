@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SANAG - Architecture & Implementation Baseline</title>
+  <style>
+    @page {
+      size: letter portrait;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      color: #0f172a;
+      line-height: 1.45;
+      font-size: 10.5pt;
+      margin: 0;
+      padding: 0;
+    }
+    .header-box {
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 8px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 22pt;
+      margin: 0 0 2px 0;
+      color: #0369a1;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      font-size: 12pt;
+      color: #475569;
+      font-weight: 500;
+      margin: 0 0 6px 0;
+    }
+    .meta-bar {
+      font-size: 9pt;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+    h2 {
+      font-size: 12pt;
+      color: #0f172a;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 3px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    h3 {
+      font-size: 10.5pt;
+      margin: 10px 0 4px 0;
+      color: #1e293b;
+    }
+    p {
+      margin: 5px 0 8px 0;
+    }
+    ul {
+      margin: 4px 0 8px 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 3px;
+    }
+    pre {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 8.5pt;
+      line-height: 1.35;
+      margin: 6px 0 10px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 12px 0;
+      font-size: 9pt;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f1f5f9;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-box">
+    <h1>SANAG</h1>
+    <div class="subtitle">Satellite Analytics for Nightlight &amp; Assessment Grid</div>
+    <div class="meta-bar">
+      <span><strong>Scope:</strong> Panay Island (Aklan, Antique, Capiz, Iloilo)</span>
+      <span><strong>Course:</strong> CSE 499 Senior Capstone</span>
+      <span><strong>Milestone:</strong> Week 1 Architecture Baseline</span>
+    </div>
+  </div>
+
+  <h2>Executive Summary</h2>
+  <p>
+    <strong>SANAG</strong> is a public-benefit geospatial intelligence web application engineered to assess power grid resilience and disaster recovery across Panay Island. By transforming NASA Visible Infrared Imaging Radiometer Suite (VIIRS) nighttime light composites into quantifiable recovery curves, the platform replaces delayed manual surveys with objective, automated satellite-derived recovery metrics.
+  </p>
+
+  <h2>1. End-to-End System Architecture</h2>
+  <pre>
+┌─────────────────────────────────────────────────────────────┐
+│             NASA / NOAA Earth Observation Sources           │
+│  • VNP46A2: Daily Lunar-Adjusted Radiance (500m)            │
+│  • VCMSLCFG: Monthly Baseline Reference Composites          │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼  (Google Earth Engine API / Python ee)
+┌─────────────────────────────────────────────────────────────┐
+│                 Python Data Processing Engine               │
+│  • Spatial Clipping (Panay Municipal GeoJSON Boundaries)    │
+│  • Cloud, Moon & Stray Light Filtering                      │
+│  • Recovery Ratio Engine: R(t) = Radiance(t) / Baseline     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼  (Persistence Layer)
+┌─────────────────────────────────────────────────────────────┐
+│                 Data Persistence & REST Backend             │
+│  • SQLite: Historical Disasters & Municipal Recovery Indices│
+│  • FastAPI: Asynchronous REST Endpoints                     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼  (REST JSON)
+┌─────────────────────────────────────────────────────────────┐
+│             Lightweight Web Presentation Layer              │
+│  • UI Shell: Vanilla HTML5 / CSS3 / ES6+ JavaScript         │
+│  • Cartography: Leaflet.js (Municipal Recovery Choropleth)  │
+│  • Analytics: Chart.js (Bounce-Back Recovery Curves)        │
+│  • AI Layer: Gemini 2.5 Flash API (Situational Briefs)      │
+└─────────────────────────────────────────────────────────────┘
+  </pre>
+
+  <h2>2. Processing Workflow: Three Recovery Windows</h2>
+  <ul>
+    <li>
+      <strong>Window 1: Pre-Disaster Baseline (T<sub>base</sub>):</strong> 
+      Spans 15–30 days prior to event onset. Extracts clear-sky average radiance across each municipality to establish standard operating light levels (L&#772;<sub>base</sub>).
+    </li>
+    <li>
+      <strong>Window 2: Disaster Impact (T<sub>impact</sub>):</strong> 
+      Spans Day 0 to Day +2 (peak hazard impact or transmission grid collapse). Captures minimum radiance (L<sub>event</sub>) to evaluate drop severity:
+      <br>
+      <em>Outage Drop % = (1 - L<sub>event</sub> / L&#772;<sub>base</sub>) &times; 100</em>
+    </li>
+    <li>
+      <strong>Window 3: Restoration Horizon (T<sub>post</sub>):</strong> 
+      Spans Day +3 through Day +14. Evaluates daily recovery ratio R(t) = L(t) / L&#772;<sub>base</sub>, tracking the duration required to achieve sustained stability (R(t) &ge; 0.90).
+    </li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>3. API Data Contracts</h2>
+
+  <h3>Endpoint: GET /api/v1/events</h3>
+  <p>Returns selectable historical incidents for the dashboard dropdown.</p>
+  <pre>
+[
+  {
+    "id": "panay-blackout-2024",
+    "name": "Panay Grid Collapse",
+    "type": "Grid Failure",
+    "startDate": "2024-01-02",
+    "endDate": "2024-01-08",
+    "provinces": ["Aklan", "Antique", "Capiz", "Iloilo"]
+  }
+]
+  </pre>
+
+  <h3>Endpoint: GET /api/v1/resilience/timeline?eventId=panay-blackout-2024&amp;muniId=iloilo_city</h3>
+  <p>Provides daily metrics for time-series charts and map choropleth fills.</p>
+  <pre>
+{
+  "muniId": "iloilo_city",
+  "muniName": "Iloilo City",
+  "baselineRadiance": 28.45,
+  "timeline": [
+    { "date": "2024-01-01", "radiance": 28.20, "recoveryRatio": 0.99, "status": "Normal" },
+    { "date": "2024-01-02", "radiance": 4.15,  "recoveryRatio": 0.15, "status": "Severe Outage" },
+    { "date": "2024-01-05", "radiance": 25.90, "recoveryRatio": 0.91, "status": "Restored" }
+  ]
+}
+  </pre>
+
+  <h2>4. Technology Stack Justification</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>Technology</th>
+        <th>Operational Rationale</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Geospatial Data</strong></td>
+        <td>Google Earth Engine (Python API)</td>
+        <td>Cloud-side satellite queries without storing massive raster tiles locally.</td>
+      </tr>
+      <tr>
+        <td><strong>Backend API</strong></td>
+        <td>FastAPI (Python)</td>
+        <td>Lightweight, asynchronous performance with built-in schema validation.</td>
+      </tr>
+      <tr>
+        <td><strong>Database</strong></td>
+        <td>SQLite &amp; GeoJSON</td>
+        <td>Zero-maintenance local storage for rapid development and boundary mapping.</td>
+      </tr>
+      <tr>
+        <td><strong>Frontend</strong></td>
+        <td>Vanilla HTML5, CSS3, JS</td>
+        <td>Zero-framework design optimized for mobile devices and slow data connections.</td>
+      </tr>
+      <tr>
+        <td><strong>Visuals</strong></td>
+        <td>Leaflet.js &amp; Chart.js</td>
+        <td>Minimal JavaScript overhead for interactive mapping and bounce-back trends.</td>
+      </tr>
+      <tr>
+        <td><strong>AI Summaries</strong></td>
+        <td>Gemini 2.5 Flash (AI Studio)</td>
+        <td>Automated plain-language disaster briefing reports via free-tier API.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>5. Four-Sprint Implementation Plan (Weeks 2–5)</h2>
+  <ul>
+    <li><strong>Sprint 1 (W2):</strong> Authenticate Earth Engine, ingest VIIRS data for Jan 2024 blackout, and mount base Leaflet map.</li>
+    <li><strong>Sprint 2 (W3):</strong> Build recovery index math engine, configure SQLite storage, and expose REST API endpoints.</li>
+    <li><strong>Sprint 3 (W4):</strong> Map municipal boundaries, implement Red/Yellow/Green choropleth, and bind Chart.js curves.</li>
+    <li><strong>Sprint 4 (W5):</strong> Integrate Gemini API briefing card, optimize for mobile data, and deploy to staging.</li>
+  </ul>
+
+</body>
+</html>

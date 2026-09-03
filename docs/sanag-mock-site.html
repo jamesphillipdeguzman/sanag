@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SANAG — Interactive Panay Disaster Dashboard V2</title>
+    <style>
+        /* -----------------------------------------------------------
+           1. CORE DESIGN TOKENS (Futuristic Dark Mode)
+        ----------------------------------------------------------- */
+        :root {
+            /* Palette */
+            --bg-page: #050b14;        /* Deepest space blue/black */
+            --bg-panel: #0d1a2d;       /* Elevated panel blue */
+            --primary: #06b6d4;        /* Neon Cyan (Reel inspired) */
+            --primary-glow: #22d3ee;   
+            --border: #1e293b;
+            
+            /* Typography */
+            --text-main: #94a3b8;
+            --text-bold: #f8fafc;
+            --font-stack: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            
+            /* Status/Data Colors */
+            --status-restored: #10b981;  /* Emerald */
+            --status-partial: #f59e0b;   /* Amber */
+            --status-severe: #ef4444;    /* Crimson/Red */
+            
+            /* Hazard Colors */
+            --hz-high: #06b6d4;          
+            --hz-mid: #0284c7;           
+            --hz-low: #7dd3fc;           
+
+            /* UI Elements */
+            --radius: 6px;
+            --ease: cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-speed: 0.4s;
+        }
+
+        /* -----------------------------------------------------------
+           2. GLOBAL RESET & LAYOUT 
+        ----------------------------------------------------------- */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font-stack);
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header {
+            height: 60px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            flex-shrink: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .brand-text { color: var(--text-bold); font-size: 1.3rem; font-weight: 800; letter-spacing: 1px; }
+        .brand-sub { font-size: 0.75rem; color: var(--primary); letter-spacing: 2px; margin-left: 10px; text-transform: uppercase;}
+        
+        .header-controls { display: flex; gap: 15px; align-items: center; }
+        
+        .audio-toggle {
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid var(--primary);
+            color: var(--primary-glow);
+            padding: 6px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: var(--transition-speed);
+        }
+        .audio-toggle:hover { background: rgba(6, 182, 212, 0.2); box-shadow: 0 0 10px rgba(6, 182, 212, 0.3); }
+        .audio-toggle.active { background: var(--primary); color: #000; font-weight: 700; box-shadow: 0 0 15px var(--primary); }
+
+        /* -----------------------------------------------------------
+           3. MAIN LAYOUT
+        ----------------------------------------------------------- */
+        main { flex: 1; display: flex; overflow: hidden; }
+
+        .sidebar {
+            width: 300px;
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .dashboard-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        @media (max-width: 768px) {
+            main { flex-direction: column; overflow-y: auto; }
+            .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); height: auto; position: relative; }
+            .dashboard-body { height: auto; overflow: visible; }
+        }
+
+        /* -----------------------------------------------------------
+           4. SIDEBAR CONTROLS & CONTEXT
+        ----------------------------------------------------------- */
+        h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; color: #64748b; margin-bottom: 8px; font-weight: 700; }
+
+        /* Event Context Panel (New Addition) */
+        .event-context-panel {
+            background: rgba(0,0,0,0.3);
+            border-left: 3px solid var(--primary);
+            padding: 12px;
+            border-radius: 0 var(--radius) var(--radius) 0;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: #cbd5e1;
+        }
+        .event-context-panel strong { color: var(--text-bold); }
+
+        .geo-btn-list, .layer-btn-list { display: flex; flex-direction: column; gap: 8px; }
+
+        .btn-check {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px 14px;
+            border-radius: var(--radius);
+            text-align: left;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: var(--transition-speed);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-check:hover { background: rgba(6, 182, 212, 0.1); border-color: rgba(6, 182, 212, 0.3); }
+        .btn-check.active {
+            background-color: rgba(6, 182, 212, 0.15);
+            color: var(--primary-glow);
+            border-color: var(--primary);
+            font-weight: 600;
+        }
+
+        .check-icon { opacity: 0; transition: var(--transition-speed); fill: var(--primary-glow); width: 16px; height: 16px; }
+        .btn-check.active .check-icon { opacity: 1; }
+
+        .kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+
+        /* -----------------------------------------------------------
+           5. MAP AREA
+        ----------------------------------------------------------- */
+        .map-section {
+            flex: 1; 
+            position: relative;
+            background-color: #020617; /* Very dark map background */
+            border-bottom: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) { .map-section { height: 40vh; flex: none; } }
+
+        .mock-map { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; position: relative; }
+
+        .province-poly {
+            position: absolute;
+            opacity: 0.6;
+            cursor: pointer;
+            transition: var(--transition-speed);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: var(--radius);
+        }
+
+        .province-poly:hover { opacity: 0.9; transform: scale(1.02); }
+        .province-poly.active { opacity: 1; border-width: 3px; box-shadow: 0 0 20px rgba(255,255,255,0.2); z-index: 10; }
+
+        /* Map Polygons */
+        #aklan_poly { top: 15%; left: 35%; width: 30%; height: 25%; }
+        #antique_poly { top: 20%; left: 15%; width: 15%; height: 60%; }
+        #capiz_poly { top: 20%; left: 55%; width: 30%; height: 30%; }
+        #iloilo_poly { top: 45%; left: 35%; width: 50%; height: 40%; }
+
+        .map-control-overlay { position: absolute; padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); background-color: rgba(13, 26, 45, 0.85); backdrop-filter: blur(4px); font-size: 0.8rem; z-index: 50; }
+        
+        .map-title { top: 20px; left: 20px; font-weight: 700; color: var(--text-bold); font-size: 1rem; border-left: 3px solid var(--primary); }
+        .map-legend { bottom: 20px; left: 20px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .color-box { width: 12px; height: 12px; border-radius: 2px; }
+
+        /* -----------------------------------------------------------
+           6. VISUAL CICADA GAUGE (Top Right)
+        ----------------------------------------------------------- */
+        .cicada-panel { top: 20px; right: 20px; width: 180px; transition: var(--transition-speed); border-color: rgba(255,255,255,0.1); }
+
+        .cicada-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+        .cicada-icon {
+            width: 20px; height: 20px;
+            fill: #475569; 
+            transition: var(--transition-speed);
+        }
+
+        .gauge-container { display: flex; justify-content: space-between; align-items: flex-end; height: 100px; padding: 0 10px; }
+        .gauge-column { width: 30px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
+
+        .gauge-bar-track { width: 100%; height: 80px; background-color: #020617; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; position: relative; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+        .gauge-bar-fill { position: absolute; bottom: 0; width: 100%; transition: height var(--transition-speed) var(--ease), background var(--transition-speed) var(--ease); border-radius: 20px; }
+        .gauge-label { font-size: 0.65rem; color: #64748b; margin-top: 8px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+
+        /* Active Glow */
+        .blackout-severe .cicada-icon { fill: var(--status-severe); filter: drop-shadow(0 0 8px var(--status-severe)); animation: pulseCicada 1s infinite alternate; }
+        .blackout-partial .cicada-icon { fill: var(--status-partial); filter: drop-shadow(0 0 5px var(--status-partial)); }
+        @keyframes pulseCicada { from { filter: drop-shadow(0 0 4px var(--status-severe)); } to { filter: drop-shadow(0 0 12px var(--status-severe)); } }
+
+        /* -----------------------------------------------------------
+           7. ANALYTICS AREA (Fixed Chart)
+        ----------------------------------------------------------- */
+        .analytics-scroll-area {
+            height: 240px; 
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+            background: var(--bg-panel);
+            padding: 20px;
+        }
+
+        @media (max-width: 768px) { .analytics-scroll-area { height: auto; overflow: visible; padding: 15px; } }
+
+        .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; height: 100%; }
+        @media (max-width: 992px) { .analytics-grid { grid-template-columns: 1fr; } }
+
+        .panel-card { background-color: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px; display: flex; flex-direction: column; }
+
+        /* Improved Chart.js Simulation */
+        .chart-container {
+            flex: 1; position: relative; margin-top: 15px;
+            border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        }
+
+        /* Axis Labels */
+        .y-axis { position: absolute; left: -35px; top: 0; height: 100%; display: flex; flex-direction: column; justify-content: space-between; font-size: 0.65rem; color: #64748b; font-weight: 600; padding-bottom: 20px;}
+        .x-axis { position: absolute; bottom: -20px; left: 0; width: 100%; display: flex; justify-content: space-between; font-size: 0.65rem; color: #64748b; font-weight: 600; padding-left: 5px;}
+
+        /* Grid lines */
+        .grid-line { position: absolute; left: 0; width: 100%; height: 1px; background: rgba(255,255,255,0.05); }
+        .grid-line.target { border-top: 1px dashed rgba(16, 185, 129, 0.4); background: none; } /* 90% Target line */
+
+        /* SVG Graph */
+        .chart-svg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; overflow: visible; }
+        .curve-line { fill: none; stroke: var(--primary); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; transition: var(--transition-speed); filter: drop-shadow(0 4px 6px rgba(6, 182, 212, 0.3)); }
+        .curve-area { transition: var(--transition-speed); }
+        
+        /* Simulated Data Points */
+        .data-point { fill: #fff; stroke: var(--bg-page); stroke-width: 2; transition: var(--transition-speed); r: 4; }
+        .data-point.critical { fill: var(--status-severe); stroke: #fff; r: 5; filter: drop-shadow(0 0 5px var(--status-severe)); }
+
+        /* AI Summary Card */
+        .gemini-panel {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.05) 0%, rgba(13, 26, 45, 0) 100%);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            position: relative;
+        }
+
+        .ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .gemini-icon { width: 18px; height: 18px; fill: var(--primary-glow); }
+
+        .ai-text { font-size: 0.85rem; line-height: 1.6; color: #e2e8f0; }
+        .highlight { color: var(--primary-glow); font-weight: 600; }
+        .ai-initial { font-style: italic; color: #64748b; font-size: 0.8rem; }
+
+        /* KPI Styling */
+        .kpi-card { background-color: rgba(0,0,0,0.3); border: 1px solid var(--border); padding: 12px; border-radius: var(--radius); text-align: center; }
+        .kpi-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-bottom: 5px; }
+        .kpi-value { font-size: 1.5rem; font-weight: 800; color: var(--text-bold); transition: color var(--transition-speed); text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="prov-all"> 
+
+    <header>
+        <div>
+            <span class="brand-text">SANAG</span>
+            <span class="brand-sub">Predictive Recovery Grid</span>
+        </div>
+        <div class="header-controls">
+            <button id="audioToggle" class="audio-toggle">Enable Atmos. Audio (Cicadas)</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Sidebar Controls -->
+        <div class="sidebar">
+            <!-- New Event Context Panel -->
+            <div class="control-group">
+                <h2>Event Context</h2>
+                <div class="event-context-panel">
+                    <strong>Jan 2, 2024 Grid Collapse</strong><br>
+                    A cascading failure at multiple power plants caused a total grid collapse across Panay Island. This dataset tracks the multi-day blackout and restoration efforts.
+                </div>
+            </div>
+
+            <div class="control-group geo-filter">
+                <h2>Region Selection</h2>
+                <button id="provAllBtn" class="geo-btn btn-check active" onclick="setProvince('all')">
+                    All Panay Island
+                    <svg class="check-icon" viewBox="0 0 24 24"><path d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z" /></svg>
+                </button>
+                <div class="kpi-row">
+                    <button id="aklanBtn" class="btn-check" onclick="setProvince('aklan')">Aklan</button>
+                    <button id="antiqueBtn" class="btn-check" onclick="setProvince('antique')">Antique</button>
+                    <button id="capizBtn" class="btn-check" onclick="setProvince('capiz')">Capiz</button>
+                    <button id="iloiloBtn" class="btn-check" onclick="setProvince('iloilo')">Iloilo</button>
+                </div>
+            </div>
+
+            <div class="control-group gemini-panel panel-card" style="margin-top: auto;">
+                <div class="ai-header">
+                    <svg class="gemini-icon" viewBox="0 0 24 24"><path d="M9.5,4A6.5,6.5 0 0,1 16,10.5C16,14.09 13.09,17 9.5,17C5.91,17 3,14.09 3,10.5C3,6.91 5.91,4 9.5,4M21.5,14H18.5V11H17.5V14H14.5V15H17.5V18H18.5V15H21.5V14Z" /></svg>
+                    <h2>AI Situational Brief</h2>
+                </div>
+                <p id="geminiSummary" class="ai-text">
+                    <span class="ai-initial">Select a province to generate analytical briefing...</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Dashboard Body -->
+        <div class="dashboard-body">
+            
+            <!-- Map Section -->
+            <div class="map-section">
+                
+                <div class="mock-map">
+                    <div class="province-poly active" id="all_poly" onclick="setProvince('all')"></div> 
+                    <div class="province-poly" id="aklan_poly" onclick="setProvince('aklan')"></div>
+                    <div class="province-poly" id="antique_poly" onclick="setProvince('antique')"></div>
+                    <div class="province-poly" id="capiz_poly" onclick="setProvince('capiz')"></div>
+                    <div class="province-poly" id="iloilo_poly" onclick="setProvince('iloilo')"></div>
+                </div>
+
+                <div id="mapTitle" class="map-control-overlay map-title">Panay: All Provinces [Recovery]</div>
+
+                <div id="legendRecovery" class="map-control-overlay map-legend">
+                    <h2>Recovery Status</h2>
+                    <div class="legend-item"><div class="color-box" style="background:var(--status-restored); box-shadow: 0 0 8px var(--status-restored);"></div> Restored (&gt;90%)</div>
+                    <div class="legend-item"><div class="color-box" style="background:var(--status-partial); box-shadow: 0 0 8px var(--status-partial);"></div> Partial (50-89%)</div>
+                    <div class="legend-item"><div class="color-box" style="background:var(--status-severe); box-shadow: 0 0 8px var(--status-severe);"></div> Severe Outage (&lt;50%)</div>
+                </div>
+
+                <!-- VISUAL CICADA GAUGE -->
+                <div id="cicadaPanel" class="map-control-overlay cicada-panel blackout-normal">
+                    <div class="cicada-header">
+                        <h2>Vulnerability</h2>
+                        <svg class="cicada-icon" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z" /></svg>
+                    </div>
+                    <div class="gauge-container">
+                        <div class="gauge-column">
+                            <div class="gauge-bar-track"><div id="cicadaGaugeFill" class="gauge-bar-fill" style="height: 10%; background: #475569;"></div></div>
+                            <span class="gauge-label">Insect</span>
+                        </div>
+                        <div class="gauge-column">
+                            <div class="gauge-bar-track"><div id="nightlightGaugeFill" class="gauge-bar-fill" style="height: 100%; background: var(--status-restored);"></div></div>
+                            <span class="gauge-label">Grid</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Area -->
+            <div class="analytics-scroll-area">
+                <div class="analytics-grid">
+                    
+                    <!-- Corrected Recovery Curve Chart -->
+                    <div class="panel-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2 style="color: var(--text-bold);">Recovery Curve R(t) — <span id="chartProvName" style="color: var(--primary);">Panay Island</span></h2>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <!-- Axis Labels -->
+                            <div class="y-axis">
+                                <span>100%</span>
+                                <span>50%</span>
+                                <span>0%</span>
+                            </div>
+                            <div class="x-axis">
+                                <span>Pre-Event</span>
+                                <span>Day 1</span>
+                                <span>Day 4</span>
+                                <span>Day 8</span>
+                            </div>
+
+                            <!-- Gridlines -->
+                            <div class="grid-line" style="top: 0%;"></div>
+                            <div class="grid-line target" style="top: 10%;"></div> <!-- 90% Target -->
+                            <div class="grid-line" style="top: 50%;"></div>
+                            
+                            <!-- Corrected SVG: Y=0 is Top (100%), Y=100 is Bottom (0%) -->
+                            <svg class="chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                <defs>
+                                    <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stop-color="var(--primary)" stop-opacity="0.4"/>
+                                        <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+                                    </linearGradient>
+                                </defs>
+                                
+                                <!-- Filled Area under the curve -->
+                                <path id="recoveryCurveArea" class="curve-area" fill="url(#areaGradient)" d="M 0,0 L 15,0 L 20,85 L 40,40 L 70,10 L 100,0 L 100,100 L 0,100 Z" />
+                                
+                                <!-- The Line itself -->
+                                <path id="recoveryCurveLine" class="curve-line" d="M 0,0 L 15,0 L 20,85 L 40,40 L 70,10 L 100,0" />
+                                
+                                <!-- Simulated Data Points (Anchored at estimated coordinates) -->
+                                <circle id="pt-pre" class="data-point" cx="15" cy="0" />
+                                <circle id="pt-drop" class="data-point critical" cx="20" cy="85" />
+                                <circle id="pt-mid" class="data-point" cx="40" cy="40" />
+                                <circle id="pt-end" class="data-point" cx="100" cy="0" />
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="panel-card" style="justify-content:center;">
+                        <h2>Current Status Metrics</h2>
+                        <div class="kpi-row" style="margin-top: 10px;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Active Recovery</div>
+                                <div id="kpiRecovery" class="kpi-value" style="color:var(--status-restored)">100%</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Days to 90%</div>
+                                <div id="kpiDays" class="kpi-value">N/A</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /* -----------------------------------------------------------
+           MOCK DATA OBJECTS (Corrected SVG Path Coordinates)
+           Note for SVG: Y=0 is 100% recovery (TOP), Y=100 is 0% recovery (BOTTOM).
+           A blackout is a DROP down in the graph.
+        ----------------------------------------------------------- */
+        
+        const blackoutData = {
+            all: { 
+                name: "Panay Island", recovery: 100, days: "N/A", status: "restored", 
+                curve: "M 0,0 L 15,0 L 20,70 L 40,40 L 70,10 L 100,0", // Drops to 30%, recovers
+                pts: [0, 70, 40, 0],
+                summary: "Following the system trip on Jan 2, <span class='highlight'>Panay grid stability</span> remains normalized. Average Nightlight Index (NLI) is holding at baseline levels across the island group." 
+            },
+            iloilo: { 
+                name: "Iloilo City/Prov.", recovery: 15, days: "5 (Est.)", status: "severe", 
+                curve: "M 0,0 L 15,0 L 20,85 L 40,80 L 70,85 L 100,85", // Severe drop, stays low
+                pts: [0, 85, 80, 85],
+                summary: "Iloilo City remains the critical node. Nightlight output plummeted to <span class='highlight'>15% of baseline</span>. Grid trip causes widespread blackout, matching ground reports of standard protection trips at transmission level." 
+            },
+            antique: { 
+                name: "Antique", recovery: 95, days: "2", status: "restored", 
+                curve: "M 0,0 L 15,0 L 20,40 L 30,10 L 70,5 L 100,5", // Minor drop, fast recovery
+                pts: [0, 40, 10, 5],
+                summary: "Antique is fully stabilized. Standard restoration protocols successful; Nightlight index suggests <span class='highlight'>95% grid coverage</span> returned within 48 hours." 
+            },
+            capiz: { 
+                name: "Capiz", recovery: 65, days: "4", status: "partial", 
+                curve: "M 0,0 L 15,0 L 20,75 L 40,55 L 70,35 L 100,35", // Mid drop, slow recovery
+                pts: [0, 75, 55, 35],
+                summary: "Capiz experienced substantial dips, currently analyzing <span class='highlight'>65% NLI recovery</span>. Specific transmission lines serving northeastern towns remain unstable." 
+            },
+            aklan: { 
+                name: "Aklan", recovery: 70, days: "4", status: "partial", 
+                curve: "M 0,0 L 15,0 L 20,60 L 40,45 L 70,30 L 100,30", // Mid drop, slow recovery
+                pts: [0, 60, 45, 30],
+                summary: "Aklan stabilizing at <span class='highlight'>70% NLI recovery</span>. Major hubs restored, but redundancy issues exist on standard feeders." 
+            }
+        };
+
+        let appState = { province: 'all', layer: 'recovery', audioEnabled: false };
+
+        function updateDashboardUI() {
+            const provKey = appState.province;
+            const activeData = blackoutData[provKey];
+            
+            document.body.className = `prov-${provKey}`;
+
+            // Map Colors
+            document.querySelectorAll('.province-poly').forEach(p => p.classList.remove('active'));
+            const provPoly = document.getElementById(`${provKey}_poly`);
+            if (provPoly) provPoly.classList.add('active');
+
+            for (const key in blackoutData) {
+                if (key === 'all') continue;
+                const poly = document.getElementById(`${key}_poly`);
+                if (!poly) continue;
+
+                const provStatus = blackoutData[key].status;
+                let color = 'var(--text-main)'; 
+                if (provStatus === 'restored') color = 'var(--status-restored)';
+                else if (provStatus === 'partial') color = 'var(--status-partial)';
+                else if (provStatus === 'severe') color = 'var(--status-severe)';
+                
+                poly.style.backgroundColor = color;
+                poly.style.borderColor = "rgba(255,255,255,0.4)"; 
+            }
+
+            // Update Cicada Gauge
+            updateCicadaGauge(provKey);
+
+            // Update Analytics
+            updateAnalytics(provKey);
+
+            // Update Text
+            document.getElementById('geminiSummary').innerHTML = activeData.summary;
+            document.getElementById('mapTitle').innerText = `Panay: ${activeData.name} [Recovery]`;
+
+            // Sync Buttons
+            document.querySelectorAll('.geo-filter .btn-check').forEach(b => b.classList.remove('active'));
+            document.getElementById(`${provKey}Btn`).classList.add('active');
+        }
+
+        function updateCicadaGauge(provKey) {
+            const panel = document.getElementById('cicadaPanel');
+            const cicadaFill = document.getElementById('cicadaGaugeFill');
+            const nliFill = document.getElementById('nightlightGaugeFill');
+            const currentRatio = blackoutData[provKey].recovery; 
+
+            panel.className = 'map-control-overlay cicada-panel blackout-normal';
+
+            if (currentRatio < 50) {
+                nliFill.style.height = `${currentRatio}%`;
+                nliFill.style.background = 'var(--status-severe)';
+                cicadaFill.style.height = '100%'; 
+                cicadaFill.style.background = 'var(--status-severe)';
+                panel.className = 'map-control-overlay cicada-panel blackout-severe';
+            } else if (currentRatio < 90) {
+                nliFill.style.height = `${currentRatio}%`;
+                nliFill.style.background = 'var(--status-partial)';
+                cicadaFill.style.height = '50%'; 
+                cicadaFill.style.background = 'var(--status-partial)';
+                panel.className = 'map-control-overlay cicada-panel blackout-partial';
+            } else {
+                nliFill.style.height = '100%';
+                nliFill.style.background = 'var(--status-restored)';
+                cicadaFill.style.height = '10%'; 
+                cicadaFill.style.background = '#475569';
+            }
+        }
+
+        function updateAnalytics(provKey) {
+            const chartLine = document.getElementById('recoveryCurveLine');
+            const chartArea = document.getElementById('recoveryCurveArea');
+            const chartTitleProv = document.getElementById('chartProvName');
+            const activeData = blackoutData[provKey];
+            
+            // Set line path
+            chartLine.setAttribute('d', activeData.curve); 
+            // Set Area path by appending close polygon commands to the bottom corners
+            chartArea.setAttribute('d', activeData.curve + " L 100,100 L 0,100 Z"); 
+
+            // Animate point dots
+            document.getElementById('pt-pre').setAttribute('cy', activeData.pts[0]);
+            const ptDrop = document.getElementById('pt-drop');
+            ptDrop.setAttribute('cy', activeData.pts[1]);
+            // If drop is severe (low recovery), color it red
+            ptDrop.className.baseVal = activeData.pts[1] > 50 ? "data-point critical" : "data-point";
+            
+            document.getElementById('pt-mid').setAttribute('cy', activeData.pts[2]);
+            document.getElementById('pt-end').setAttribute('cy', activeData.pts[3]);
+
+            chartTitleProv.innerText = activeData.name;
+
+            // Update KPIs
+            const kpiRec = document.getElementById('kpiRecovery');
+            kpiRec.innerText = `${activeData.recovery}%`;
+            
+            let valColor = 'var(--text-bold)';
+            if (activeData.status === 'restored') valColor = 'var(--status-restored)';
+            else if (activeData.status === 'partial') valColor = 'var(--status-partial)';
+            else if (activeData.status === 'severe') valColor = 'var(--status-severe)';
+            
+            kpiRec.style.color = valColor;
+            
+            // Adapt chart stroke color based on status
+            chartLine.style.stroke = valColor;
+            document.getElementById('areaGradient').children[0].setAttribute('stop-color', valColor);
+
+            document.getElementById('kpiDays').innerText = activeData.days;
+        }
+
+        function setProvince(provKey) {
+            appState.province = provKey;
+            updateDashboardUI();
+        }
+
+        // Initialize
+        updateDashboardUI(); 
+
+    </script>
+</body>
+</html>
