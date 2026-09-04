@@ -1,5 +1,7 @@
 import ee
 import sys
+import json
+from loader import load_panay_municipalities_geojson
 
 def initialize_gee():
     """
@@ -58,34 +60,39 @@ if __name__ == "__main__":
     # Initialize the connection
     initialize_gee()
 
-    # Crate a temporary dummy polygon for testing (Roughly Iloilo City)
-    test_polygon = ee.FeatureCollection([
-        ee.Feature(ee.Geometry.Rectangle([122.5, 10.6, 122.6, 10.7]), {'name': 'Iloilo Test Area'})
-    ])
+    # Load actual Panay municipal boundaries
+    print("\n--- Loading Panay Municipal Boundaries ---")
+    panay_geojson = load_panay_municipalities_geojson()
+    panay_feature_collection = ee.FeatureCollection(panay_geojson)
 
     # Test pulling data for January 3, 2024 (The Panay Grid Collapse)
     print("\n--- Requesting VIIRS Data for Jan 3, 2024 ---")
     try:
-        daily_result = extract_zonal_radiance(test_polygon, '2024-01-3', is_baseline=False)
+        daily_result = extract_zonal_radiance(panay_feature_collection, '2024-01-03', is_baseline=False)
 
-        # Print the resulting dictionary
-        import json
-        print(json.dumps(daily_result, indent=2))
-
-        # 1. Grab the first feature from the features list
-        # 1. Grab the first feature from the features list
-        feature = daily_result['features'][0]  # type: ignore
+        features = daily_result.get('features', [])
+        print(f"\nSuccessfully queried {len(features)} municipal features!")
         
-        # Ensure the type checker knows it's a dictionary
-        if isinstance(feature, dict):
-            properties = feature.get('properties', {})  # type: ignore
-            radiance = properties.get('mean', None)  # type: ignore
+        valid_municipalities = []
+        for feature in features:
+            if isinstance(feature, dict):
+                props = feature.get('properties', {})
+                if isinstance(props, dict):
+                    name = props.get('ADM3_EN', 'Unknown')
+                    radiance = props.get('mean', None)
+                    if radiance is not None:
+                        valid_municipalities.append((name, radiance))
 
-            print("\n--- Parsed Result ---")
-            if radiance is None:
-                print(f"No valid data for {properties.get('name', 'Unknown Area')} on this date (likely cloud cover or empty collection).")  # type: ignore
-            else:
-                print(f"Success! The mean radiance for {properties.get('name', 'Unknown Area')} is: {radiance}")  # type: ignore
+        if valid_municipalities:
+            valid_municipalities.sort(key=lambda x: x[1])
+            lowest = valid_municipalities[0]
+            highest = valid_municipalities[-1]
+
+            print("\n--- Panay Island Radiance Extremes ---")
+            print(f"📉 Lowest Radiance: {lowest[0]} ({lowest[1]:.4f})")
+            print(f"📈 Highest Radiance: {highest[0]} ({highest[1]:.4f})")
+        else:
+            print("No valid radiance data found across features (heavy cloud cover).")
 
     except Exception as e:
         print(f"Query failed: {e}")
