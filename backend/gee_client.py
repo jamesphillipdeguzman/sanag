@@ -17,6 +17,52 @@ def initialize_gee():
         print(f"GEE Initialization Failed: {e}")
         sys.exit(1) # Force the script to stop if initialization failed
 
+def extract_daily_vnp46a2(geojson_collection, target_date):
+    """
+    Pulls daily NASA VIIRS VNP46A2 DNB radiance and performs
+    ee.Reducer.mean() across municipal boundaries for a specific date.
+    """
+    collection_id = 'NASA/VIIRS/002/VNP46A2' # Daily VIIRS DNB NTL
+    band_name = 'DNB_BRDF_Corrected_NTL'
+
+    # Filter the daily image collection for the target date
+    dataset = ee.ImageCollection(collection_id).filterDate(
+        ee.Date(target_date), ee.Date(target_date).advance(1, 'day')
+    ).select(band_name)
+
+    # Safe fallback if no imagery exists (e.g., severe cloud cover)
+    if dataset.size().getInfo() == 0:
+        print(f"No data found for {target_date}")
+        return {"type": "FeatureCollection", "features": []}
+
+    image = dataset.first()
+
+    # Convert GeoJSON to FeatureCollection
+    # Note: 'geojson_collection' is already expected to be an ee.FeatureCollection
+    # based on previous usage, but we ensure it here for safety.
+    if isinstance(geojson_collection, dict):
+        feature_collection = ee.FeatureCollection(geojson_collection)
+    else:
+        feature_collection = geojson_collection
+
+    # Perform zonal statistics (mean radiance) for each municipality
+    zonal_stats = image.reduceRegions(
+        collection=feature_collection,
+        reducer=ee.Reducer.mean(),
+        scale=500,  # VIIRS native resolution in meters
+        crs='EPSG:4326'
+    )
+
+    # Return the result as a Python dictionary
+    return zonal_stats.getInfo()
+
+
+
+
+
+
+
+     
 def extract_zonal_radiance(geojson_collection, target_date, is_baseline=False):
     """
     Queries VIIRS data and performs ee.Reducer.mean() across municipality boundaries.
@@ -57,21 +103,25 @@ def extract_zonal_radiance(geojson_collection, target_date, is_baseline=False):
     return zonal_stats.getInfo()
 
 if __name__ == "__main__":
-    # Initialize the connection
+    # 1. Initialize the connection
     initialize_gee()
 
-    # Load actual Panay municipal boundaries
+    # 2. Load actual Panay municipal boundaries
     print("\n--- Loading Panay Municipal Boundaries ---")
     panay_geojson = load_panay_municipalities_geojson()
     panay_feature_collection = ee.FeatureCollection(panay_geojson)
 
-    # Test pulling data for January 3, 2024 (The Panay Grid Collapse)
-    print("\n--- Requesting VIIRS Data for Jan 3, 2024 ---")
-    try:
-        daily_result = extract_zonal_radiance(panay_feature_collection, '2024-01-03', is_baseline=False)
+    # 3. User Input for Daily VNP46A2 Query
+    print("\n--- Task: Daily VIIRS DNB Routine (VNP46A2) ---")
+    user_date = input("Enter target date to query (YYYY-MM-DD): ").strip()
 
-        features = daily_result.get('features', [])
-        print(f"\nSuccessfully queried {len(features)} municipal features!")
+
+    try:
+        print(f"\nQuerying NASA VIIRS VNP46A2 for {user_date}")
+        result = extract_daily_vnp46a2(panay_feature_collection, user_date)
+
+        features = result.get('features', [])
+        print(f"\nSuccessfully processed {len(features)} municipal features for {user_date}!")
         
         valid_municipalities = []
         for feature in features:
