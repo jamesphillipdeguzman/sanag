@@ -1,3 +1,4 @@
+from secrets import choice
 import ee
 import sys
 import json
@@ -111,14 +112,29 @@ if __name__ == "__main__":
     panay_geojson = load_panay_municipalities_geojson()
     panay_feature_collection = ee.FeatureCollection(panay_geojson)
 
-    # 3. User Input for Daily VNP46A2 Query
-    print("\n--- Task: Daily VIIRS DNB Routine (VNP46A2) ---")
-    user_date = input("Enter target date to query (YYYY-MM-DD): ").strip()
+    # 3 Choose Routine (Daily VNP46A2 vs Monthly VCMSLCFG Baseline)
+    print("\n--- Choosing Routine ---")
+    print("1. Daily VIIRS DNB Routine (VNP46A2)")
+    print("2. Monthly VCMSLCFG Baseline Routine")
+    routine_choice = input("Enter routine choice (1 or 2): ").strip()
+
+    if routine_choice == "2":
+        is_baseline = True
+        print("\n--- Task: Monthly VCMSLCFG Baseline Routine ---")
+        user_date = input("Enter target month date (e.g., 2024-01-01): ").strip()
+    else:
+        is_baseline = False
+        print("\n--- Task: Daily VIIRS DNB Routine (VNP46A2) ---")
+        user_date = input("Enter target date to query (YYYY-MM-DD): ").strip()
 
 
     try:
-        print(f"\nQuerying NASA VIIRS VNP46A2 for {user_date}")
-        result = extract_daily_vnp46a2(panay_feature_collection, user_date)
+        if is_baseline: 
+            print(f"\nQuerying NOAA Monthly Baseline (VCMSLCFG) using 'avg_rad' for {user_date}")
+            result = extract_zonal_radiance(panay_feature_collection, user_date, is_baseline=True)
+        else:
+            print(f"\nQuerying NASA VIIRS VNP46A2 for {user_date}")
+            result = extract_daily_vnp46a2(panay_feature_collection, user_date)
 
         features = result.get('features', [])
         print(f"\nSuccessfully processed {len(features)} municipal features for {user_date}!")
