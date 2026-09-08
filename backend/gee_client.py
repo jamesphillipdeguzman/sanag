@@ -1,7 +1,7 @@
-from secrets import choice
 import ee
 import sys
 import json
+import os
 from loader import load_panay_municipalities_geojson
 
 def initialize_gee():
@@ -103,6 +103,28 @@ def extract_zonal_radiance(geojson_collection, target_date, is_baseline=False):
     # Returns a dictionary payload ready to be parsed into the SQLite database
     return zonal_stats.getInfo()
 
+def export_results_to_json(result_data, target_date, routine_name="vnp46a2"):
+    """
+    Exports the GEE zonal statistics result dictionary to a JSON file 
+    inside an output directory.
+    """
+    output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create a sanitized filename based on the date and routine
+    filename = f"{routine_name}_{target_date}.json"
+    file_path = os.path.join(output_dir, filename)
+    
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(result_data, f, indent=2)
+        print(f"\n✅ Results successfully exported to: {file_path}")
+        return file_path
+    except Exception as e:
+        print(f"Error exporting to JSON: {e}")
+        return None
+
+
 if __name__ == "__main__":
     # 1. Initialize the connection
     initialize_gee()
@@ -132,12 +154,18 @@ if __name__ == "__main__":
         if is_baseline: 
             print(f"\nQuerying NOAA Monthly Baseline (VCMSLCFG) using 'avg_rad' for {user_date}")
             result = extract_zonal_radiance(panay_feature_collection, user_date, is_baseline=True)
+            routine_tag = "monthly_baseline"
         else:
             print(f"\nQuerying NASA VIIRS VNP46A2 for {user_date}")
             result = extract_daily_vnp46a2(panay_feature_collection, user_date)
+            routine_tag = "daily_vnp46a2"
 
         features = result.get('features', [])
         print(f"\nSuccessfully processed {len(features)} municipal features for {user_date}!")
+
+        # ---> Export the results payload <---
+        if features:
+            export_results_to_json(result, user_date, routine_tag)
         
         valid_municipalities = []
         for feature in features:
