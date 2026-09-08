@@ -1,0 +1,202 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-200: #d8e1ef;
+  --color-ink-300: #aab7c9;
+  --color-ink-400: #8492a7;
+  --color-ink-500: #718096;
+  --color-ink-800: #1c2738;
+  --color-ink-900: #111927;
+  --color-ink-950: #080d16;
+  --color-ocean-200: #c4ddff;
+  --color-ocean-300: #8fc1ff;
+  --color-ocean-400: #70b0ff;
+  --color-ocean-500: #599ffd;
+  --color-ocean-600: #347bf9;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-amber-400: #fbbf24;
+}
+
+:root {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+  --code-bg: #f4f3ec;
+  --accent: #aa3bff;
+  --accent-bg: rgba(170, 59, 255, 0.1);
+  --accent-border: rgba(170, 59, 255, 0.5);
+  --social-bg: rgba(244, 243, 236, 0.5);
+  --shadow:
+    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --mono: ui-monospace, Consolas, monospace;
+
+  font: 18px/145% var(--sans);
+  letter-spacing: 0.18px;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  @media (max-width: 1024px) {
+    font-size: 16px;
+    .lg\:text-6xl {
+        font-size: 3.75rem;
+        line-height: 1;
+    }
+  }
+}
+
+body {
+  margin: 0;
+}
+
+.dashboard-main {
+  background: #080d16;
+}
+
+.dashboard-section {
+  width: min(1200px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+.glass {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(17, 25, 39, 0.72);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+}
+
+.grid-bg {
+  background-image: linear-gradient(rgba(89, 159, 253, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(89, 159, 253, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.dot-bg {
+  background-image: radial-gradient(rgba(89, 159, 253, 0.16) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.leaflet-map {
+  min-height: 420px;
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d1117;
+}
+
+.leaflet-container {
+  font: inherit;
+  background: #0d1117;
+}
+
+.leaflet-control-zoom a {
+  color: #d8e1ef;
+  background: #111927;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.leaflet-control-zoom a:hover {
+  color: #ffffff;
+  background: #1c2738;
+}
+
+.leaflet-tooltip {
+  color: #ffffff;
+  background: #111927;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #599ffd 0%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+.text-white {
+    --tw-text-opacity: 1;
+    color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.font-extrabold {
+    font-weight: 800;
+}
+
+.tracking-tight {
+    letter-spacing: -0.025em;
+}
+
+
+.card-hover { transition: transform 180ms ease, border-color 180ms ease; }
+.card-hover:hover { transform: translateY(-2px); border-color: rgba(89, 159, 253, 0.35); }
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in-up { animation: fade-in-up 500ms ease both; }
+.animate-fade-in { animation: fade-in-up 250ms ease both; }
+
+@media (max-width: 640px) {
+  .dashboard-section { width: min(100% - 24px, 1200px); padding: 12px 0; }
+}
+
+#root {
+  width: 100%;
+  margin: 0 auto;
+  min-height: 100svh;
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+}
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
