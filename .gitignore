@@ -36,3 +36,5 @@ Thumbs.db
 # Ignore local Docker volume mounts if you add them later
 .docker/
 docker-data/
+frontend/node_modules/
+frontend/dist/
