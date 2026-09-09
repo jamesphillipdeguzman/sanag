@@ -7,7 +7,7 @@ def load_panay_municipalities_geojson() -> Dict[str, Any]:
     Loads the raw GeoJSON FeatureCollection for Panay municipalities.
     Can be passed directly into Earth Engine FeatureCollection.
     """
-    file_path = "../frontend/data/panay_municipalities.geojson"
+    file_path = "../frontend/src/data/panay_municipalities.geojson"
     
     if not os.path.exists(file_path):
         print(f"Error: GeoJSON file not found at {file_path}")
