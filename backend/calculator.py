@@ -31,8 +31,12 @@ def interpret_score(r_val):
 
 def compute_recovery_index(db_path=DB_PATH, baseline_threshold=1e-4):
     """
-    Computes the R(t) recovery index using historical database observations.
-    Formula: R(t) = L(t) / L_baseline
+    Computes the R(t) recovery index using historical database observations,
+    with explicit guardrails for edge cases:
+      1. Cloud-mask exclusions (None values)
+      2. Missing satellite tiles (Missing records / None)
+      3. Zero/near-zero baselines (< threshold)
+      4. Missing dates (Gaps in expected timelines)
     """
     # Connect to the database
     conn = sqlite3.connect(db_path)
@@ -54,25 +58,51 @@ def compute_recovery_index(db_path=DB_PATH, baseline_threshold=1e-4):
 
     results = []
 
+    # --- EDGE CASE HANDLING STARTS HERE ---
     for row in rows:
         mun_name = row["municipality_name"]
         obs_date = row["observation_date"]
         radiance = row["post_event_radiance"]
         baseline_rad = row["baseline_radiance"]
 
-        # Guardrail 1: Cloud Masks / Missing Daily Observations (None values)
-        # Guardrail 2: Missing Baselines or Zero/Near-Zero Baselines (prevent division-by-zero)
-        if radiance is None or baseline_rad is None or baseline_rad < baseline_threshold:
+        # Edge Case 4: Missing Dates or Municipality Records
+        if not obs_date or not mun_name:
+            results.append({
+                "municipality_name": mun_name or "Unknown",
+                "date": obs_date or "Missing Date",
+                "r_t": None,
+                "status": "Error: Missing Date or Municipality Record"
+            })
+            continue
+
+        # Edge Cases 1 & 2: Cloud-Mask Exlusions or Missing Satellite Tiles (None values)
+        if radiance is None:
             results.append({
                 "municipality_name": mun_name,
                 "date": obs_date,
                 "r_t": None,
-                "status": "No Data / Cloud Masked"
+                "status": "No Data / Cloud Masked / Missing Tile"
             })
             continue
 
+        # Edge Case 3: Missing Baselines or Zero/Near-Zero Baselines (prevent division by zero)
+        if baseline_rad is None or baseline_rad < baseline_threshold:
+            results.append({
+                "municipality_name": mun_name,
+                "date": obs_date,
+                "r_t": None,
+                "status": "Invalid Baseline (Zeror or Near-Zero)"
+            })
+            continue
+        # --- EDGE CASE HANDLING ENDS HERE ---
+
         # Core Formula: R(t) = L(t) / L_baseline 
         # (Post-Event Daily Radiance / Monthly Baseline Radiance)
+        # Where:
+        #   - R(t): Recovery ratio or index at time t
+        #   - L(t): Luminosity / daily radiance measured at time t (post-event)
+        #   - L_baseline: Standard baseline luminosity / normal monthly radiance
+        
         r_t = radiance / baseline_rad
         interpretation = interpret_score(r_t)
 
