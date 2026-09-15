@@ -65,7 +65,7 @@ def compute_recovery_index(db_path=DB_PATH, baseline_threshold=1e-4):
         radiance = row["post_event_radiance"]
         baseline_rad = row["baseline_radiance"]
 
-        # Edge Case 4: Missing Dates or Municipality Records
+        # Guardrail 1: Missing Dates or Municipality Records
         if not obs_date or not mun_name:
             results.append({
                 "municipality_name": mun_name or "Unknown",
@@ -75,7 +75,7 @@ def compute_recovery_index(db_path=DB_PATH, baseline_threshold=1e-4):
             })
             continue
 
-        # Edge Cases 1 & 2: Cloud-Mask Exlusions or Missing Satellite Tiles (None values)
+        # Guardrail 2: Cloud-Mask Exclusions or Missing Satellite Tiles (None values)
         if radiance is None:
             results.append({
                 "municipality_name": mun_name,
@@ -85,13 +85,23 @@ def compute_recovery_index(db_path=DB_PATH, baseline_threshold=1e-4):
             })
             continue
 
-        # Edge Case 3: Missing Baselines or Zero/Near-Zero Baselines (prevent division by zero)
+        # Guardrail 3: Missing Baselines or Zero/Near-Zero Baselines (prevent division-by-zero)
         if baseline_rad is None or baseline_rad < baseline_threshold:
             results.append({
                 "municipality_name": mun_name,
                 "date": obs_date,
                 "r_t": None,
-                "status": "Invalid Baseline (Zeror or Near-Zero)"
+                "status": "Invalid Baseline (Zero or Near-Zero)"
+            })
+            continue
+
+        # Guardrail 4: Invalid Ratios (Negative radiance anomalies)
+        if radiance < 0:
+            results.append({
+                "municipality_name": mun_name,
+                "date": obs_date,
+                "r_t": None,
+                "status": "Error: Invalid Negative Radiance Reading"
             })
             continue
         # --- EDGE CASE HANDLING ENDS HERE ---
