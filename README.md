@@ -39,7 +39,32 @@ Recovery Ratio = 80 / 100
 
 > **Important:** Recovery Ratio is an analytical indicator based on nighttime-light observations. It does **not** mean that exactly 80% of the electrical grid has been restored.
 
+# SANAG Power Grid Recovery Index Specification
+
+## 1. Core Formula
+The recovery index $R(t)$ for a given municipality at time $t$ is defined as:
+
+$$R(t) = \frac{L(t)}{L_{\text{baseline}}}$$
+
+Where:
+* $L(t)$: Post-event daily nighttime luminosity/radiance measured by satellite at date $t$.
+* $L_{\text{baseline}}$: Pre-disaster baseline monthly radiance established for the municipality under normal operating conditions.
+
 ---
+
+## 2. Status Benchmarks & Interpretation
+The resulting ratio $R(t)$ is classified into three operational categories:
+
+| Range                    | Status Category                     | Interpretation                                                                     |
+| :----------------------- | :---------------------------------- | :--------------------------------------------------------------------------------- |
+| **$R(t) \ge 0.9$**       | **Normal Operating Conditions**     | Power grid has fully or near-fully recovered to pre-disaster baseline levels.      |
+| **$0.3 \le R(t) < 0.9$** | **Partial Power / Brownouts**       | Active recovery underway; partial grid stability or rolling brownouts experienced. |
+| **$R(t) < 0.3$**         | **Severe Grid Collapse / Blackout** | Major grid failure resulting in catastrophic loss of nighttime luminosity.         |
+
+
+---
+
+
 
 # 🗺️ What SANAG Does
 
