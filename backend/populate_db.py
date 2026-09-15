@@ -75,6 +75,21 @@ def populate_sample_data():
         VALUES (?, ?, ?)
     """, observations_data) 
 
+    # Populate events table matching the exact schema columns
+    cursor.execute("""
+        INSERT OR REPLACE INTO events (id, municipality_code, barangay_code, name, description, date, category, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        1,
+        "PH603000000",  # Example region/municipality code for Panay/Iloilo region scope
+        None,
+        "Panay Island Grid Collapse",
+        "Major transmission failure causing widespread power blackouts across Panay Island.",
+        "2024-01-02",
+        "Power Disruption",
+        None
+    ))
+
     # Commit the changes
     conn.commit()
     conn.close()
