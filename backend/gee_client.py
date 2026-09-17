@@ -78,17 +78,26 @@ def extract_zonal_radiance(geojson_collection, target_date, is_baseline=False):
 
     # If collection is empty, return a safe fallback structure
     if dataset.size().getInfo() == 0:
-        return {
-            "type": "FeatureCollection",
-            "features": [{
+        fc_info = geojson_collection.getInfo() if hasattr(geojson_collection, 'getInfo') else geojson_collection
+        raw_features = fc_info.get('features', []) if isinstance(fc_info, dict) else []
+        fallback_features = []
+        for idx, f in enumerate(raw_features):
+            props = dict(f.get('properties', {}))
+            name = props.get('ADM3_EN') or props.get('psgc_name') or props.get('name', 'Unknown')
+            pcode = props.get('ADM3_PCODE') or props.get('psgc_id', '')
+            props['name'] = name
+            props['ADM3_EN'] = props.get('ADM3_EN', name)
+            props['ADM3_PCODE'] = pcode
+            props['system:index'] = f.get('id', str(idx))
+            props['mean'] = None
+            fallback_features.append({
                 "type": "Feature",
                 "geometry": f.get('geometry'),
-                "properties": {
-                    "name": f.get('properties', {}).get('name', 'Unknown'),
-                    "system:index": f.get('id', '0'),
-                    "mean": None
-                }
-            } for f in geojson_collection.getInfo()['features']]
+                "properties": props
+            })
+        return {
+            "type": "FeatureCollection",
+            "features": fallback_features
         }
 
     image = dataset.first()
