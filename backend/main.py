@@ -5,6 +5,7 @@ import os
 import sqlite3
 from typing import List, Optional, Dict, Any
 from calculator import compute_recovery_index
+from weather_service import fetch_historical_weather
 
 app = FastAPI(
     title="SANAG API",
@@ -89,13 +90,30 @@ def get_municipalities():
 def get_events():
     """
     Returns all historical disaster and power disruption event records.
-    Excludes barangay fields and supports island-wide or municipality-scoped codes.
     """
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT id, municipality_code, name, description, date, category, image_url FROM events ORDER BY date DESC")
+        
+        # Check actual table schema to dynamically alias columns safely
+        cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
+        if "event_title" in cols:
+            sql = """
+                SELECT 
+                    id, 
+                    affected_pcode AS municipality_code, 
+                    event_title AS name, 
+                    description, 
+                    event_date AS date, 
+                    event_type AS category, 
+                    NULL AS image_url 
+                FROM events ORDER BY event_date DESC
+            """
+        else:
+            sql = "SELECT id, municipality_code, name, description, date, category, image_url FROM events ORDER BY date DESC"
+            
+        cursor.execute(sql)
         rows = cursor.fetchall()
         conn.close()
         return {"events": [dict(row) for row in rows]}
@@ -147,7 +165,23 @@ def get_event_radiance(
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    cursor.execute("SELECT id, municipality_code, name, description, date, category, image_url FROM events WHERE id = ?", (event_id,))
+    cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
+    if "event_title" in cols:
+        evt_sql = """
+            SELECT 
+                id, 
+                affected_pcode AS municipality_code, 
+                event_title AS name, 
+                description, 
+                event_date AS date, 
+                event_type AS category, 
+                NULL AS image_url 
+            FROM events WHERE id = ?
+        """
+    else:
+        evt_sql = "SELECT id, municipality_code, name, description, date, category, image_url FROM events WHERE id = ?"
+        
+    cursor.execute(evt_sql, (event_id,))
     event = cursor.fetchone()
     if not event:
         conn.close()
@@ -190,7 +224,6 @@ def get_event_radiance(
     cursor.execute(query, params)
     rows = cursor.fetchall()
 
-    # If no records exist for exact event date, attempt nearest observation date within +/- 3 days
     if not rows and target_date:
         cursor.execute("""
             SELECT observation_date, ABS(JULIANDAY(observation_date) - JULIANDAY(?)) AS diff
@@ -265,3 +298,25 @@ def get_municipality_timeline(
         "pcode": mun_pcode,
         "timeline": filtered
     }
+
+
+@app.get("/api/v1/weather/historical", tags=["Weather"])
+async def get_historical_weather_endpoint(
+    start_date: str = "2024-01-01",
+    end_date: str = "2024-01-05",
+    latitude: float = 11.15,
+    longitude: float = 122.50
+):
+    """
+    Fetches historical daily weather data from Open-Meteo for disaster correlation.
+    """
+    try:
+        data = await fetch_historical_weather(
+            latitude=latitude,
+            longitude=longitude,
+            start_date=start_date,
+            end_date=end_date
+        )
+        return {"status": "success", "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
