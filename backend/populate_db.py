@@ -54,23 +54,61 @@ def ensure_database_schema(conn: sqlite3.Connection):
         ON radiance_observations (municipality_name, observation_date)
     """)
 
-    # 3. Ensure baselines table exists with municipality_pcode
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS baselines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            municipality_name TEXT NOT NULL,
-            municipality_pcode TEXT,
-            month_date TEXT NOT NULL,
-            baseline_radiance REAL,
-            FOREIGN KEY (municipality_name) REFERENCES municipalities(name)
-        )
-    """)
-
+    # 3. Ensure baselines table exists with municipality_pcode and allows null baseline values
     cursor.execute("PRAGMA table_info(baselines)")
-    cols = [col[1] for col in cursor.fetchall()]
-    if "municipality_pcode" not in cols:
-        print("Migrating baselines: adding municipality_pcode column...")
-        cursor.execute("ALTER TABLE baselines ADD COLUMN municipality_pcode TEXT")
+    baseline_cols = cursor.fetchall()
+    if not baseline_cols:
+        cursor.execute("""
+            CREATE TABLE baselines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                municipality_name TEXT NOT NULL,
+                municipality_pcode TEXT,
+                month_date TEXT NOT NULL,
+                baseline_radiance REAL,
+                FOREIGN KEY (municipality_name) REFERENCES municipalities(name)
+            )
+        """)
+    else:
+        baseline_map = {col[1]: col for col in baseline_cols}
+        needs_rebuild = "municipality_pcode" not in baseline_map or baseline_map["baseline_radiance"][3] == 1
+        if needs_rebuild:
+            print("Rebuilding baselines table for NULL-safe baseline values and municipality_pcode alignment...")
+            cursor.execute("ALTER TABLE baselines RENAME TO baselines_legacy")
+            cursor.execute("""
+                CREATE TABLE baselines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    municipality_name TEXT NOT NULL,
+                    municipality_pcode TEXT,
+                    month_date TEXT NOT NULL,
+                    baseline_radiance REAL,
+                    FOREIGN KEY (municipality_name) REFERENCES municipalities(name)
+                )
+            """)
+            if "id" in baseline_map and "municipality_pcode" in baseline_map:
+                cursor.execute("""
+                    INSERT INTO baselines (id, municipality_name, municipality_pcode, month_date, baseline_radiance)
+                    SELECT id, municipality_name, municipality_pcode, month_date, baseline_radiance
+                    FROM baselines_legacy
+                """)
+            elif "municipality_pcode" in baseline_map:
+                cursor.execute("""
+                    INSERT INTO baselines (municipality_name, municipality_pcode, month_date, baseline_radiance)
+                    SELECT municipality_name, municipality_pcode, month_date, baseline_radiance
+                    FROM baselines_legacy
+                """)
+            elif "id" in baseline_map:
+                cursor.execute("""
+                    INSERT INTO baselines (id, municipality_name, month_date, baseline_radiance)
+                    SELECT id, municipality_name, month_date, baseline_radiance
+                    FROM baselines_legacy
+                """)
+            else:
+                cursor.execute("""
+                    INSERT INTO baselines (municipality_name, month_date, baseline_radiance)
+                    SELECT municipality_name, month_date, baseline_radiance
+                    FROM baselines_legacy
+                """)
+            cursor.execute("DROP TABLE baselines_legacy")
 
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_baselines_mun_month 
