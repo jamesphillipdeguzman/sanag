@@ -9,6 +9,7 @@ interface PanayMapProps {
   municipalities: Municipality[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  recoveryDate?: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -18,7 +19,7 @@ const statusLabels: Record<string, string> = {
   critical: 'Critical Outage',
 };
 
-export default function PanayMap({ municipalities, selectedId, onSelect }: PanayMapProps) {
+export default function PanayMap({ municipalities, selectedId, onSelect, recoveryDate }: PanayMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const hovered = municipalities.find((m) => m.id === hoveredId);
@@ -33,7 +34,10 @@ export default function PanayMap({ municipalities, selectedId, onSelect }: Panay
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
             <div>
               <h3 className="text-sm font-semibold text-white">Panay Island — Nightlight Recovery Map</h3>
-              <p className="text-xs text-ink-400 mt-0.5">NASA VIIRS radiance overlay · Municipal boundaries</p>
+              <p className="text-xs text-ink-400 mt-0.5">
+                NASA VIIRS radiance overlay · Municipal boundaries
+                {recoveryDate ? ` · Latest valid reading: ${recoveryDate}` : ''}
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <LegendDot color="#10b981" label="Restored" />
@@ -218,10 +222,13 @@ function LeafletMap({
       attributionControl: false,
     });
     mapRef.current = map;
+    let disposed = false;
 
     fetch('/panay_municipalities.geojson')
       .then((response) => response.json())
       .then((geojson: GeoJSON.FeatureCollection) => {
+        if (disposed || mapRef.current !== map) return;
+
         const municipalityById = new Map(municipalities.map((municipality) => [municipality.id, municipality]));
         const layer = L.geoJSON(geojson, {
           style: (feature) => {
@@ -259,10 +266,17 @@ function LeafletMap({
           },
         }).addTo(map);
 
-        map.fitBounds(layer.getBounds(), { padding: [18, 18] });
+        const bounds = layer.getBounds();
+        if (!disposed && mapRef.current === map && bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [18, 18] });
+        }
+      })
+      .catch(() => {
+        // Ignore aborted or unavailable map data during component cleanup.
       });
 
     return () => {
+      disposed = true;
       map.remove();
       mapRef.current = null;
       layersRef.current = {};
