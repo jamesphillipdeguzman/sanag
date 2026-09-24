@@ -1,4 +1,4 @@
-import { Satellite, Heart, Globe } from 'lucide-react';
+import { Satellite, Globe } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -50,7 +50,7 @@ export default function Footer() {
             CSE 499 Project · Panay Island, Philippines
           </p>
           <p className="text-xs text-ink-500 flex items-center gap-1.5">
-            Built with <Heart className="h-3 w-3 text-rose-400" /> for Panay communities
+            Built for Panay communities
           </p>
         </div>
       </div>

@@ -116,7 +116,15 @@ def get_events():
         cursor.execute(sql)
         rows = cursor.fetchall()
         conn.close()
-        return {"events": [dict(row) for row in rows]}
+
+        events = []
+        for row in rows:
+            event = dict(row)
+            if event.get("id") is not None:
+                event["id"] = str(event["id"])
+            events.append(event)
+
+        return {"events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
@@ -186,8 +194,10 @@ def get_event_radiance(
     if not event:
         conn.close()
         raise HTTPException(status_code=404, detail=f"Event ID '{event_id}' not found.")
-    
+
     event_dict = dict(event)
+    if event_dict.get("id") is not None:
+        event_dict["id"] = str(event_dict["id"])
     target_date = event_dict.get("date")
     
     query = """
