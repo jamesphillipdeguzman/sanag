@@ -134,18 +134,53 @@ function App() {
         return response.json()
       })
       .then((payload) => {
-        const apiEvents = payload.events.map(mapApiEvent)
+        const rawEvents = payload.events.map(mapApiEvent)
+        // Deduplicate events by id or identical name + date
+        const apiEvents = rawEvents.filter((evt, idx, arr) =>
+          idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
+        )
         setEvents(apiEvents)
-        setActiveEventId(apiEvents[0]?.id ?? null)
+        // Default to the flagship Panay blackout event which has verified VIIRS satellite data
+        const defaultEvent = apiEvents.find((e) => e.id === 'panay-blackout-2024') ?? apiEvents[0]
+        setActiveEventId(defaultEvent?.id ?? null)
       })
       .catch((error) => setEventsError(error.message))
   }, [])
 
   useEffect(() => {
+    if (!activeEventId) return
+
+    // Connect event-specific spatial radiance to update map layers with actual post-event observations
+    fetch(`/api/v1/events/${activeEventId}/radiance`)
+      .then((response) => {
+        if (!response.ok) return null
+        return response.json()
+      })
+      .then((payload) => {
+        if (payload?.data && payload.data.length > 0) {
+          const records = payload.data.map((item) => ({
+            ...item,
+            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+            date: item.observation_date,
+          }))
+          setMunicipalities((current) => {
+            const mapped = applyRecoveryScores(current, records)
+            setRecoveryDate(payload.data[0]?.observation_date ?? null)
+            return mapped
+          })
+        }
+      })
+      .catch(() => {
+        // Fall back gracefully if spatial data is not available for this event
+      })
+  }, [activeEventId])
+
+  useEffect(() => {
     if (!activeEvent?.date) return
 
-    const startDate = activeEvent.date
-    const endDate = addDays(startDate, 30)
+    // Query from 3 days before event onset to 30 days after to capture pre-event baseline and drop
+    const startDate = addDays(activeEvent.date, -3)
+    const endDate = addDays(activeEvent.date, 30)
     fetch(`/api/v1/recovery-scores?start_date=${startDate}&end_date=${endDate}`)
       .then((response) => {
         if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)

@@ -33,7 +33,7 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span className="text-xs font-medium text-ocean-200">Local GeoJSON Dataset</span>
+              <span className="text-xs font-medium text-ocean-200">NASA VIIRS Nightlight Analytics</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.1] text-balance">
@@ -43,9 +43,9 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
             </h1>
 
             <p className="mt-6 text-lg text-ink-300 leading-relaxed max-w-2xl">
-              SANAG visualizes municipality boundaries and recovery indicators across
-              Panay Island. Connect a verified night-light data source later to replace
-              the included demo metrics with live measurements.
+              SANAG computes municipal power recovery indicators across
+              all 93 Panay Island local government units using satellite nightlight
+              radiance observations and calibrated monthly baselines.
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">

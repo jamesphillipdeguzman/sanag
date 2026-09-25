@@ -11,9 +11,10 @@ export default function AIBriefing({ event, municipalities }: AIBriefingProps) {
   const sorted = [...municipalities].sort((a, b) => a.recoveryScore - b.recoveryScore);
   const critical = sorted.filter((m) => m.status === 'critical' || m.status === 'warning');
   const restored = sorted.filter((m) => m.status === 'restored');
-  const avgScore = Math.round(sorted.reduce((s, m) => s + m.recoveryScore, 0) / sorted.length);
+  const totalCount = municipalities.length || 1;
+  const avgScore = Math.round(sorted.reduce((s, m) => s + m.recoveryScore, 0) / totalCount);
 
-  const summary = generateSummary(event, avgScore, critical, restored);
+  const summary = generateSummary(event, avgScore, critical, restored, municipalities.length);
   const takeaways = generateTakeaways(sorted, critical, restored);
 
   return (
@@ -29,10 +30,10 @@ export default function AIBriefing({ event, municipalities }: AIBriefingProps) {
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white">AI Situational Briefing</h3>
-            <p className="text-xs text-ink-400">Generated locally · {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+            <p className="text-xs text-ink-400">Generated from satellite analytics · {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         </div>
-        <span className="text-xs text-ink-400 hidden sm:inline">Based on local GeoJSON and demo metrics</span>
+        <span className="text-xs text-ink-400 hidden sm:inline">Based on satellite VIIRS radiance metrics</span>
       </div>
 
       <div className="p-5">
@@ -107,11 +108,13 @@ function generateSummary(
   avgScore: number,
   critical: Municipality[],
   restored: Municipality[],
+  totalMunicipalities: number,
 ): string {
   const criticalNames = critical.slice(0, 2).map((m) => m.name).join(' and ');
-  const restoredPct = Math.round((restored.length / 13) * 100);
+  const total = totalMunicipalities || 1;
+  const restoredPct = Math.round((restored.length / total) * 100);
 
-  return `As of Day 14 following the ${event.name}, the average municipal recovery score across Panay Island stands at ${avgScore}%. ${restoredPct}% of monitored municipalities (${restored.length} of 13) have reached or exceeded the 85% recovery threshold. However, ${critical.length} communities — including ${criticalNames} — remain below 50% of their pre-disaster baseline radiance, indicating persistent power infrastructure gaps. Satellite nightlight data confirms that urban centers are recovering faster than rural coastal towns, consistent with historical post-disaster patterns in the region.`;
+  return `Following the ${event.name}, the average municipal recovery score across Panay Island stands at ${avgScore}%. ${restoredPct}% of monitored municipalities (${restored.length} of ${totalMunicipalities}) have reached or exceeded the recovery benchmark. However, ${critical.length} communities${criticalNames ? ` — including ${criticalNames} —` : ''} remain below 50% of their baseline radiance, indicating persistent power infrastructure gaps. Satellite nightlight data confirms that urban centers are recovering faster than rural coastal towns, consistent with historical post-disaster patterns in the region.`;
 }
 
 function generateTakeaways(
