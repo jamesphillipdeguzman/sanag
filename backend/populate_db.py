@@ -317,15 +317,6 @@ def seed_event_and_baseline_references(conn: sqlite3.Connection, lookup: Dict[st
             None
         ),
         (
-            "1", # Numeric alias for backward compatibility
-            "PANAY_ALL",
-            "Panay Island Grid Collapse",
-            "Major transmission failure causing widespread power blackouts across Panay Island.",
-            "2024-01-02",
-            "Power Disruption",
-            None
-        ),
-        (
             "haiyan",
             "PANAY_ALL",
             "Typhoon Haiyan Aftermath",

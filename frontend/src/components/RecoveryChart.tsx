@@ -36,7 +36,8 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
     const recordsByPcode = new Map<string, RecoveryRecord[]>();
     const validRecords = records.filter((record) => record.r_t !== null && record.r_t !== undefined);
     const windowStart = eventDate ? new Date(`${eventDate}T00:00:00Z`) : null;
-    const windowEnd = windowStart ? new Date(windowStart) : null;
+    if (windowStart) windowStart.setUTCDate(windowStart.getUTCDate() - 3); // Include pre-event baseline/onset observations
+    const windowEnd = eventDate ? new Date(`${eventDate}T00:00:00Z`) : null;
     if (windowEnd) windowEnd.setUTCDate(windowEnd.getUTCDate() + 30);
 
     for (const record of validRecords) {
@@ -68,24 +69,32 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
   const innerW = W - margin.left - margin.right;
   const innerH = H - margin.top - margin.bottom;
 
-  const pointCount = Math.max(1, ...series.map((item) => item.data.length));
-  const xScale = (i: number) => margin.left + (i / Math.max(1, pointCount - 1)) * innerW;
+  // Collect all unique observation dates across series to build a unified timeline
+  const allDates = useMemo(() => {
+    const dateSet = new Set<string>();
+    series.forEach((s) => s.data.forEach((d) => dateSet.add(d.date)));
+    return Array.from(dateSet).sort();
+  }, [series]);
+
+  const pointCount = allDates.length;
+  const xScale = (i: number) => margin.left + (pointCount > 1 ? (i / (pointCount - 1)) * innerW : innerW / 2);
   const yScale = (score: number) => margin.top + innerH - (score / 100) * innerH;
-  const chartDates = series[0]?.data ?? [];
+
   const formatDate = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
     month: '2-digit',
     day: 'numeric',
     timeZone: 'UTC',
   });
-  const eventWindowEnd = eventDate ? new Date(`${eventDate}T00:00:00Z`) : null;
-  if (eventWindowEnd) eventWindowEnd.setUTCDate(eventWindowEnd.getUTCDate() + 30);
-  const dateRange = eventDate
-    ? `${formatDate(eventDate)} - ${formatDate(eventWindowEnd!.toISOString().slice(0, 10))}`
-    : chartDates.length > 1
-    ? `${formatDate(chartDates[0].date)} - ${formatDate(chartDates[chartDates.length - 1].date)}`
-    : chartDates[0]
-      ? formatDate(chartDates[0].date)
-      : 'No valid observations';
+  const dateRange = allDates.length > 1
+    ? `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`
+    : allDates[0]
+      ? formatDate(allDates[0])
+      : eventDate
+        ? formatDate(eventDate)
+        : 'No valid observations';
+
+  const eventMarkerIndex = allDates.findIndex((d) => d >= (eventDate ?? ''));
+  const markerX = eventMarkerIndex >= 0 ? xScale(eventMarkerIndex) : xScale(0);
 
   const lineColors = ['#599ffd', '#10b981', '#fbbf24', '#f43f5e'];
 
@@ -102,7 +111,7 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
         </div>
         <div className="flex items-center gap-1 text-xs text-emerald-400">
           <TrendingUp className="h-3.5 w-3.5" />
-          <span>30 days after event · {dateRange}</span>
+          <span>Timeline window · {dateRange}</span>
         </div>
       </div>
 
@@ -161,27 +170,27 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
             </text>
 
             {/* X axis labels */}
-            {series[0]?.data.map((point, index) => {
-              if (series[0].data.length > 7 && ![0, Math.floor((series[0].data.length - 1) / 2), series[0].data.length - 1].includes(index)) return null;
+            {allDates.map((dateStr, index) => {
+              if (allDates.length > 7 && ![0, Math.floor((allDates.length - 1) / 2), allDates.length - 1].includes(index)) return null;
               return (
                 <text
-                  key={point.date}
+                  key={dateStr}
                   x={xScale(index)}
                   y={H - 12}
                   textAnchor="middle"
                   className="fill-ink-500"
                   style={{ fontSize: '9px' }}
                 >
-                  {formatDate(point.date)}
+                  {formatDate(dateStr)}
                 </text>
               );
             })}
 
             {/* Event marker line */}
             <line
-              x1={xScale(0)}
+              x1={markerX}
               y1={margin.top}
-              x2={xScale(0)}
+              x2={markerX}
               y2={margin.top + innerH}
               stroke="#f43f5e"
               strokeWidth="1.5"
@@ -189,25 +198,38 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
               opacity="0.6"
             />
             <text
-              x={xScale(0) + 4}
+              x={markerX + 4}
               y={margin.top + 12}
               className="fill-rose-400"
               style={{ fontSize: '9px', fontWeight: 600 }}
             >
-              Window Start
+              Event Onset
             </text>
 
             {/* Recovery curves */}
             {series.map((s, i) => {
               const color = lineColors[i % lineColors.length];
-              const pathData = s.data
-                .map((pt, j) => `${j === 0 ? 'M' : 'L'} ${xScale(j)} ${yScale(pt.recoveryScore)}`)
-                .join(' ');
+              const isSingle = s.data.length === 1;
+              const firstPt = s.data[0];
+              const lastPt = s.data[s.data.length - 1];
+              const firstX = xScale(allDates.indexOf(firstPt.date));
+              const lastX = xScale(allDates.indexOf(lastPt.date));
 
-              const areaPath =
-                `M ${xScale(0)} ${yScale(s.data[0].recoveryScore)} ` +
-                s.data.map((pt, j) => `L ${xScale(j)} ${yScale(pt.recoveryScore)}`).join(' ') +
-                ` L ${xScale(s.data.length - 1)} ${margin.top + innerH} L ${xScale(0)} ${margin.top + innerH} Z`;
+              const pathData = isSingle
+                ? `M ${firstX - 15} ${yScale(firstPt.recoveryScore)} L ${firstX + 15} ${yScale(firstPt.recoveryScore)}`
+                : s.data
+                    .map((pt, j) => {
+                      const x = xScale(allDates.indexOf(pt.date));
+                      const y = yScale(pt.recoveryScore);
+                      return `${j === 0 ? 'M' : 'L'} ${x} ${y}`;
+                    })
+                    .join(' ');
+
+              const areaPath = !isSingle
+                ? `M ${firstX} ${yScale(firstPt.recoveryScore)} ` +
+                  s.data.map((pt) => `L ${xScale(allDates.indexOf(pt.date))} ${yScale(pt.recoveryScore)}`).join(' ') +
+                  ` L ${lastX} ${margin.top + innerH} L ${firstX} ${margin.top + innerH} Z`
+                : '';
 
               return (
                 <g key={s.municipality.id}>
@@ -217,7 +239,7 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
                       <stop offset="100%" stopColor={color} stopOpacity="0" />
                     </linearGradient>
                   </defs>
-                  {series.length === 1 && <path d={areaPath} fill={`url(#grad-${s.municipality.id})`} />}
+                  {series.length === 1 && !isSingle && <path d={areaPath} fill={`url(#grad-${s.municipality.id})`} />}
                   <path
                     d={pathData}
                     fill="none"
@@ -230,8 +252,8 @@ export default function RecoveryChart({ municipalities, selectedId, records, eve
                   />
                   {/* End point dot */}
                   <circle
-                    cx={xScale(s.data.length - 1)}
-                    cy={yScale(s.data[s.data.length - 1].recoveryScore)}
+                    cx={lastX}
+                    cy={yScale(lastPt.recoveryScore)}
                     r="4"
                     fill={color}
                     stroke="#0d1117"
