@@ -21,10 +21,10 @@ __pycache__/
 
 # 3. SQLite Database
 # Prevent local testing data from overwriting the production database
-*.db
-*.sqlite
-*.sqlite3
-backend/db/*.db
+# *.db
+# *.sqlite
+# *.sqlite3
+# backend/db/*.db
 
 # 4. OS & IDE Configuration
 # Ignore Mac/Windows system files and personal editor settings
