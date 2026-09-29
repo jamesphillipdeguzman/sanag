@@ -4,3 +4,4 @@ httpx
 pydantic
 earthengine-api
 google-genai
+python-dotenv
