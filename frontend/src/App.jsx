@@ -212,6 +212,7 @@ function App() {
             selectedId={selectedId}
             records={recoveryRecords}
             eventDate={activeEvent?.date}
+            onSelect={selectMunicipality}
           />
         </section>
         <section className="dashboard-section">

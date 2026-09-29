@@ -225,22 +225,22 @@ def get_event_radiance(
             o.daily_radiance,
             COALESCE(
                 (SELECT b1.baseline_radiance FROM baselines b1 
-                 WHERE b1.municipality_name = o.municipality_name 
+                 WHERE (b1.municipality_name = o.municipality_name OR b1.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
                    AND b1.baseline_radiance IS NOT NULL 
                    AND (b1.month_date = substr(o.observation_date, 1, 7) OR b1.month_date = substr(o.observation_date, 1, 7) || '-01')
                  LIMIT 1),
                 (SELECT b2.baseline_radiance FROM baselines b2 
-                 WHERE b2.municipality_name = o.municipality_name 
+                 WHERE (b2.municipality_name = o.municipality_name OR b2.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
                    AND b2.baseline_radiance IS NOT NULL 
-                   AND b2.month_date <= o.observation_date
-                 ORDER BY b2.month_date DESC LIMIT 1),
+                   AND (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) <= o.observation_date
+                 ORDER BY (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) DESC LIMIT 1),
                 (SELECT b3.baseline_radiance FROM baselines b3 
-                 WHERE b3.municipality_name = o.municipality_name 
+                 WHERE (b3.municipality_name = o.municipality_name OR b3.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
                    AND b3.baseline_radiance IS NOT NULL 
-                 ORDER BY b3.month_date DESC LIMIT 1)
+                 ORDER BY b3.month_date ASC LIMIT 1)
             ) AS baseline_radiance
         FROM radiance_observations o
-        LEFT JOIN municipalities m ON o.municipality_name = m.name
+        LEFT JOIN municipalities m ON (o.municipality_name = m.name OR o.municipality_pcode = m.code)
         WHERE o.observation_date = ?
     """
     params = [target_date]

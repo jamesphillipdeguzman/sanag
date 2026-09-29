@@ -12,7 +12,7 @@ type SortKey = 'recoveryScore' | 'name' | 'province' | 'estimatedDaysToRecover';
 
 export default function MunicipalityTable({ municipalities, selectedId, onSelect }: MunicipalityTableProps) {
   const sorted = [...municipalities]
-    .sort((a, b) => a.recoveryScore - b.recoveryScore)
+    .sort((a, b) => a.recoveryScore - b.recoveryScore || a.name.localeCompare(b.name))
     .slice(0, 5);
 
   return (
