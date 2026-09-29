@@ -6,6 +6,7 @@ import sqlite3
 from typing import List, Optional, Dict, Any
 from calculator import compute_recovery_index
 from weather_service import fetch_historical_weather
+from ai_briefing import generate_recovery_briefing
 
 app = FastAPI(
     title="SANAG API",
@@ -13,10 +14,15 @@ app = FastAPI(
     version="1.1.0"
 )
 
-# Enable CORS for local frontend development
+# Allow production domain and local dev
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS", 
+    "https://sanag-project.netlify.app,http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,28 +139,23 @@ def get_events():
 def get_recovery_scores(
     municipality: Optional[str] = Query(None, description="Filter by specific municipality name or ADM3_PCODE"),
     start_date: Optional[str] = Query(None, description="Filter observations from YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="Filter observations up to YYYY-MM-DD")
+    end_date: Optional[str] = Query(None, description="Filter observations up to YYYY-MM-DD"),
+    month: Optional[str] = Query(None, description="Filter observations for full month (e.g. YYYY-MM)"),
+    event_id: Optional[str] = Query(None, description="Filter observations by disaster event ID (with safe fallback event window)")
 ):
     """
     Computes and returns R(t) recovery scores with both municipality_name and pcode
     for direct Leaflet map binding without string-matching errors.
+    Supports full monthly and custom date ranges, plus safe event-window fallbacks.
     """
     try:
-        scores = compute_recovery_index()
-        
-        filtered = scores
-        if municipality and isinstance(municipality, str):
-            mun_query = municipality.strip().lower()
-            filtered = [
-                s for s in filtered 
-                if (s.get("municipality_name") or "").lower() == mun_query
-                or (s.get("pcode") or "").lower() == mun_query
-            ]
-        if start_date and isinstance(start_date, str):
-            filtered = [s for s in filtered if (s.get("date") or "") >= start_date]
-        if end_date and isinstance(end_date, str):
-            filtered = [s for s in filtered if (s.get("date") or "") <= end_date]
-            
+        filtered = compute_recovery_index(
+            start_date=start_date,
+            end_date=end_date,
+            municipality=municipality,
+            event_id=event_id,
+            month=month
+        )
         return {"records_count": len(filtered), "data": filtered}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -189,7 +190,7 @@ def get_event_radiance(
     else:
         evt_sql = "SELECT id, municipality_code, name, description, date, category, image_url FROM events WHERE id = ?"
         
-    lookup_id = "panay-blackout-2024" if str(event_id).strip() == "1" else event_id
+    lookup_id = "panay-blackout-2024" if event_id.strip() == "1" else event_id
     cursor.execute(evt_sql, (lookup_id,))
     event = cursor.fetchone()
     if not event:
@@ -207,20 +208,24 @@ def get_event_radiance(
             COALESCE(o.municipality_pcode, m.code) AS pcode,
             o.observation_date,
             o.daily_radiance,
-            b.baseline_radiance
+            COALESCE(
+                (SELECT b1.baseline_radiance FROM baselines b1 
+                 WHERE b1.municipality_name = o.municipality_name 
+                   AND b1.baseline_radiance IS NOT NULL 
+                   AND (b1.month_date = substr(o.observation_date, 1, 7) OR b1.month_date = substr(o.observation_date, 1, 7) || '-01')
+                 LIMIT 1),
+                (SELECT b2.baseline_radiance FROM baselines b2 
+                 WHERE b2.municipality_name = o.municipality_name 
+                   AND b2.baseline_radiance IS NOT NULL 
+                   AND b2.month_date <= o.observation_date
+                 ORDER BY b2.month_date DESC LIMIT 1),
+                (SELECT b3.baseline_radiance FROM baselines b3 
+                 WHERE b3.municipality_name = o.municipality_name 
+                   AND b3.baseline_radiance IS NOT NULL 
+                 ORDER BY b3.month_date DESC LIMIT 1)
+            ) AS baseline_radiance
         FROM radiance_observations o
         LEFT JOIN municipalities m ON o.municipality_name = m.name
-        LEFT JOIN baselines b ON o.municipality_name = b.municipality_name
-            AND b.baseline_radiance IS NOT NULL
-            AND (
-                b.month_date = substr(o.observation_date, 1, 7)
-                OR b.month_date = substr(o.observation_date, 1, 7) || '-01'
-                OR b.month_date = (
-                    SELECT b2.month_date FROM baselines b2 
-                    WHERE b2.municipality_name = o.municipality_name AND b2.baseline_radiance IS NOT NULL
-                    ORDER BY b2.month_date DESC LIMIT 1
-                )
-            )
         WHERE o.observation_date = ?
     """
     params = [target_date]
@@ -271,43 +276,82 @@ def get_event_radiance(
     }
 
 
+@app.get("/api/v1/resilience/timeline", response_model=TimelineResponse, tags=["Timeline"])
+def get_timeline_query(
+    municipality: Optional[str] = Query(None, description="Filter by municipality name or ADM3_PCODE"),
+    muniId: Optional[str] = Query(None, description="Alias for municipality or ADM3_PCODE"),
+    start_date: Optional[str] = Query(None, description="Start date filter YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="End date filter YYYY-MM-DD"),
+    month: Optional[str] = Query(None, description="Filter observations for full month (e.g. YYYY-MM)"),
+    event_id: Optional[str] = Query(None, description="Filter observations by disaster event ID"),
+    eventId: Optional[str] = Query(None, description="Alias for event_id")
+):
+    """
+    Query-param based recovery timeline endpoint supporting full date ranges and event views.
+    Example: /api/v1/resilience/timeline?muniId=iloilo_city&eventId=panay-blackout-2024
+    """
+    target_mun = municipality or muniId
+    if not target_mun:
+        raise HTTPException(
+            status_code=400,
+            detail="A municipality identifier ('municipality' or 'muniId') is required."
+        )
+    target_event = event_id or eventId
+    return get_municipality_timeline(
+        municipality_identifier=target_mun,
+        start_date=start_date,
+        end_date=end_date,
+        month=month,
+        event_id=target_event
+    )
+
+
 @app.get("/api/v1/resilience/timeline/{municipality_identifier}", response_model=TimelineResponse, tags=["Timeline"])
 def get_municipality_timeline(
     municipality_identifier: str,
     start_date: Optional[str] = Query(None, description="Start date filter YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="End date filter YYYY-MM-DD")
+    end_date: Optional[str] = Query(None, description="End date filter YYYY-MM-DD"),
+    month: Optional[str] = Query(None, description="Filter observations for full month (e.g. YYYY-MM)"),
+    event_id: Optional[str] = Query(None, description="Filter observations by disaster event ID (with safe fallback event window)")
 ):
     """
     Returns the day-by-day recovery timeline for a specific municipality.
     Accepts either municipality name (e.g. 'Altavas') or ADM3_PCODE (e.g. 'PH0600401').
+    Supports full monthly and custom date ranges, plus safe event-window fallbacks.
     """
-    scores = compute_recovery_index()
+    # Verify municipality exists
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
     ident = municipality_identifier.strip().lower()
-    
-    filtered = [
-        s for s in scores 
-        if (s.get("municipality_name") and s["municipality_name"].lower() == ident)
-        or (s.get("pcode") and s["pcode"].lower() == ident)
-    ]
-    
-    if not filtered:
+    cursor.execute(
+        "SELECT name, code FROM municipalities WHERE LOWER(name) = ? OR LOWER(code) = ? LIMIT 1",
+        (ident, ident)
+    )
+    mun_row = cursor.fetchone()
+    conn.close()
+
+    if not mun_row:
         raise HTTPException(
             status_code=404, 
             detail=f"Municipality '{municipality_identifier}' not found."
         )
-        
-    if start_date and isinstance(start_date, str):
-        filtered = [s for s in filtered if (s.get("date") or "") >= start_date]
-    if end_date and isinstance(end_date, str):
-        filtered = [s for s in filtered if (s.get("date") or "") <= end_date]
-    
-    mun_name = filtered[0].get("municipality_name", municipality_identifier)
-    mun_pcode = filtered[0].get("pcode")
-    
+
+    mun_name = mun_row["name"]
+    mun_pcode = mun_row["code"]
+
+    timeline = compute_recovery_index(
+        municipality=mun_name,
+        start_date=start_date,
+        end_date=end_date,
+        month=month,
+        event_id=event_id
+    )
+
     return {
         "municipality": mun_name,
         "pcode": mun_pcode,
-        "timeline": filtered
+        "timeline": timeline
     }
 
 
@@ -329,5 +373,16 @@ async def get_historical_weather_endpoint(
             end_date=end_date
         )
         return {"status": "success", "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/generate-briefing")
+def api_generate_briefing(event_context: str):
+    """
+    Endpoint to trigger an automated disaster recovery briefing using Gemini 2.5 Flash.
+    """
+    try:
+        briefing = generate_recovery_briefing(event_context)
+        return {"status": "success", "briefing": briefing}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
