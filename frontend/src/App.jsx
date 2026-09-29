@@ -91,8 +91,17 @@ function App() {
   const [activeEventId, setActiveEventId] = useState(null)
   const [eventsError, setEventsError] = useState('')
   const [recoveryDate, setRecoveryDate] = useState(null)
+  const [latestObservationDate, setLatestObservationDate] = useState(null)
   const [recoveryRecords, setRecoveryRecords] = useState([])
+  const [recoveryDateRange, setRecoveryDateRange] = useState(null)
   const activeEvent = events.find((event) => event.id === activeEventId) ?? events[0]
+  const hasRecoveryDateRange = recoveryDateRange?.eventId === activeEvent?.id
+  const recoveryStartDate = activeEvent?.date
+    ? hasRecoveryDateRange ? recoveryDateRange.startDate : activeEvent.date
+    : ''
+  const recoveryEndDate = activeEvent?.date
+    ? hasRecoveryDateRange ? recoveryDateRange.endDate : latestObservationDate ?? addDays(activeEvent.date, 30)
+    : ''
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
   useEffect(() => {
@@ -110,9 +119,14 @@ function App() {
         return response.json()
       })
       .then((recoveryPayload) => {
+        const latestDate = recoveryPayload.data.reduce(
+          (latest, record) => record.date && record.date > latest ? record.date : latest,
+          '',
+        )
+        setLatestObservationDate(latestDate || null)
         setMunicipalities((current) => {
           const mappedMunicipalities = applyRecoveryScores(current, recoveryPayload.data)
-          setRecoveryDate(mappedMunicipalities.find((municipality) => municipality.recoveryDate)?.recoveryDate ?? null)
+          setRecoveryDate(latestDate || (mappedMunicipalities.find((municipality) => municipality.recoveryDate)?.recoveryDate ?? null))
           return mappedMunicipalities
         })
       })
@@ -148,10 +162,11 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!activeEventId) return
+    if (!activeEventId || !recoveryEndDate) return
 
-    // Connect event-specific spatial radiance to update map layers with actual post-event observations
-    fetch(`/api/v1/events/${activeEventId}/radiance`)
+    const controller = new AbortController()
+    const params = new URLSearchParams({ observation_date: recoveryEndDate })
+    fetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) return null
         return response.json()
@@ -170,25 +185,31 @@ function App() {
           })
         }
       })
-      .catch(() => {
-        // Fall back gracefully if spatial data is not available for this event
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          // Fall back gracefully if spatial data is not available for this event
+        }
       })
-  }, [activeEventId])
+    return () => controller.abort()
+  }, [activeEventId, recoveryEndDate])
 
   useEffect(() => {
-    if (!activeEvent?.date) return
+    if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
 
-    // Query from 3 days before event onset to 30 days after to capture pre-event baseline and drop
-    const startDate = addDays(activeEvent.date, -3)
-    const endDate = addDays(activeEvent.date, 30)
-    fetch(`/api/v1/recovery-scores?start_date=${startDate}&end_date=${endDate}`)
+    const controller = new AbortController()
+    const params = new URLSearchParams({ start_date: recoveryStartDate, end_date: recoveryEndDate })
+    fetch(`/api/v1/recovery-scores?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
         return response.json()
       })
       .then((payload) => setRecoveryRecords(payload.data))
-      .catch((error) => setEventsError(error.message))
-  }, [activeEvent?.date])
+      .catch((error) => {
+        if (error.name !== 'AbortError') setEventsError(error.message)
+      })
+
+    return () => controller.abort()
+  }, [activeEvent?.date, recoveryEndDate, recoveryStartDate])
 
   return (
     <div id="top">
@@ -212,6 +233,12 @@ function App() {
             selectedId={selectedId}
             records={recoveryRecords}
             eventDate={activeEvent?.date}
+            startDate={recoveryStartDate}
+            endDate={recoveryEndDate}
+            onDateRangeChange={(startDate, endDate) => {
+              if (!activeEvent) return
+              setRecoveryDateRange({ eventId: activeEvent.id, startDate, endDate })
+            }}
           />
         </section>
         <section className="dashboard-section">

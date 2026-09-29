@@ -2,7 +2,7 @@ import { Satellite, Globe } from 'lucide-react';
 
 export default function Footer() {
   return (
-    <footer className="relative mt-16 border-t border-white/10 bg-ink-950">
+    <footer className="relative border-t border-white/10 bg-ink-950">
       <div className="absolute inset-0 grid-bg opacity-20" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid md:grid-cols-3 gap-8">
