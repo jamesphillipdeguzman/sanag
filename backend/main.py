@@ -7,11 +7,26 @@ from typing import List, Optional, Dict, Any
 from calculator import compute_recovery_index
 from weather_service import fetch_historical_weather
 from ai_briefing import generate_recovery_briefing
+from contextlib import asynccontextmanager
+from seed_events import seed_observations_for_all_events
 
+# --- 1. Define your lifespan startup handler ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Runs automatically on application startup
+    try:
+        print("Running automatic database seeding for events...")
+        seed_observations_for_all_events()
+    except Exception as e:
+        print(f"Startup seeding error: {e}")
+    yield
+
+# --- 2. Initialize FastAPI ONCE with the lifespan attached ---
 app = FastAPI(
     title="SANAG API",
     description="Satellite Analytics for Nightlight & Assessment Grid - Backend API",
-    version="1.1.0"
+    version="1.1.0",
+    lifespan=lifespan
 )
 
 # Allow production domain and local dev
@@ -386,3 +401,4 @@ def api_generate_briefing(event_context: str):
         return {"status": "success", "briefing": briefing}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
