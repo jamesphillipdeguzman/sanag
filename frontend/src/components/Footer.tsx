@@ -1,4 +1,4 @@
-import { Satellite, Globe } from 'lucide-react';
+import { Satellite, Globe, ExternalLink } from 'lucide-react';
 
 export default function Footer() {
   return (
@@ -29,7 +29,28 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-ink-400">
               <li>GeoJSON Municipal Boundaries</li>
               <li>Local demo recovery metrics</li>
-              <li>NASA VIIRS (planned integration)</li>
+              <li>
+                <a
+                  href="https://developers.google.com/earth-engine/datasets/catalog/NASA_VIIRS_002_VNP46A2"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex items-center gap-1.5 hover:text-ocean-400 transition-colors"
+                >
+                  <span>NASA VIIRS Daily Radiance (VNP46A2)</span>
+                  <ExternalLink className="h-3 w-3 text-ink-500 group-hover:text-ocean-400 transition-colors" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://developers.google.com/earth-engine/datasets/catalog/NOAA_VIIRS_DNB_MONTHLY_V1_VCMSLCFG"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group inline-flex items-center gap-1.5 hover:text-ocean-400 transition-colors"
+                >
+                  <span>NOAA Monthly Baselines (VCMSLCFG)</span>
+                  <ExternalLink className="h-3 w-3 text-ink-500 group-hover:text-ocean-400 transition-colors" />
+                </a>
+              </li>
             </ul>
           </div>
 
