@@ -3,13 +3,14 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor } from '@/data/mockData';
-import { Lock, MapPin, RotateCcw, Unlock, X } from 'lucide-react';
+import { Lock, Loader2, MapPin, Radio, RotateCcw, Unlock, X } from 'lucide-react';
 
 interface PanayMapProps {
   municipalities: Municipality[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   recoveryDate?: string | null;
+  isLoading?: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -19,7 +20,74 @@ const statusLabels: Record<string, string> = {
   critical: 'Critical Outage',
 };
 
-export default function PanayMap({ municipalities, selectedId, onSelect, recoveryDate }: PanayMapProps) {
+function MapLoadingSkeleton() {
+  return (
+    <div
+      className="leaflet-map relative flex flex-col items-center justify-center p-6 text-center overflow-hidden border border-white/5 bg-ink-950/70 select-none"
+      aria-label="Loading Panay Island nightlight telemetry"
+    >
+      {/* High-tech pulsing radar background elements */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden opacity-60">
+        <div className="absolute w-[440px] h-[440px] rounded-full border border-ocean-500/10 animate-ping" style={{ animationDuration: '4s' }} />
+        <div className="absolute w-[320px] h-[320px] rounded-full border border-ocean-500/15" />
+        <div className="absolute w-[200px] h-[200px] rounded-full border border-ocean-500/20" />
+        <div className="absolute w-[90px] h-[90px] rounded-full border border-ocean-500/30" />
+        <div className="absolute w-2 h-2 rounded-full bg-ocean-400 shadow-[0_0_12px_#70b0ff]" />
+      </div>
+
+      {/* Modern High-Tech Content */}
+      <div className="relative z-10 flex flex-col items-center max-w-sm">
+        {/* Pulse beacon icon */}
+        <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-ocean-500/10 border border-ocean-500/30 mb-3.5 shadow-[0_0_25px_rgba(89,159,253,0.18)]">
+          <span className="absolute -top-1 -right-1 flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+          </span>
+          <Radio className="h-6 w-6 text-ocean-400 animate-pulse" />
+        </div>
+
+        {/* Live status badge */}
+        <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/15 px-3 py-1 mb-2.5">
+          <Loader2 className="h-3 w-3 text-ocean-300 animate-spin" />
+          <span className="text-[11px] font-semibold text-ocean-200 uppercase tracking-wider">
+            Loading Satellite Telemetry
+          </span>
+        </div>
+
+        <h4 className="text-base font-bold text-white tracking-tight">
+          Calibrating Panay Island Grid
+        </h4>
+        <p className="text-xs text-ink-300 mt-1 leading-relaxed">
+          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across 93 LGUs...
+        </p>
+
+        {/* Shimmer progress line */}
+        <div className="w-52 h-1.5 bg-ink-800/80 rounded-full mt-4 overflow-hidden relative border border-white/5">
+          <div className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-ocean-400 to-emerald-400 rounded-full animate-shimmer" />
+        </div>
+
+        {/* Regional indicator chips */}
+        <div className="flex items-center gap-1.5 mt-3.5 text-[10px] text-ink-400 font-medium">
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">Iloilo</span>
+          <span className="text-ink-600">·</span>
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">Capiz</span>
+          <span className="text-ink-600">·</span>
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">Aklan</span>
+          <span className="text-ink-600">·</span>
+          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">Antique</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function PanayMap({
+  municipalities,
+  selectedId,
+  onSelect,
+  recoveryDate,
+  isLoading = false,
+}: PanayMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const hovered = municipalities.find((m) => m.id === hoveredId);
@@ -48,37 +116,43 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
           </div>
 
           {/* Leaflet GeoJSON map */}
-          <div className="relative dot-bg p-2 flex-1">
-            <LeafletMap
-              municipalities={municipalities}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              onHover={setHoveredId}
-            />
+          <div className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center">
+            {isLoading || municipalities.length === 0 ? (
+              <MapLoadingSkeleton />
+            ) : (
+              <>
+                <LeafletMap
+                  municipalities={municipalities}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  onHover={setHoveredId}
+                />
 
-            {/* Hover tooltip */}
-            {hovered && !selected && (
-              <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl">
-                <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
-                  />
-                  <span className="text-sm font-semibold text-white">{hovered.name}</span>
-                  <span className="text-xs text-ink-400">{hovered.province}</span>
-                </div>
-                <div className="flex items-center gap-4 text-xs">
-                  <span className="text-ink-300">
-                    Recovery: <span className="font-semibold text-white">{hovered.recoveryScore}%</span>
-                  </span>
-                  <span className="text-ink-300">
-                    Status: <span style={{ color: getRecoveryStatusColor(hovered.status) }}>
-                      {statusLabels[hovered.status]}
-                    </span>
-                  </span>
-                </div>
-                <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
-              </div>
+                {/* Hover tooltip */}
+                {hovered && !selected && (
+                  <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
+                      />
+                      <span className="text-sm font-semibold text-white">{hovered.name}</span>
+                      <span className="text-xs text-ink-400">{hovered.province}</span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs">
+                      <span className="text-ink-300">
+                        Recovery: <span className="font-semibold text-white">{hovered.recoveryScore}%</span>
+                      </span>
+                      <span className="text-ink-300">
+                        Status: <span style={{ color: getRecoveryStatusColor(hovered.status) }}>
+                          {statusLabels[hovered.status]}
+                        </span>
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -216,9 +290,13 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
                 </span>
                 <MapPin className="h-7 w-7 text-ocean-400" />
               </div>
-              <h3 className="text-base font-bold text-white mb-1.5">Select a Municipality</h3>
+              <h3 className="text-base font-bold text-white mb-1.5">
+                {isLoading ? 'Calibrating Telemetry...' : 'Select a Municipality'}
+              </h3>
               <p className="text-xs sm:text-sm text-ink-300 max-w-xs leading-relaxed">
-                Click any municipality boundary on the map to inspect satellite radiance, outage severity, and restoration trajectory.
+                {isLoading
+                  ? 'Spatial radiance layers are resolving. Municipality metrics will be accessible once synchronization completes.'
+                  : 'Click any municipality boundary on the map to inspect satellite radiance, outage severity, and restoration trajectory.'}
               </p>
 
               {/* Quick sample town buttons */}
