@@ -138,7 +138,7 @@ export default function PanayMap({
 
           {/* Leaflet GeoJSON map */}
           <div className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center">
-            {isLoading || municipalities.length === 0 ? (
+            {isLoading && municipalities.length === 0 ? (
               <MapLoadingSkeleton />
             ) : (
               <>
@@ -152,6 +152,13 @@ export default function PanayMap({
                   activeEventId={activeEventId}
                   onSimulateGdacs={onSimulateGdacs}
                 />
+
+                {isLoading && municipalities.length > 0 && (
+                  <div className="absolute top-4 left-4 z-[1001] flex items-center gap-2 px-3 py-1.5 rounded-full bg-ink-950/85 border border-ocean-500/30 text-ocean-300 text-xs backdrop-blur-md shadow-lg pointer-events-none animate-pulse">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span>Calibrating radiance...</span>
+                  </div>
+                )}
 
                 {/* Hover tooltip */}
                 {hovered && !selected && (
@@ -384,6 +391,23 @@ function LeafletMap({
   const layersRef = useRef<Record<string, L.Path>>({});
   const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
+  const municipalitiesByIdRef = useRef<Map<string, Municipality>>(new Map());
+  const selectedIdRef = useRef<string | null>(selectedId);
+  const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
+
+  // Keep callback refs synchronized
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    onHoverRef.current = onHover;
+  }, [onHover]);
 
   // Default mobile view to locked so users can scroll past without getting trapped
   const [isLocked, setIsLocked] = useState<boolean>(() => isMobileOrTouchDevice());
@@ -429,8 +453,9 @@ function LeafletMap({
     }
   }, [isLocked]);
 
+  // Initialize Map and GeoJSON boundary layers once
   useEffect(() => {
-    if (!mapElement.current || mapRef.current || municipalities.length === 0) return;
+    if (!mapElement.current || mapRef.current) return;
 
     const initialLocked = isMobileOrTouchDevice();
     const map = L.map(mapElement.current, {
@@ -455,12 +480,12 @@ function LeafletMap({
       .then((geojson: GeoJSON.FeatureCollection) => {
         if (disposed || mapRef.current !== map) return;
 
-        const municipalityById = new Map(municipalities.map((municipality) => [municipality.id, municipality]));
         const layer = L.geoJSON(geojson, {
           style: (feature) => {
             const id = String(feature?.properties?.ADM3_PCODE ?? '');
-            const municipality = municipalityById.get(id);
-            const color = getRecoveryColor(municipality?.recoveryScore ?? 40);
+            const municipality = municipalitiesByIdRef.current.get(id);
+            const score = municipality?.recoveryScore ?? 50;
+            const color = getRecoveryColor(score);
             return {
               color: 'rgba(255,255,255,0.3)',
               weight: 1,
@@ -470,23 +495,31 @@ function LeafletMap({
           },
           onEachFeature: (feature, featureLayer) => {
             const id = String(feature.properties?.ADM3_PCODE ?? '');
-            const municipality = municipalityById.get(id);
-            if (!municipality || !(featureLayer instanceof L.Path)) return;
+            if (!(featureLayer instanceof L.Path)) return;
 
             layersRef.current[id] = featureLayer;
-            featureLayer.bindTooltip(`${municipality.name} · ${municipality.recoveryScore}% recovery`, {
+            const municipality = municipalitiesByIdRef.current.get(id);
+            const initialName = municipality?.name || String(feature.properties?.ADM3_EN || 'Municipality');
+            const initialScore = municipality?.recoveryScore ?? 50;
+
+            featureLayer.bindTooltip(`${initialName} · ${initialScore}% recovery`, {
               sticky: true,
               direction: 'top',
             });
             featureLayer.on({
-              click: () => onSelect(id),
+              click: () => onSelectRef.current(id),
               mouseover: () => {
-                onHover(id);
-                featureLayer.setStyle({ weight: 2, fillOpacity: 0.9 });
+                onHoverRef.current(id);
+                featureLayer.setStyle({ weight: 2.5, fillOpacity: 0.95 });
               },
               mouseout: () => {
-                onHover(null);
-                updateLayerStyle(featureLayer, municipality, false);
+                onHoverRef.current(null);
+                const currentM = municipalitiesByIdRef.current.get(id);
+                if (currentM) {
+                  updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current);
+                } else {
+                  featureLayer.setStyle({ weight: 1, fillOpacity: 0.62 });
+                }
               },
             });
           },
@@ -497,6 +530,15 @@ function LeafletMap({
           defaultBoundsRef.current = bounds;
           map.fitBounds(bounds, { padding: [18, 18] });
         }
+
+        // Apply any municipality styles that arrived prior to or during geojson download
+        Object.entries(layersRef.current).forEach(([id, featureLayer]) => {
+          const m = municipalitiesByIdRef.current.get(id);
+          if (m) {
+            updateLayerStyle(featureLayer, m, id === selectedIdRef.current);
+            featureLayer.setTooltipContent(`${m.name} · ${m.recoveryScore}% recovery`);
+          }
+        });
       })
       .catch(() => {
         // Ignore aborted or unavailable map data during component cleanup.
@@ -509,13 +551,19 @@ function LeafletMap({
       layersRef.current = {};
       gdacsGroupRef.current = null;
     };
-  }, [municipalities, onHover, onSelect]);
+  }, []);
 
-  // Update GeoJSON polygon styles on selection change
+  // Update GeoJSON polygon styles and tooltip content dynamically when municipality scores or selection change
   useEffect(() => {
+    const map = new Map(municipalities.map((item) => [item.id, item]));
+    municipalitiesByIdRef.current = map;
+
     Object.entries(layersRef.current).forEach(([id, layer]) => {
-      const municipality = municipalities.find((item) => item.id === id);
-      if (municipality) updateLayerStyle(layer, municipality, id === selectedId);
+      const municipality = map.get(id);
+      if (municipality) {
+        updateLayerStyle(layer, municipality, id === selectedId);
+        layer.setTooltipContent(`${municipality.name} · ${municipality.recoveryScore}% recovery`);
+      }
     });
   }, [municipalities, selectedId]);
 

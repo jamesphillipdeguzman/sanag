@@ -14,7 +14,7 @@ import {
   Satellite,
   Lock
 } from 'lucide-react';
-import type { GdacsAlert } from '@/types';
+import type { GdacsAlert, DisasterEvent } from '@/types';
 
 interface GdacsAlertBannerProps {
   alerts: GdacsAlert[];
@@ -25,6 +25,7 @@ interface GdacsAlertBannerProps {
   activeEventId?: string | null;
   importedEventIds?: Set<string>;
   onSelectEvent?: (id: string) => void;
+  events?: DisasterEvent[];
 }
 
 export default function GdacsAlertBanner({
@@ -36,6 +37,7 @@ export default function GdacsAlertBanner({
   activeEventId = null,
   importedEventIds = new Set(),
   onSelectEvent,
+  events = [],
 }: GdacsAlertBannerProps) {
   const getHazardIcon = (type: string, name: string) => {
     const t = (type || '').toUpperCase();
@@ -114,17 +116,56 @@ export default function GdacsAlertBanner({
           ) : (
             <div className="gdacs-marquee-track flex items-center gap-6 sm:gap-8 px-4 cursor-default">
               {displayAlerts.map((alert, idx) => {
-                const eventId = alert.id || `gdacs-${alert.event_id}`;
-                const isImporting = importingId === String(alert.event_id) || importingId === eventId;
-                const isImported = importedEventIds.has(eventId) || importedEventIds.has(String(alert.event_id)) || alert.is_imported;
-                const isActive = activeEventId === eventId || activeEventId === String(alert.event_id);
+                const rawAlertId = alert.event_id != null ? String(alert.event_id) : '';
+                const baseEventId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : '');
+                const normName = (alert.name || '').toLowerCase().trim();
+
+                // Check if alert already exists in the active events list
+                const matchingEvent = events.find((e) => {
+                  const eId = String(e.id);
+                  const eName = (e.name || '').toLowerCase().trim();
+                  return (
+                    (baseEventId && (eId === baseEventId || `gdacs-${eId}` === baseEventId)) ||
+                    (rawAlertId && (eId === rawAlertId || eId === `gdacs-${rawAlertId}`)) ||
+                    (normName && eName === normName)
+                  );
+                });
+
+                const isImporting = Boolean(
+                  (rawAlertId && importingId === rawAlertId) ||
+                  (baseEventId && importingId === baseEventId)
+                );
+                const isImported = Boolean(
+                  matchingEvent ||
+                  (baseEventId && importedEventIds.has(baseEventId)) ||
+                  (rawAlertId && importedEventIds.has(rawAlertId)) ||
+                  alert.is_imported
+                );
+                const resolvedEventId = matchingEvent ? String(matchingEvent.id) : baseEventId;
+                const isActive = Boolean(
+                  activeEventId && (
+                    activeEventId === resolvedEventId ||
+                    (baseEventId && activeEventId === baseEventId) ||
+                    (rawAlertId && activeEventId === rawAlertId)
+                  )
+                );
                 const badgeClass = getAlertBadge(alert.alert_level);
                 const viirsAvailable = alert.viirs_data_available ?? false;
+
+                const handleTileClick = () => {
+                  if (isActive) return;
+                  if (isImported || matchingEvent) {
+                    onSelectEvent?.(resolvedEventId);
+                  } else if (viirsAvailable && onImport) {
+                    onImport(alert);
+                  }
+                };
 
                 return (
                   <div
                     key={`${alert.event_id || alert.id}-${idx}`}
-                    className="flex items-center gap-2 shrink-0 group/item hover:bg-white/5 py-1 px-1.5 rounded transition-colors"
+                    onClick={handleTileClick}
+                    className="flex items-center gap-2 shrink-0 group/item hover:bg-white/5 py-1 px-1.5 rounded transition-colors cursor-pointer"
                   >
                     {/* Hazard Icon */}
                     {getHazardIcon(alert.type, alert.name)}
@@ -189,7 +230,7 @@ export default function GdacsAlertBanner({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onSelectEvent?.(eventId);
+                            onSelectEvent?.(resolvedEventId);
                           }}
                           className="inline-flex items-center gap-1 text-[10px] font-medium text-ocean-300 hover:text-white bg-ocean-500/15 hover:bg-ocean-500/30 border border-ocean-500/30 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
                           title="View simulation on grid"
