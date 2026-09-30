@@ -811,10 +811,19 @@ function LeafletMap({
       style: (feature) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const municipality = municipalitiesByIdRef.current.get(id);
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          municipalitiesByIdRef.current.get(id) ||
+          (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+          (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+          (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
         const score = municipality?.recoveryScore ?? 50;
         const color = getRecoveryColor(score);
-        const isSelected = id === selectedIdRef.current;
+        const isSelected = id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current);
         return {
           renderer: canvasRendererRef.current || undefined,
           color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
@@ -831,8 +840,17 @@ function LeafletMap({
         if (!featureLayer || (!('setStyle' in featureLayer) && !(featureLayer instanceof L.Path))) return;
 
         layersRef.current[id] = featureLayer;
-        const municipality = municipalitiesByIdRef.current.get(id);
-        const initialName = municipality?.name || String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const rawName = String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
+        const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          municipalitiesByIdRef.current.get(id) ||
+          (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+          (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
+          (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+        const initialName = municipality?.name || rawName;
         const initialProvince = municipality?.province || String(props.ADM2_EN || props.province || '');
         const initialScore = municipality?.recoveryScore ?? 50;
 
@@ -857,9 +875,13 @@ function LeafletMap({
           },
           mouseout: () => {
             onHoverRef.current(null);
-            const currentM = municipalitiesByIdRef.current.get(id);
+            const currentM =
+              municipalitiesByIdRef.current.get(id) ||
+              (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+              (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
+              (normName ? municipalitiesByIdRef.current.get(normName) : null);
             if (currentM) {
-              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current);
+              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current);
             } else if (typeof (featureLayer as any).setStyle === 'function') {
               (featureLayer as any).setStyle({ weight: 1.2, color: 'rgba(255,255,255,0.4)', fillOpacity: 0.65 });
             }
@@ -872,9 +894,19 @@ function LeafletMap({
 
     // Apply any telemetry scores already in memory
     Object.entries(layersRef.current).forEach(([id, featureLayer]) => {
-      const m = municipalitiesByIdRef.current.get(id);
+      const props = (featureLayer as any)?.feature?.properties || {};
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+      const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+      const m =
+        municipalitiesByIdRef.current.get(id) ||
+        (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+        (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+        (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
       if (m) {
-        updateLayerStyle(featureLayer, m, id === selectedIdRef.current);
+        updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current);
         featureLayer.setTooltipContent(`${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`);
       }
     });
@@ -1008,13 +1040,32 @@ function LeafletMap({
 
   // Update GeoJSON polygon styles and tooltip content dynamically when municipality scores or selection change
   useEffect(() => {
-    const map = new Map(municipalities.map((item) => [item.id, item]));
+    const map = new Map<string, Municipality>();
+    municipalities.forEach((item) => {
+      if (item.id) map.set(item.id, item);
+      if (item.pcode) map.set(item.pcode, item);
+      if (item.name) {
+        map.set(item.name.toLowerCase().trim(), item);
+        const norm = item.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '');
+        if (norm) map.set(norm, item);
+      }
+    });
     municipalitiesByIdRef.current = map;
 
     Object.entries(layersRef.current).forEach(([id, layer]) => {
-      const municipality = map.get(id);
+      const props = (layer as any)?.feature?.properties || {};
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+      const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+      const municipality =
+        map.get(id) ||
+        (pcode ? map.get(pcode) : null) ||
+        (name ? map.get(name.toLowerCase().trim()) : null) ||
+        (normName ? map.get(normName) : null);
+
       if (municipality) {
-        updateLayerStyle(layer, municipality, id === selectedId);
+        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId);
         layer.setTooltipContent(`${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery`);
       }
     });
