@@ -1,6 +1,7 @@
+import React from 'react';
 import type { DisasterEvent } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
-import { Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
+import { Activity, Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
 
 interface EventTimelineProps {
   events: DisasterEvent[];
@@ -12,6 +13,11 @@ const typeIcon: Record<string, React.ReactNode> = {
   blackout: <Zap className="h-4 w-4" />,
   typhoon: <CloudRain className="h-4 w-4" />,
   flood: <Waves className="h-4 w-4" />,
+  earthquake: <Activity className="h-4 w-4" />,
+  // GDACS short-codes — map to the same icons so imported events render correctly
+  TC: <CloudRain className="h-4 w-4" />,
+  FL: <Waves className="h-4 w-4" />,
+  EQ: <Activity className="h-4 w-4" />,
 };
 
 export default function EventTimeline({ events, activeEventId, onSelect }: EventTimelineProps) {
