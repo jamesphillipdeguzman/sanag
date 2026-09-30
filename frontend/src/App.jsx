@@ -2,10 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import AIBriefing from './components/AIBriefing.tsx'
 import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
-import Hero from './components/Hero.tsx'
 import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
-import PanayMap from './components/PanayMap.tsx'
+import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import { createMunicipalities } from './data/mockData.ts'
 import './App.css'
@@ -194,18 +193,18 @@ function App() {
     <div id="top">
       <Navbar />
       {activeEvent && (
-        <Hero
+        <Overview
           municipalities={municipalities}
           activeEvent={activeEvent}
           events={events}
           onSelectEvent={setActiveEventId}
+          selectedId={selectedId}
+          onSelectMunicipality={selectMunicipality}
+          recoveryDate={recoveryDate}
         />
       )}
       {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}
       <main className="dashboard-main">
-        <section id="map" className="dashboard-section">
-          <PanayMap municipalities={municipalities} selectedId={selectedId} onSelect={selectMunicipality} recoveryDate={recoveryDate} />
-        </section>
         <section id="recovery" className="dashboard-section">
           <RecoveryChart
             municipalities={municipalities}

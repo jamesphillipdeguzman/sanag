@@ -1,0 +1,213 @@
+import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Wind, Zap } from 'lucide-react';
+import type { Municipality, DisasterEvent } from '@/types';
+import { getSeverityColor } from '@/data/mockData';
+import PanayMap from '@/components/PanayMap';
+
+interface OverviewProps {
+  municipalities: Municipality[];
+  activeEvent: DisasterEvent;
+  events: DisasterEvent[];
+  onSelectEvent: (id: string) => void;
+  selectedId: string | null;
+  onSelectMunicipality: (id: string) => void;
+  recoveryDate?: string | null;
+}
+
+export default function Overview({
+  municipalities,
+  activeEvent,
+  events,
+  onSelectEvent,
+  selectedId,
+  onSelectMunicipality,
+  recoveryDate,
+}: OverviewProps) {
+  const avgRecovery = municipalities.length > 0
+    ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
+    : 0;
+  const restoredCount = municipalities.filter((m) => m.status === 'restored').length;
+  const criticalCount = municipalities.filter((m) => m.status === 'critical').length;
+
+  const getEventIcon = (event: DisasterEvent) => {
+    const type = event.type?.toLowerCase() || '';
+    const name = event.name?.toLowerCase() || '';
+    if (type.includes('flood') || name.includes('monsoon') || name.includes('flood')) {
+      return <Droplets className="h-4 w-4 text-ocean-400 shrink-0" />;
+    }
+    if (type.includes('typhoon') || name.includes('typhoon') || name.includes('storm')) {
+      return <Wind className="h-4 w-4 text-amber-400 shrink-0" />;
+    }
+    return <Zap className="h-4 w-4 text-rose-400 shrink-0" />;
+  };
+
+  return (
+    <section id="overview" className="relative pt-20 lg:pt-22 pb-8 overflow-hidden">
+      {/* Background aesthetics */}
+      <div className="absolute inset-0 bg-ink-950 pointer-events-none" />
+      <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
+      <div className="absolute top-0 left-1/3 -translate-x-1/2 w-[700px] h-[320px] bg-ocean-600/15 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute top-40 right-10 w-[450px] h-[260px] bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        {/* ROW 1: Header + Summary Metrics (aligned for standard viewport visibility) */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-white/10 mb-4 animate-fade-in-up">
+          {/* Header left */}
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-[11px] font-semibold text-ocean-200 uppercase tracking-wider">
+                NASA VIIRS Nightlight Analytics · 93 Panay LGUs
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              Panay Island <span className="gradient-text">Power Recovery Grid</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-ink-300 mt-1 max-w-2xl">
+              High-resolution satellite radiance tracking and daily restoration indexes across Iloilo, Capiz, Aklan, and Antique.
+            </p>
+          </div>
+
+          {/* Header right: Summary Metrics Cluster */}
+          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+            <StatCard
+              icon={<Activity className="h-4 w-4" />}
+              label="Avg Recovery"
+              value={`${avgRecovery}%`}
+              accent="text-ocean-300"
+              badge="Island-wide"
+            />
+            <StatCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Restored"
+              value={`${restoredCount}/${municipalities.length}`}
+              accent="text-emerald-300"
+              badge="LGUs >= 90%"
+            />
+            <StatCard
+              icon={<AlertTriangle className="h-4 w-4" />}
+              label="Critical"
+              value={criticalCount.toString()}
+              accent="text-rose-300"
+              badge="Outages < 30%"
+            />
+          </div>
+        </div>
+
+        {/* ROW 2: Event Selector Cards (Clean layout without overlapping) */}
+        <div className="mb-5 animate-fade-in-up" style={{ animationDelay: '0.08s' }}>
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-ink-300">
+                Disaster Event Monitoring
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-ink-400 border border-white/10">
+                {events.length} Incidents Tracked
+              </span>
+            </div>
+            <span className="text-xs text-ink-400 hidden sm:inline">
+              Select an incident to recompute spatial radiance & recovery curves
+            </span>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {events.map((event) => {
+              const isSelected = event.id === activeEvent.id;
+              const severityColor = getSeverityColor(event.severity);
+
+              return (
+                <button
+                  key={event.id}
+                  type="button"
+                  onClick={() => onSelectEvent(event.id)}
+                  aria-pressed={isSelected}
+                  className={`group relative text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-ocean-500/80 bg-gradient-to-br from-ocean-500/15 via-ink-900/90 to-ink-900 shadow-[0_0_20px_rgba(89,159,253,0.18)] ring-1 ring-ocean-400/50'
+                      : 'border-white/10 bg-ink-900/60 hover:bg-ink-900/90 hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2 w-full">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-500/20' : 'bg-white/5'}`}>
+                        {getEventIcon(event)}
+                      </div>
+                      <h3 className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-ink-200 group-hover:text-white'}`}>
+                        {event.name}
+                      </h3>
+                    </div>
+
+                    {isSelected && (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-300 shrink-0">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-ocean-400" />
+                        <span className="hidden xl:inline">Active</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full">
+                    <span className="flex items-center gap-1.5">
+                      <Calendar className="h-3 w-3 text-ink-400" />
+                      {event.date}
+                    </span>
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        color: severityColor,
+                        backgroundColor: `${severityColor}18`,
+                        border: `1px solid ${severityColor}35`,
+                      }}
+                    >
+                      {event.severity}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ROW 3: Interactive Leaflet Map & Side Panel (Immediately visible in standard viewport) */}
+        <section id="map" className="relative animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
+          <PanayMap
+            municipalities={municipalities}
+            selectedId={selectedId}
+            onSelect={onSelectMunicipality}
+            recoveryDate={recoveryDate}
+          />
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  accent,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  accent: string;
+  badge: string;
+}) {
+  return (
+    <div className="glass rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 card-hover border border-white/10 flex flex-col justify-between min-w-[100px] sm:min-w-[120px]">
+      <div className={`flex items-center gap-1.5 mb-1 ${accent}`}>
+        {icon}
+        <span className="text-[10px] sm:text-[11px] font-semibold text-ink-400 uppercase tracking-wider truncate">
+          {label}
+        </span>
+      </div>
+      <p className="text-xl sm:text-2xl font-black text-white tracking-tight">{value}</p>
+      <span className="text-[10px] text-ink-400 mt-0.5 truncate">{badge}</span>
+    </div>
+  );
+}

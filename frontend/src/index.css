@@ -89,11 +89,18 @@ body {
 }
 
 .leaflet-map {
-  min-height: 420px;
+  height: clamp(360px, 46vh, 500px);
+  min-height: 360px;
   width: 100%;
   border-radius: 12px;
   overflow: hidden;
   background: #0d1117;
+}
+
+@media (min-width: 1024px) {
+  .leaflet-map {
+    height: 480px;
+  }
 }
 
 .leaflet-map.is-locked,

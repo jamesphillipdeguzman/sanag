@@ -26,20 +26,20 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
   const selected = municipalities.find((m) => m.id === selectedId);
 
   return (
-    <div className="grid lg:grid-cols-12 gap-6">
+    <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
       {/* Map */}
-      <div className="lg:col-span-8">
-        <div className="relative rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm overflow-hidden">
+      <div className="lg:col-span-8 flex flex-col">
+        <div className="relative rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm overflow-hidden flex flex-col h-full shadow-xl">
           {/* Map header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3.5 border-b border-white/10 bg-ink-950/40">
             <div>
               <h3 className="text-sm font-semibold text-white">Panay Island — Nightlight Recovery Map</h3>
               <p className="text-xs text-ink-400 mt-0.5">
-                NASA VIIRS radiance overlay · Municipal boundaries
-                {recoveryDate ? ` · Latest valid reading: ${recoveryDate}` : ''}
+                NASA VIIRS radiance overlay · 93 Municipal boundaries
+                {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <LegendDot color="#10b981" label="Restored" />
               <LegendDot color="#599ffd" label="Recovering" />
               <LegendDot color="#fbbf24" label="Limited" />
@@ -48,7 +48,7 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
           </div>
 
           {/* Leaflet GeoJSON map */}
-          <div className="relative dot-bg p-2">
+          <div className="relative dot-bg p-2 flex-1">
             <LeafletMap
               municipalities={municipalities}
               selectedId={selectedId}
@@ -58,7 +58,7 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
 
             {/* Hover tooltip */}
             {hovered && !selected && (
-              <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in">
+              <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl">
                 <div className="flex items-center gap-2 mb-1">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
@@ -77,95 +77,110 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
                     </span>
                   </span>
                 </div>
-                <p className="text-[11px] text-ink-400 mt-1.5">Click to view detailed recovery data</p>
+                <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
               </div>
             )}
           </div>
 
           {/* Scale bar */}
-          <div className="flex items-center gap-2 px-5 py-3 border-t border-white/10">
-            <div className="flex h-2 w-32 rounded-full overflow-hidden">
-              <div className="flex-1 bg-rose-500" />
-              <div className="flex-1 bg-amber-400" />
-              <div className="flex-1 bg-emerald-400" />
-              <div className="flex-1 bg-emerald-500" />
+          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-t border-white/10 bg-ink-950/40">
+            <div className="flex items-center gap-2">
+              <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden">
+                <div className="flex-1 bg-rose-500" />
+                <div className="flex-1 bg-amber-400" />
+                <div className="flex-1 bg-ocean-400" />
+                <div className="flex-1 bg-emerald-500" />
+              </div>
+              <span className="text-[11px] text-ink-400">Recovery Score (0–100)</span>
             </div>
-            <span className="text-xs text-ink-400">Recovery Score (0–100)</span>
+            <span className="text-[11px] text-ink-400 hidden sm:inline">
+              Projection model: VIIRS-DNB vs Pre-event Baseline
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Detail panel */}
-      <div className="lg:col-span-4">
+      {/* Detail side panel */}
+      <div className="lg:col-span-4 flex flex-col">
         {selected ? (
-          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <MapPin className="h-4 w-4 text-ocean-400" />
-                  <span className="text-xs text-ink-400">{selected.province} Province</span>
+          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-xl">
+            <div>
+              <div className="flex items-start justify-between pb-3 mb-4 border-b border-white/10">
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <MapPin className="h-3.5 w-3.5 text-ocean-400" />
+                    <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
+                  </div>
+                  <h3 className="text-xl font-extrabold text-white">{selected.name}</h3>
                 </div>
-                <h3 className="text-xl font-bold text-white">{selected.name}</h3>
-              </div>
-              <button
-                onClick={() => onSelect('')}
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-white/10 hover:text-white transition-all"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {/* Recovery gauge */}
-            <div className="mb-5">
-              <div className="flex items-end justify-between mb-2">
-                <span className="text-xs text-ink-400 uppercase tracking-wider">Recovery Score</span>
-                <span
-                  className="text-3xl font-extrabold"
-                  style={{ color: getRecoveryColor(selected.recoveryScore) }}
+                <button
+                  type="button"
+                  onClick={() => onSelect('')}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  title="Deselect municipality"
+                  aria-label="Close details"
                 >
-                  {selected.recoveryScore}
-                  <span className="text-lg text-ink-500">/100</span>
-                </span>
+                  <X className="h-4 w-4" />
+                </button>
               </div>
-              <div className="h-3 rounded-full bg-ink-800 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-700"
-                  style={{
-                    width: `${selected.recoveryScore}%`,
-                    backgroundColor: getRecoveryColor(selected.recoveryScore),
-                  }}
-                />
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <div
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: getRecoveryStatusColor(selected.status) }}
-                />
-                <span className="text-sm font-medium" style={{ color: getRecoveryStatusColor(selected.status) }}>
-                  {statusLabels[selected.status]}
-                </span>
-              </div>
-            </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <MiniStat label="Population" value={selected.population.toLocaleString()} />
-              <MiniStat label="Days Since Event" value={selected.daysSinceEvent.toString()} />
-              <MiniStat
-                label="Baseline Radiance"
-                value={`${selected.baselineRadiance.toFixed(1)} nW`}
-              />
-              <MiniStat
-                label="Current Radiance"
-                value={`${selected.currentRadiance.toFixed(1)} nW`}
-              />
+              {/* Recovery gauge */}
+              <div className="mb-5 bg-ink-950/50 rounded-xl p-3.5 border border-white/5">
+                <div className="flex items-end justify-between mb-2">
+                  <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
+                  <span
+                    className="text-3xl font-black tracking-tight"
+                    style={{ color: getRecoveryColor(selected.recoveryScore) }}
+                  >
+                    {selected.recoveryScore}
+                    <span className="text-base text-ink-500 font-normal">/100</span>
+                  </span>
+                </div>
+                <div className="h-2.5 rounded-full bg-ink-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{
+                      width: `${selected.recoveryScore}%`,
+                      backgroundColor: getRecoveryColor(selected.recoveryScore),
+                    }}
+                  />
+                </div>
+                <div className="mt-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: getRecoveryStatusColor(selected.status) }}
+                    />
+                    <span className="font-semibold" style={{ color: getRecoveryStatusColor(selected.status) }}>
+                      {statusLabels[selected.status]}
+                    </span>
+                  </div>
+                  <span className="text-ink-400">Target: 90%+ restored</span>
+                </div>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 gap-2.5 mb-4">
+                <MiniStat label="Population" value={selected.population.toLocaleString()} />
+                <MiniStat label="Days Elapsed" value={`${selected.daysSinceEvent}d`} />
+                <MiniStat
+                  label="Baseline Radiance"
+                  value={`${selected.baselineRadiance.toFixed(1)} nW`}
+                />
+                <MiniStat
+                  label="Observed Radiance"
+                  value={`${selected.currentRadiance.toFixed(1)} nW`}
+                />
+              </div>
             </div>
 
             {/* Recovery projection */}
-            <div className="rounded-xl bg-ink-950/50 border border-white/5 p-4">
+            <div className="rounded-xl bg-ink-950/50 border border-white/5 p-3.5 mt-auto">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-ink-400">Est. Days to Full Recovery</span>
-                <span className="text-lg font-bold text-white">{selected.estimatedDaysToRecover}</span>
+                <span className="text-xs font-medium text-ink-400">Est. Full Restoration</span>
+                <span className="text-base font-bold text-white">
+                  {selected.estimatedDaysToRecover === 0 ? 'Restored' : `~${selected.estimatedDaysToRecover} days`}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex-1 h-1.5 rounded-full bg-ink-800 overflow-hidden">
@@ -176,21 +191,63 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
                     }}
                   />
                 </div>
-                <span className="text-xs text-ink-400 whitespace-nowrap">
-                  {selected.estimatedDaysToRecover === 0 ? 'Fully restored' : `${selected.estimatedDaysToRecover}d remaining`}
+                <span className="text-[11px] text-ink-400 whitespace-nowrap">
+                  {selected.estimatedDaysToRecover === 0 ? '100% capacity' : `${selected.estimatedDaysToRecover}d remaining`}
                 </span>
               </div>
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col items-center justify-center text-center min-h-[300px]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ocean-500/10 mb-4">
-              <MapPin className="h-7 w-7 text-ocean-400" />
+          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-xl">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <span className="text-xs font-semibold uppercase tracking-wider text-ink-300">
+                Municipality Telemetry
+              </span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-500/10 text-ocean-300 border border-ocean-500/20">
+                Interactive Inspector
+              </span>
             </div>
-            <h3 className="text-base font-semibold text-white mb-1">Select a Municipality</h3>
-            <p className="text-sm text-ink-400 max-w-xs">
-              Click any town on the map to see its recovery score, radiance data, and projected timeline.
-            </p>
+
+            <div className="my-auto py-6 flex flex-col items-center justify-center text-center">
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-ocean-500/10 mb-3 border border-ocean-500/20">
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-ocean-500"></span>
+                </span>
+                <MapPin className="h-7 w-7 text-ocean-400" />
+              </div>
+              <h3 className="text-base font-bold text-white mb-1.5">Select a Municipality</h3>
+              <p className="text-xs sm:text-sm text-ink-300 max-w-xs leading-relaxed">
+                Click any municipality boundary on the map to inspect satellite radiance, outage severity, and restoration trajectory.
+              </p>
+
+              {/* Quick sample town buttons */}
+              <div className="mt-5 w-full">
+                <span className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider block mb-2">
+                  Quick Select Major Hubs
+                </span>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000'].map((pcode) => {
+                    const m = municipalities.find((item) => item.id === pcode);
+                    if (!m) return null;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => onSelect(m.id)}
+                        className="px-2.5 py-1 text-xs rounded-lg border border-white/10 bg-white/5 hover:bg-ocean-500/20 hover:border-ocean-500/40 text-ink-300 hover:text-white transition-all cursor-pointer"
+                      >
+                        {m.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-white/10 text-[11px] text-ink-400 text-center">
+              Covers 93 LGUs in Iloilo, Capiz, Aklan, and Antique
+            </div>
           </div>
         )}
       </div>
