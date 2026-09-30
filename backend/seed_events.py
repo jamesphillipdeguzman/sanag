@@ -1,10 +1,9 @@
-from datetime import timezone
 import sqlite3
 import os
 import math
 import hashlib
-from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Any, Optional, Tuple, Union
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.db")
 
@@ -62,17 +61,42 @@ URBAN_HUB_KEYWORDS = [
 ]
 
 
-def parse_date_safe(date_str: Optional[str]) -> Optional[datetime]:
-    """Parse date strings like 'YYYY-MM-DD' or 'YYYY-MM' safely."""
-    if not date_str:
+def to_naive_utc(dt: Union[datetime, str, None]) -> Optional[datetime]:
+    """
+    Standardizes any datetime or date string into an offset-naive UTC datetime:
+    - If None or empty, returns None.
+    - If already a datetime: converts to UTC if timezone-aware, then strips tzinfo.
+    - If string: parses ISO format (with Z or +/- offset), 'YYYY-MM-DD', or 'YYYY-MM'.
+    """
+    if dt is None:
         return None
-    s = date_str.strip()
+    if isinstance(dt, datetime):
+        if dt.tzinfo is not None:
+            return dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    s = dt.strip()
+    if not s:
+        return None
     try:
+        if 'T' in s or '+' in s or s.endswith('Z'):
+            clean_s = s.replace('Z', '+00:00')
+            try:
+                parsed = datetime.fromisoformat(clean_s)
+                if parsed.tzinfo is not None:
+                    return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                return parsed
+            except Exception:
+                pass
         if len(s) == 7:
             return datetime.strptime(s, "%Y-%m")
         return datetime.strptime(s[:10], "%Y-%m-%d")
     except Exception:
         return None
+
+
+def parse_date_safe(date_str: Optional[Union[str, datetime]]) -> Optional[datetime]:
+    """Parse date strings or datetimes safely into an offset-naive UTC datetime."""
+    return to_naive_utc(date_str)
 
 
 def fetch_baselines_cache(cursor: sqlite3.Cursor) -> Tuple[Dict[str, List[Dict[str, Any]]], float]:
@@ -96,7 +120,7 @@ def fetch_baselines_cache(cursor: sqlite3.Cursor) -> Tuple[Dict[str, List[Dict[s
     for r in records:
         mun_name = r["municipality_name"]
         pcode = r["municipality_pcode"]
-        dt = parse_date_safe(r["month_date"])
+        dt = to_naive_utc(r["month_date"])
         if dt is None:
             continue
 
@@ -121,7 +145,7 @@ def get_matching_baseline(
     regional_avg: float,
     mun_name: str,
     pcode: Optional[str],
-    event_date: datetime
+    event_date: Union[datetime, str]
 ) -> float:
     """
     Retrieves the closest pre-disaster baseline radiance for a municipality:
@@ -130,6 +154,10 @@ def get_matching_baseline(
     3. Third priority: closest available baseline in time for this municipality.
     4. Fallback: regional average baseline across Panay Island.
     """
+    event_dt = to_naive_utc(event_date)
+    if event_dt is None:
+        event_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+
     candidates = (
         baselines_by_mun.get(mun_name)
         or (baselines_by_mun.get(pcode) if pcode else None)
@@ -142,20 +170,34 @@ def get_matching_baseline(
         return regional_avg
 
     # 1. Exact month match
-    month_prefix = event_date.strftime("%Y-%m")
-    exact_month = [c for c in candidates if c["month_date"].startswith(month_prefix)]
+    month_prefix = event_dt.strftime("%Y-%m")
+    exact_month = [c for c in candidates if str(c.get("month_date", "")).startswith(month_prefix)]
     if exact_month:
         return exact_month[0]["radiance"]
 
     # 2. Check for pre-disaster baselines (month_date <= event_date)
-    pre_disaster = [c for c in candidates if c["dt"] <= event_date]
+    pre_disaster = []
+    for c in candidates:
+        c_dt = to_naive_utc(c.get("dt")) or to_naive_utc(c.get("month_date"))
+        if c_dt and c_dt <= event_dt:
+            pre_disaster.append((c_dt, c["radiance"]))
+
     if pre_disaster:
-        closest_pre = max(pre_disaster, key=lambda c: c["dt"])
-        return closest_pre["radiance"]
+        closest_pre = max(pre_disaster, key=lambda item: item[0])
+        return closest_pre[1]
 
     # 3. Closest available baseline in time for this municipality
-    closest_any = min(candidates, key=lambda c: abs((c["dt"] - event_date).total_seconds()))
-    return closest_any["radiance"]
+    valid_candidates = []
+    for c in candidates:
+        c_dt = to_naive_utc(c.get("dt")) or to_naive_utc(c.get("month_date"))
+        if c_dt:
+            valid_candidates.append((c_dt, c["radiance"]))
+
+    if valid_candidates:
+        closest_any = min(valid_candidates, key=lambda item: abs((item[0] - event_dt).total_seconds()))
+        return closest_any[1]
+
+    return regional_avg
 
 
 def get_mun_variance(event_id: str, pcode: str, name: str) -> float:
@@ -414,8 +456,9 @@ def seed_single_event(
     across all 93 Panay municipalities, scaling the initial radiance impact and recovery trajectory
     according to GDACS hazard type and alert level (Red / Orange / Green).
     """
-    event_date = parse_date_safe(event_date_str)
-    event_date = datetime.now(timezone.utc)
+    event_date = to_naive_utc(event_date_str)
+    if not event_date:
+        event_date = datetime.now(timezone.utc).replace(tzinfo=None)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

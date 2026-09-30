@@ -603,6 +603,12 @@ function LeafletMap({
             <span class="text-ink-400">Severity:</span>
             <span class="truncate ml-1 font-semibold">${alert.severity_text}</span>
           </div>` : ''}
+          <div class="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
+            <span class="text-ink-400">VIIRS Radiance:</span>
+            <span class="${alert.viirs_data_available !== false ? 'text-emerald-300 font-medium' : 'text-amber-300 font-medium'} flex items-center gap-1">
+              ${alert.viirs_data_available !== false ? '✓ Ready to Simulate' : '⏳ VIIRS Data Pending'}
+            </span>
+          </div>
         </div>
         <div class="action-btn-placeholder"></div>
       `;
@@ -611,12 +617,20 @@ function LeafletMap({
       if (btnPlaceholder && onSimulateGdacs) {
         const btn = document.createElement('button');
         btn.type = 'button';
+        const isViirsAvailable = alert.viirs_data_available !== false;
+
         if (isActive) {
           btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center justify-center gap-1.5 cursor-default';
           btn.innerHTML = '<span>✓ Active Simulation</span>';
+        } else if (!isViirsAvailable) {
+          btn.disabled = true;
+          btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-medium text-ink-400 bg-white/5 border border-white/10 flex items-center justify-center gap-1.5 cursor-not-allowed opacity-60';
+          btn.title = 'Simulation disabled: Live hazard pending NASA VIIRS nightlight radiance data';
+          btn.innerHTML = '<span>🔒 Simulate Event (VIIRS Pending)</span>';
         } else {
           btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 shadow-md shadow-ocean-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95';
           btn.innerHTML = '<span>Simulate Event</span>';
+          btn.title = 'Ready to Simulate: Confirmed NASA VIIRS radiance data available';
           btn.onclick = (e) => {
             e.stopPropagation();
             marker.closePopup();

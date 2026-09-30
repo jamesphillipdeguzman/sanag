@@ -86,6 +86,7 @@ function mapApiEvent(event) {
     description: event.description ?? 'No description available.',
     category: event.category,
     alert_level: alertLevel,
+    viirs_data_available: event.viirs_data_available ?? true,
     critical_municipalities: event.critical_municipalities ?? [],
   }
 }
@@ -146,6 +147,12 @@ function App() {
   }, [events])
 
   const handleImportGdacs = useCallback(async (alert) => {
+    if (alert.viirs_data_available === false) {
+      setEventsError('Simulation Unavailable: Confirmed NASA VIIRS radiance data is pending for this live hazard. Please wait until satellite ground telemetry is confirmed.')
+      setTimeout(() => setEventsError(''), 6000)
+      return
+    }
+
     const alertId = String(alert.event_id)
     setImportingId(alertId)
     try {

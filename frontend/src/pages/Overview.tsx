@@ -205,16 +205,27 @@ export default function Overview({
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full">
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="h-3 w-3 text-ink-400" />
-                      {event.date}
-                    </span>
-                    <span className="text-[11px] text-amber-300/90 font-medium">
-                      {formatAffectedPopulation(event.affectedPopulation)}
+                  <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full gap-1">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-ink-400 shrink-0" />
+                      <span className="truncate">{event.date}</span>
                     </span>
                     <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
+                        event.viirs_data_available !== false
+                          ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
+                          : 'text-amber-300 bg-amber-500/10 border-amber-500/25'
+                      }`}
+                      title={
+                        event.viirs_data_available !== false
+                          ? 'NASA VIIRS Radiance Observations Confirmed Across Grid'
+                          : 'VIIRS Ground Sensor Radiance Pending Confirmation'
+                      }
+                    >
+                      {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
+                    </span>
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
                       style={{
                         color: severityColor,
                         backgroundColor: `${severityColor}18`,

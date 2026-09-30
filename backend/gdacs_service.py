@@ -1,3 +1,5 @@
+import os
+import sqlite3
 from gdacs.api import GDACSAPIReader, GDACSAPIError
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -11,6 +13,57 @@ EVENT_TYPE_MAP = {
     "TS": "Tsunami",
 }
 
+def check_viirs_data_availability(
+    event_date: Optional[str],
+    conn: Optional[Any] = None
+) -> bool:
+    """
+    Validates whether confirmed NASA VIIRS nightlight radiance observations exist
+    for the specified hazard date across the Panay LGU grid in radiance_observations.
+    Returns:
+        True: If calibrated observations exist across the Panay grid (e.g. >= 10 LGUs).
+        False: If radiance data is pending (such as live approaching storms or dates without satellite downlink).
+    """
+    if not event_date:
+        return False
+    
+    clean_date = event_date.strip()[:10]
+    if len(clean_date) < 10:
+        return False
+        
+    close_after = False
+    if conn is None:
+        try:
+            db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.db")
+            conn = sqlite3.connect(db_path)
+            close_after = True
+        except Exception as conn_err:
+            print(f"Error opening DB for VIIRS check: {conn_err}")
+            return False
+            
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT COUNT(*) FROM radiance_observations
+            WHERE observation_date = ? AND daily_radiance IS NOT NULL
+            """,
+            (clean_date,)
+        )
+        row = cursor.fetchone()
+        count = row[0] if row else 0
+        return count >= 10
+    except Exception as query_err:
+        print(f"Error checking VIIRS radiance availability for {clean_date}: {query_err}")
+        return False
+    finally:
+        if close_after and conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 # Fallback realistic disaster alerts with spatial coordinates around Panay & Western Visayas
 FALLBACK_PH_ALERTS = [
     {
@@ -22,8 +75,8 @@ FALLBACK_PH_ALERTS = [
         "alert_level": "Red",
         "alert_score": 2.5,
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "description": "Category 3 Tropical Cyclone entering the Philippine Area of Responsibility with projected track towards Western Visayas and Panay Island.",
-        "severity_text": "Wind speeds up to 185 km/h · Severe gale-force gusts",
+        "description": "Category 3 Tropical Cyclone entering the Philippine Area of Responsibility with projected track towards Western Visayas and Panay Island. Satellite nightlight telemetry pending ground sensor impact.",
+        "severity_text": "Wind speeds up to 185 km/h · Overpass pending",
         "country": "Philippines",
         "url": "https://www.gdacs.org",
         "latitude": 11.45,
@@ -34,7 +87,8 @@ FALLBACK_PH_ALERTS = [
             "type": "Point",
             "coordinates": [123.10, 11.45]
         },
-        "is_imported": False
+        "is_imported": False,
+        "viirs_data_available": False
     },
     {
         "event_id": "1568718",
@@ -44,9 +98,9 @@ FALLBACK_PH_ALERTS = [
         "category": "Earthquake",
         "alert_level": "Orange",
         "alert_score": 1.8,
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "description": "Moderate shallow tectonic earthquake detected along the Western Panay Fault line affecting Iloilo and Antique power distribution infrastructure.",
-        "severity_text": "Magnitude 6.2 · Depth 12 km",
+        "date": "2024-01-02",
+        "description": "Moderate shallow tectonic earthquake along the Western Panay Fault line affecting Iloilo and Antique. Confirmed NASA VIIRS nightlight observations available across 93 LGUs.",
+        "severity_text": "Magnitude 6.2 · Confirmed VIIRS Telemetry",
         "country": "Philippines",
         "url": "https://www.gdacs.org",
         "latitude": 10.82,
@@ -57,7 +111,8 @@ FALLBACK_PH_ALERTS = [
             "type": "Point",
             "coordinates": [122.35, 10.82]
         },
-        "is_imported": False
+        "is_imported": False,
+        "viirs_data_available": True
     },
     {
         "event_id": "1003412",
@@ -68,8 +123,8 @@ FALLBACK_PH_ALERTS = [
         "alert_level": "Green",
         "alert_score": 1.0,
         "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        "description": "Enhanced Southwest Monsoon low-pressure precipitation triggering precautionary substation isolation across Panay River Basin.",
-        "severity_text": "Heavy rainfall 120mm/24h · Lowland inundation",
+        "description": "Enhanced Southwest Monsoon low-pressure precipitation triggering precautionary substation isolation across Panay River Basin. Radiance sensor telemetry pending.",
+        "severity_text": "Heavy rainfall 120mm/24h · Sensor telemetry pending",
         "country": "Philippines",
         "url": "https://www.gdacs.org",
         "latitude": 11.38,
@@ -80,7 +135,8 @@ FALLBACK_PH_ALERTS = [
             "type": "Point",
             "coordinates": [122.75, 11.38]
         },
-        "is_imported": False
+        "is_imported": False,
+        "viirs_data_available": False
     }
 ]
 
@@ -154,8 +210,8 @@ def format_gdacs_feature(
 
     if (lat is None or lon is None) and bbox and len(bbox) >= 4:
         try:
-            lon = float((bbox[0] + bbox[2]) / 2.0)
-            lat = float((bbox[1] + bbox[3]) / 2.0)
+            lon = (bbox[0] + bbox[2]) / 2.0
+            lat = (bbox[1] + bbox[3]) / 2.0
         except Exception:
             pass
 
@@ -178,7 +234,8 @@ def format_gdacs_feature(
         "coordinates": [lat, lon] if (lat is not None and lon is not None) else None,
         "bbox": bbox,
         "geometry": geom,
-        "is_imported": False
+        "is_imported": False,
+        "viirs_data_available": check_viirs_data_availability(date_clean)
     }
 
 
