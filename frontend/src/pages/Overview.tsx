@@ -21,6 +21,7 @@ interface OverviewProps {
   onRefreshGdacs?: () => void;
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
+  onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
 }
 
 export default function Overview({
@@ -39,6 +40,7 @@ export default function Overview({
   onRefreshGdacs,
   importingGdacsId = null,
   importedEventIds = new Set(),
+  onMunicipalitiesLoaded,
 }: OverviewProps) {
   // Focus overview headline metrics on Panay Island by default
   const panayMunicipalities = useMemo(() => {
@@ -279,6 +281,7 @@ export default function Overview({
             gdacsAlerts={gdacsAlerts}
             activeEventId={activeEvent?.id}
             onSimulateGdacs={onSimulateGdacs}
+            onMunicipalitiesLoaded={onMunicipalitiesLoaded}
           />
         </section>
       </div>

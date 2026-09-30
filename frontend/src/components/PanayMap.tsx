@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert } from '@/types';
-import { getRecoveryColor, getRecoveryStatusColor } from '@/data/mockData';
-import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X } from 'lucide-react';
+import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
+import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers } from 'lucide-react';
 
 export interface RegionPreset {
   id: string;
@@ -39,7 +39,7 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   barmm: { id: 'barmm', name: 'BARMM (Bangsamoro)', center: [7.2047, 124.2384], zoom: 8, islandGroup: 'Mindanao' },
 };
 
-interface PanayMapProps {
+export interface PanayMapProps {
   municipalities: Municipality[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -50,6 +50,22 @@ interface PanayMapProps {
   onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
   selectedRegionKey?: string;
   onRegionChange?: (regionKey: string) => void;
+  onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
+}
+
+export interface LeafletMapProps {
+  municipalities: Municipality[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onHover: (id: string | null) => void;
+  gdacsAlerts?: GdacsAlert[];
+  showGdacsMarkers?: boolean;
+  activeEventId?: string | null;
+  onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
+  selectedRegionKey?: string;
+  onRegionChange?: (key: string) => void;
+  onChunkLoaded?: (newItems: Municipality[]) => void;
+  onChunkLoadingChange?: (loading: boolean) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -125,10 +141,13 @@ export default function PanayMap({
   onSimulateGdacs,
   selectedRegionKey: externalRegionKey,
   onRegionChange: externalOnRegionChange,
+  onMunicipalitiesLoaded,
 }: PanayMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
   const [internalRegionKey, setInternalRegionKey] = useState<string>('panay');
+  const [extraMunicipalities, setExtraMunicipalities] = useState<Municipality[]>([]);
+  const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
 
   const currentRegionKey = externalRegionKey ?? internalRegionKey;
   const handleRegionChange = (newKey: string) => {
@@ -136,11 +155,30 @@ export default function PanayMap({
     externalOnRegionChange?.(newKey);
   };
 
-  const hovered = municipalities.find((m) => m.id === hoveredId);
-  const selected = municipalities.find((m) => m.id === selectedId);
+  const handleChunkLoaded = (newItems: Municipality[]) => {
+    setExtraMunicipalities((prev) => {
+      const existing = new Set(prev.map((m: Municipality) => m.id));
+      const toAdd = newItems.filter((m: Municipality) => !existing.has(m.id));
+      return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+    });
+    onMunicipalitiesLoaded?.(newItems);
+  };
+
+  // Merge default Panay telemetry with newly loaded regional chunk municipalities
+  const allMunicipalities: Municipality[] = useMemo(() => {
+    const map = new Map<string, Municipality>();
+    municipalities.forEach((m: Municipality) => map.set(m.id, m));
+    extraMunicipalities.forEach((m: Municipality) => {
+      if (!map.has(m.id)) map.set(m.id, m);
+    });
+    return Array.from(map.values());
+  }, [municipalities, extraMunicipalities]);
+
+  const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
+  const selected = allMunicipalities.find((m: Municipality) => m.id === selectedId);
 
   const alertsWithCoords = (gdacsAlerts || []).filter(
-    (a) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
+    (a: GdacsAlert) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
   );
 
   const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.panay;
@@ -158,13 +196,23 @@ export default function PanayMap({
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-300 border border-ocean-500/30">
                   {currentRegionKey === 'panay' ? 'Panay Default' : activePreset.name}
                 </span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Canvas 2D Engine
+                </span>
+                {isRegionChunkLoading && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-300 bg-ocean-500/15 border border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin text-ocean-300" />
+                    Loading {activePreset.name}...
+                  </span>
+                )}
               </div>
               <p className="text-xs text-ink-400 mt-0.5">
                 NASA VIIRS radiance overlay · Nationwide Philippine boundaries (Panay-First Default)
                 {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
               </p>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
               {/* Region Navigator Selector */}
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-200">
@@ -237,12 +285,12 @@ export default function PanayMap({
 
           {/* Leaflet GeoJSON map */}
           <div className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center">
-            {isLoading && municipalities.length === 0 ? (
+            {isLoading && allMunicipalities.length === 0 ? (
               <MapLoadingSkeleton />
             ) : (
               <>
                 <LeafletMap
-                  municipalities={municipalities}
+                  municipalities={allMunicipalities}
                   selectedId={selectedId}
                   onSelect={onSelect}
                   onHover={setHoveredId}
@@ -252,6 +300,8 @@ export default function PanayMap({
                   onSimulateGdacs={onSimulateGdacs}
                   selectedRegionKey={currentRegionKey}
                   onRegionChange={handleRegionChange}
+                  onChunkLoaded={handleChunkLoaded}
+                  onChunkLoadingChange={setIsRegionChunkLoading}
                 />
 
                 {isLoading && municipalities.length > 0 && (
@@ -446,14 +496,32 @@ export default function PanayMap({
                       targetIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
                     } else if (currentRegionKey === 'r6_negros') {
                       targetIds = ['PH060450100', 'PH060452600', 'PH060450200', 'PH060451400'];
+                    } else if (currentRegionKey === 'r1') {
+                      targetIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000'];
+                    } else if (currentRegionKey === 'r2') {
+                      targetIds = ['PH021529000', 'PH023134000', 'PH025007000'];
+                    } else if (currentRegionKey === 'car') {
+                      targetIds = ['PH141102000', 'PH141114000', 'PH143213000'];
+                    } else if (currentRegionKey === 'r5') {
+                      targetIds = ['PH050506000', 'PH051724000', 'PH056216000'];
+                    } else if (currentRegionKey === 'r10') {
+                      targetIds = ['PH104305000', 'PH103504000', 'PH101312000'];
+                    } else if (currentRegionKey === 'r9') {
+                      targetIds = ['PH097332000', 'PH097322000'];
+                    } else if (currentRegionKey === 'r12') {
+                      targetIds = ['PH126303000', 'PH126306000'];
+                    } else if (currentRegionKey === 'r13') {
+                      targetIds = ['PH160202000', 'PH166724000'];
+                    } else if (currentRegionKey === 'barmm') {
+                      targetIds = ['PH199901000', 'PH193601000'];
                     }
 
                     const items = targetIds
-                      .map((id) => municipalities.find((item) => item.id === id))
-                      .filter((m): m is Municipality => Boolean(m));
+                      .map((id) => allMunicipalities.find((item: Municipality) => item.id === id))
+                      .filter((m: Municipality | undefined): m is Municipality => Boolean(m));
 
                     if (items.length === 0) {
-                      return municipalities.slice(0, 4).map((m) => (
+                      return allMunicipalities.slice(0, 4).map((m: Municipality) => (
                         <button
                           key={m.id}
                           type="button"
@@ -465,7 +533,7 @@ export default function PanayMap({
                       ));
                     }
 
-                    return items.map((m) => (
+                    return items.map((m: Municipality) => (
                       <button
                         key={m.id}
                         type="button"
@@ -513,18 +581,9 @@ function LeafletMap({
   onSimulateGdacs,
   selectedRegionKey = 'panay',
   onRegionChange,
-}: {
-  municipalities: Municipality[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onHover: (id: string | null) => void;
-  gdacsAlerts?: GdacsAlert[];
-  showGdacsMarkers?: boolean;
-  activeEventId?: string | null;
-  onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
-  selectedRegionKey?: string;
-  onRegionChange?: (key: string) => void;
-}) {
+  onChunkLoaded,
+  onChunkLoadingChange,
+}: LeafletMapProps) {
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<Record<string, any>>({});
@@ -535,7 +594,8 @@ function LeafletMap({
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
-  const fullGeoJsonRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const canvasRendererRef = useRef<L.Canvas | null>(null);
+  const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
 
   // Panay coordinates constant
   const PANAY_CENTER: [number, number] = [11.0, 122.5];
@@ -561,71 +621,57 @@ function LeafletMap({
   // Default mobile view to locked so users can scroll past without getting trapped
   const [isLocked, setIsLocked] = useState<boolean>(() => isMobileOrTouchDevice());
 
-  // Function to bind fine-grained municipal features for the active region
-  const bindRegionGeoJson = (regionKey: string) => {
+  // Asynchronous lazy-loader for regional GeoJSON chunks with in-memory caching
+  const fetchRegionChunk = async (key: string): Promise<GeoJSON.FeatureCollection | null> => {
+    if (regionCacheRef.current.has(key)) {
+      return regionCacheRef.current.get(key)!;
+    }
+
+    // If selecting a Panay sub-province (iloilo, capiz, aklan, antique), derive from Panay if already cached
+    if (['iloilo', 'capiz', 'aklan', 'antique'].includes(key) && regionCacheRef.current.has('panay')) {
+      const panayData = regionCacheRef.current.get('panay')!;
+      const filtered = panayData.features.filter((f: GeoJSON.Feature) =>
+        (f.properties?.ADM2_EN || '').toLowerCase().includes(key)
+      );
+      if (filtered.length > 0) {
+        const subCol: GeoJSON.FeatureCollection = {
+          type: 'FeatureCollection',
+          features: filtered,
+        };
+        regionCacheRef.current.set(key, subCol);
+        return subCol;
+      }
+    }
+
+    onChunkLoadingChange?.(true);
+    try {
+      const url = key === 'panay' ? '/regions/panay.geojson' : `/regions/${key}.geojson`;
+      let res = await fetch(url);
+      if (!res.ok && key === 'panay') {
+        res = await fetch('/panay_municipalities.geojson');
+      }
+      if (!res.ok && key === 'philippines') {
+        res = await fetch('/philippines_boundaries.geojson');
+      }
+      if (res.ok) {
+        const geojson: GeoJSON.FeatureCollection = await res.json();
+        regionCacheRef.current.set(key, geojson);
+        return geojson;
+      }
+    } catch (err) {
+      console.warn(`Failed to fetch region chunk for ${key}:`, err);
+    } finally {
+      onChunkLoadingChange?.(false);
+    }
+
+    // Graceful fallback to Panay dataset
+    return regionCacheRef.current.get('panay') || null;
+  };
+
+  // Function to bind fine-grained municipal features for the active region using HTML5 Canvas
+  const renderRegionGeoJson = (regionKey: string, data: GeoJSON.FeatureCollection) => {
     const map = mapRef.current;
-    const fullData = fullGeoJsonRef.current;
-    if (!map || !fullData) return;
-
-    let targetFeatures: GeoJSON.Feature[] = [];
-
-    if (regionKey === 'panay') {
-      // Strictly 93 fine-grained Panay municipalities (no coarse boxes from other regions)
-      targetFeatures = fullData.features.filter((f) => {
-        const props = f.properties || {};
-        const prov = (props.ADM2_EN || props.province || '').toLowerCase();
-        const pcode = String(props.ADM3_PCODE || '');
-        const rkey = String(props.region_key || '');
-        return (
-          rkey === 'panay' ||
-          ['iloilo', 'capiz', 'aklan', 'antique'].some((p) => prov.includes(p)) ||
-          pcode.startsWith('PH06004') || // Aklan
-          pcode.startsWith('PH06006') || // Antique
-          pcode.startsWith('PH06019') || // Capiz
-          pcode.startsWith('PH06030')    // Iloilo
-        );
-      });
-    } else if (regionKey === 'iloilo') {
-      targetFeatures = fullData.features.filter((f) => (f.properties?.ADM2_EN || '').toLowerCase().includes('iloilo'));
-    } else if (regionKey === 'capiz') {
-      targetFeatures = fullData.features.filter((f) => (f.properties?.ADM2_EN || '').toLowerCase().includes('capiz'));
-    } else if (regionKey === 'aklan') {
-      targetFeatures = fullData.features.filter((f) => (f.properties?.ADM2_EN || '').toLowerCase().includes('aklan'));
-    } else if (regionKey === 'antique') {
-      targetFeatures = fullData.features.filter((f) => (f.properties?.ADM2_EN || '').toLowerCase().includes('antique'));
-    } else if (regionKey === 'philippines') {
-      targetFeatures = fullData.features;
-    } else {
-      targetFeatures = fullData.features.filter((f) => {
-        const props = f.properties || {};
-        const rkey = (props.region_key || '').toLowerCase();
-        const regCode = (props.ADM1_PCODE || '').toLowerCase();
-        const regName = (props.ADM1_EN || '').toLowerCase();
-        if (rkey === regionKey) return true;
-        if (regionKey === 'ncr' && (rkey === 'ncr' || regCode === 'ph13' || regName.includes('ncr') || regName.includes('capital'))) return true;
-        if (regionKey === 'r7' && (rkey === 'r7' || regCode === 'ph07' || regName.includes('central visayas') || (props.ADM2_EN || '').includes('Cebu') || (props.ADM2_EN || '').includes('Bohol'))) return true;
-        if (regionKey === 'r8' && (rkey === 'r8' || regCode === 'ph08' || regName.includes('eastern visayas') || (props.ADM2_EN || '').includes('Leyte') || (props.ADM2_EN || '').includes('Samar'))) return true;
-        if (regionKey === 'r6_negros' && (rkey === 'r6_negros' || (props.ADM2_EN || '').includes('Negros'))) return true;
-        if (regionKey === 'r3' && (rkey === 'r3' || regCode === 'ph03' || regName.includes('central luzon'))) return true;
-        if (regionKey === 'r4a' && (rkey === 'r4a' || regCode === 'ph04' || regName.includes('calabarzon'))) return true;
-        if (regionKey === 'r5' && (rkey === 'r5' || regCode === 'ph05' || regName.includes('bicol'))) return true;
-        if (regionKey === 'r1' && (rkey === 'r1' || regCode === 'ph01' || regName.includes('ilocos'))) return true;
-        if (regionKey === 'r2' && (rkey === 'r2' || regCode === 'ph02' || regName.includes('cagayan valley'))) return true;
-        if (regionKey === 'car' && (rkey === 'car' || regCode === 'ph14' || regName.includes('cordillera') || (props.ADM2_EN || '').includes('Benguet'))) return true;
-        if (regionKey === 'r4b' && (rkey === 'r4b' || regCode === 'ph17' || regName.includes('mimaropa') || (props.ADM2_EN || '').includes('Palawan'))) return true;
-        if (regionKey === 'r11' && (rkey === 'r11' || regCode === 'ph11' || regName.includes('davao'))) return true;
-        if (regionKey === 'r10' && (rkey === 'r10' || regCode === 'ph10' || regName.includes('northern mindanao'))) return true;
-        if (regionKey === 'r9' && (rkey === 'r9' || regCode === 'ph09' || regName.includes('zamboanga'))) return true;
-        if (regionKey === 'r12' && (rkey === 'r12' || regCode === 'ph12' || regName.includes('soccsksargen'))) return true;
-        if (regionKey === 'r13' && (rkey === 'r13' || regCode === 'ph16' || regName.includes('caraga'))) return true;
-        if (regionKey === 'barmm' && (rkey === 'barmm' || regCode === 'ph19' || regName.includes('bangsamoro') || regName.includes('barmm'))) return true;
-        return false;
-      });
-    }
-
-    if (targetFeatures.length === 0) {
-      targetFeatures = fullData.features;
-    }
+    if (!map || !data || !data.features) return;
 
     // Safely remove prior layer before binding new municipal collection
     if (geoJsonLayerRef.current) {
@@ -634,24 +680,37 @@ function LeafletMap({
     }
     layersRef.current = {};
 
-    const filteredCollection: GeoJSON.FeatureCollection = {
-      type: 'FeatureCollection',
-      features: targetFeatures,
-    };
+    // Register any newly encountered municipalities into municipalitiesByIdRef and propagate to parent
+    const newToRegister: GeoJSON.Feature[] = [];
+    data.features.forEach((feat: GeoJSON.Feature) => {
+      const props = feat.properties || {};
+      const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+      if (id && !municipalitiesByIdRef.current.has(id)) {
+        newToRegister.push(feat);
+      }
+    });
 
-    // Consistent multi-polygon and polygon parsing with crisp styling
-    const newLayer = L.geoJSON(filteredCollection, {
+    if (newToRegister.length > 0) {
+      const generated = createMunicipalities(newToRegister);
+      generated.forEach((m: Municipality) => municipalitiesByIdRef.current.set(m.id, m));
+      onChunkLoaded?.(generated);
+    }
+
+    // HTML5 Canvas renderer configuration: eliminates DOM node bloat for hundreds/thousands of polygons
+    const newLayer = L.geoJSON(data, {
       style: (feature) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
         const municipality = municipalitiesByIdRef.current.get(id);
         const score = municipality?.recoveryScore ?? 50;
         const color = getRecoveryColor(score);
+        const isSelected = id === selectedIdRef.current;
         return {
-          color: 'rgba(255,255,255,0.4)',
-          weight: 1.2,
+          renderer: canvasRendererRef.current || undefined,
+          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+          weight: isSelected ? 2.5 : 1.2,
           fillColor: color,
-          fillOpacity: 0.65,
+          fillOpacity: isSelected ? 0.95 : 0.65,
           lineJoin: 'round',
           lineCap: 'round',
         };
@@ -715,8 +774,10 @@ function LeafletMap({
     const map = mapRef.current;
     if (!map) return;
     onRegionChange?.('panay');
-    bindRegionGeoJson('panay');
-    map.setView(PANAY_CENTER, PANAY_ZOOM, { animate });
+    fetchRegionChunk('panay').then((data) => {
+      if (data) renderRegionGeoJson('panay', data);
+      map.setView(PANAY_CENTER, PANAY_ZOOM, { animate });
+    });
   };
 
   const handleUnlock = () => {
@@ -750,17 +811,22 @@ function LeafletMap({
     }
   }, [isLocked]);
 
-  // Initialize Map with Panay Island center lock
+  // Initialize Map with Canvas renderer and Panay Island default fast-load
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
     const initialLocked = isMobileOrTouchDevice();
+    const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 10 });
+    canvasRendererRef.current = canvasRenderer;
+
     const map = L.map(mapElement.current, {
       center: PANAY_CENTER,
       zoom: PANAY_ZOOM,
       zoomControl: true,
       scrollWheelZoom: false,
       attributionControl: false,
+      preferCanvas: true,
+      renderer: canvasRenderer,
       dragging: !initialLocked,
       touchZoom: !initialLocked,
       doubleClickZoom: !initialLocked,
@@ -775,28 +841,23 @@ function LeafletMap({
 
     let disposed = false;
 
-    // Ingest nationwide Philippine boundaries with fallback to Panay dataset
-    const loadBoundaries = async () => {
-      try {
-        const res = await fetch('/philippines_boundaries.geojson');
-        if (res.ok) return await res.json();
-      } catch (e) {
-        console.warn('Nationwide boundaries not reached, falling back to Panay dataset', e);
-      }
-      const fallbackRes = await fetch('/panay_municipalities.geojson');
-      return await fallbackRes.json();
-    };
-
-    loadBoundaries()
-      .then((geojson: GeoJSON.FeatureCollection) => {
-        if (disposed || mapRef.current !== map) return;
-        fullGeoJsonRef.current = geojson;
-
-        // Bind active region's fine-grained municipal features (defaults to Panay)
-        bindRegionGeoJson(selectedRegionKey || 'panay');
-
-        // Always lock initial view to Panay Island
-        map.setView(PANAY_CENTER, PANAY_ZOOM);
+    // Fast-load Panay Island boundaries by default
+    fetchRegionChunk('panay')
+      .then((geojson) => {
+        if (disposed || mapRef.current !== map || !geojson) return;
+        const targetKey = selectedRegionKey || 'panay';
+        if (targetKey === 'panay') {
+          renderRegionGeoJson('panay', geojson);
+          map.setView(PANAY_CENTER, PANAY_ZOOM);
+        } else {
+          fetchRegionChunk(targetKey).then((chunk) => {
+            if (chunk && !disposed && mapRef.current === map) {
+              renderRegionGeoJson(targetKey, chunk);
+              const preset = REGION_PRESETS[targetKey];
+              if (preset) map.setView(preset.center, preset.zoom);
+            }
+          });
+        }
       })
       .catch(() => {
         // Ignore aborted or unavailable map data during component cleanup.
@@ -815,22 +876,24 @@ function LeafletMap({
     };
   }, []);
 
-  // Smoothly pan & zoom and re-bind municipal feature collection when user selects a different Philippine region
+  // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedRegionKey) return;
 
-    // Re-bind the exact municipal feature collection for this region
-    bindRegionGeoJson(selectedRegionKey);
+    fetchRegionChunk(selectedRegionKey).then((chunkData) => {
+      if (!chunkData) return;
+      renderRegionGeoJson(selectedRegionKey, chunkData);
 
-    const preset = REGION_PRESETS[selectedRegionKey];
-    if (preset) {
-      if (selectedRegionKey === 'panay') {
-        map.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
-      } else {
-        map.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+      const preset = REGION_PRESETS[selectedRegionKey];
+      if (preset) {
+        if (selectedRegionKey === 'panay') {
+          map.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
+        } else {
+          map.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+        }
       }
-    }
+    });
   }, [selectedRegionKey]);
 
   // Update GeoJSON polygon styles and tooltip content dynamically when municipality scores or selection change

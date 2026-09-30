@@ -842,5 +842,12 @@ def generate_boundaries():
             json.dump(output_geojson, out, ensure_ascii=False)
         print(f"Saved GeoJSON dataset to: {p}")
 
+    # Automatically run simplification and regional chunking
+    try:
+        from optimize_and_chunk_boundaries import process_and_chunk_boundaries
+        process_and_chunk_boundaries()
+    except Exception as e:
+        print(f"Post-processing chunking notice: {e}")
+
 if __name__ == "__main__":
     generate_boundaries()
