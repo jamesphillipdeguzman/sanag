@@ -8,6 +8,7 @@ export type ViewMode = 'hubs' | 'critical';
 interface RecoveryChartProps {
   municipalities: Municipality[];
   selectedId: string | null;
+  globalRank?: number | null;
   records: RecoveryRecord[];
   events?: DisasterEvent[];
   activeEventId?: string | null;
@@ -28,6 +29,7 @@ interface RecoveryRecord {
 export default function RecoveryChart({
   municipalities,
   selectedId,
+  globalRank,
   records,
   events: propEvents,
   activeEventId,
@@ -39,6 +41,20 @@ export default function RecoveryChart({
   onSelect,
 }: RecoveryChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('hubs');
+
+  // Computed global ranking lookup based on sorted Municipal Resilience Index array
+  // Sorts municipalities uniformly from lowest score to highest (ties broken alphabetically)
+  const resilienceRankMap = useMemo(() => {
+    const sorted = [...municipalities].sort(
+      (a, b) => (a.recoveryScore ?? 50) - (b.recoveryScore ?? 50) || a.name.localeCompare(b.name)
+    );
+    const map = new Map<string, number>();
+    sorted.forEach((m, idx) => {
+      map.set(m.id, idx + 1);
+      if (m.pcode) map.set(m.pcode, idx + 1);
+    });
+    return map;
+  }, [municipalities]);
 
   // Comprehensive events list ensuring default fixtures (1990 Earthquake, Typhoon Tino, etc.) are available
   const allEvents = useMemo(() => {
@@ -294,7 +310,7 @@ export default function RecoveryChart({
       {selectedId && (
         <div className="px-5 py-2.5 bg-ocean-500/10 border-b border-ocean-500/20 flex items-center justify-between text-xs">
           <span className="text-ocean-200">
-            Focused on <strong>{featured[0]?.name}</strong> ({featured[0]?.province})
+            Focused on <strong>{featured[0]?.name}</strong> ({featured[0]?.province}) · #{featured[0]?.resilienceRank ?? featured[0]?.rank ?? (globalRank || resilienceRankMap.get(featured[0]?.id) || 1)} in Resilience Index ({featured[0]?.recoveryScore}%)
           </span>
           <button
             type="button"
@@ -399,31 +415,45 @@ export default function RecoveryChart({
 
         {/* Legend Chips */}
         <div className="flex flex-wrap gap-2.5 mb-4">
-          {series.map((s, i) => (
-            <div
-              key={s.municipality.id}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
-                viewMode === 'critical'
-                  ? 'bg-rose-500/5 border-rose-500/20 shadow-sm'
-                  : 'bg-white/5 border-white/10'
-              }`}
-            >
+          {series.map((s, i) => {
+            const isHardestHit = viewMode === 'critical' || Boolean(selectedId);
+            // Global rank resolution:
+            // 1. Attached resilienceRank / rank on the municipality object
+            // 2. Or explicit globalRank prop if this matches selectedId
+            // 3. Or derived from the full sorted Municipal Resilience Index array
+            const computedRank =
+              s.municipality.resilienceRank ??
+              s.municipality.rank ??
+              (selectedId === s.municipality.id && globalRank ? globalRank : null) ??
+              resilienceRankMap.get(s.municipality.id) ??
+              (i + 1);
+
+            return (
               <div
-                className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: lineColors[i % lineColors.length] }}
-              />
-              <span className="text-xs text-white font-medium">{s.municipality.name}</span>
-              {viewMode === 'critical' ? (
-                <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
-                  #{i + 1} Lowest ({s.municipality.recoveryScore}%)
-                </span>
-              ) : (
-                <span className="text-[10px] text-ink-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
-                  {s.municipality.province} Hub
-                </span>
-              )}
-            </div>
-          ))}
+                key={s.municipality.id}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                  isHardestHit
+                    ? 'bg-rose-500/5 border-rose-500/20 shadow-sm'
+                    : 'bg-white/5 border-white/10'
+                }`}
+              >
+                <div
+                  className="h-2.5 w-2.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: lineColors[i % lineColors.length] }}
+                />
+                <span className="text-xs text-white font-medium">{s.municipality.name}</span>
+                {isHardestHit ? (
+                  <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                    #{computedRank} Lowest ({s.municipality.recoveryScore}%)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-ink-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                    {s.municipality.province} Hub
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {series.length === 0 ? (

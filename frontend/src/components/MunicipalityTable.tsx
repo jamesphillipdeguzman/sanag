@@ -42,8 +42,9 @@ export default function MunicipalityTable({ municipalities, selectedId, onSelect
             </tr>
           </thead>
           <tbody>
-            {sorted.map((m) => {
+            {sorted.map((m, index) => {
               const isSelected = m.id === selectedId;
+              const rankNumber = m.resilienceRank ?? m.rank ?? (index + 1);
               return (
                 <tr
                   key={m.id}
@@ -56,6 +57,9 @@ export default function MunicipalityTable({ municipalities, selectedId, onSelect
                 >
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-semibold text-rose-300/80 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                        #{rankNumber}
+                      </span>
                       <div
                         className="h-2 w-2 rounded-full flex-shrink-0"
                         style={{ backgroundColor: getRecoveryColor(m.recoveryScore) }}

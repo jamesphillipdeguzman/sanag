@@ -13,6 +13,7 @@ interface OverviewProps {
   onDismissEvent?: () => void;
   selectedId: string | null;
   onSelectMunicipality: (id: string) => void;
+  globalRank?: number | null;
   recoveryDate?: string | null;
   isMapLoading?: boolean;
   gdacsAlerts?: GdacsAlert[];
@@ -31,6 +32,7 @@ export default function Overview({
   onSelectEvent,
   onDismissEvent,
   selectedId,
+  globalRank,
   onSelectMunicipality,
   recoveryDate,
   isMapLoading = false,
@@ -275,6 +277,7 @@ export default function Overview({
           <PanayMap
             municipalities={municipalities}
             selectedId={selectedId}
+            globalRank={globalRank}
             onSelect={onSelectMunicipality}
             recoveryDate={recoveryDate}
             isLoading={isMapLoading}

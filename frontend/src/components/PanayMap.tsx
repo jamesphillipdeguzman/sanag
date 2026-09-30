@@ -43,6 +43,7 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
 export interface PanayMapProps {
   municipalities: Municipality[];
   selectedId: string | null;
+  globalRank?: number | null;
   onSelect: (id: string) => void;
   recoveryDate?: string | null;
   isLoading?: boolean;
@@ -59,6 +60,7 @@ export interface LeafletMapProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
+  onMapHoverChange?: (hovered: boolean) => void;
   gdacsAlerts?: GdacsAlert[];
   showGdacsMarkers?: boolean;
   activeEventId?: string | null;
@@ -134,6 +136,7 @@ function MapLoadingSkeleton() {
 export default function PanayMap({
   municipalities,
   selectedId,
+  globalRank,
   onSelect,
   recoveryDate,
   isLoading = false,
@@ -174,6 +177,19 @@ export default function PanayMap({
     });
     return Array.from(map.values());
   }, [municipalities, extraMunicipalities]);
+
+  // Uniform ranking lookup based on Municipal Resilience Index
+  const resilienceRankMap = useMemo(() => {
+    const sorted = [...allMunicipalities].sort(
+      (a, b) => (a.recoveryScore ?? 50) - (b.recoveryScore ?? 50) || a.name.localeCompare(b.name)
+    );
+    const map = new Map<string, number>();
+    sorted.forEach((m, idx) => {
+      map.set(m.id, idx + 1);
+      if (m.pcode) map.set(m.pcode, idx + 1);
+    });
+    return map;
+  }, [allMunicipalities]);
 
   const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
   const selected = allMunicipalities.find((m: Municipality) => m.id === selectedId);
@@ -222,10 +238,20 @@ export default function PanayMap({
 
   const {
     isActive: isAudioActive,
+    isEnabled: isAudioEnabled,
+    isHovered: isMapAudioHovered,
+    isPlaying: isMapAudioPlaying,
     status: liveAudioStatus,
     toggle: toggleAudio,
+    setHovered: setAudioHovered,
     statusLabel: audioStatusLabel,
   } = useAudioSpatialIndicator(currentTargetAudioStatus);
+
+  useEffect(() => {
+    return () => {
+      setAudioHovered(false);
+    };
+  }, [setAudioHovered]);
 
   const alertsWithCoords = (gdacsAlerts || []).filter(
     (a: GdacsAlert) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
@@ -332,23 +358,25 @@ export default function PanayMap({
                 id="audio-spatial-indicator-toggle"
                 onClick={() => toggleAudio()}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  isAudioActive
+                  isAudioEnabled
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
                     : 'bg-white/5 text-ink-400 border-white/10 hover:bg-white/10 hover:text-white'
                 }`}
                 title={
-                  isAudioActive
-                    ? `Audio-Spatial Indicator: ACTIVE (${audioStatusLabel}) - Click to mute`
-                    : 'Enable Audio-Spatial Emergency Indicator (Simulated Nighttime Cricket Telemetry)'
+                  isAudioEnabled
+                    ? isMapAudioPlaying
+                      ? `Audio-Spatial Indicator: ACTIVE (${audioStatusLabel}) - Click to turn off`
+                      : `Audio-Spatial Indicator: ON (Standby · Hover map to listen) - Click to turn off`
+                    : 'Enable Audio-Spatial Emergency Indicator (Simulated Nighttime Cricket Telemetry · Plays on map hover)'
                 }
-                aria-pressed={isAudioActive}
+                aria-pressed={isAudioEnabled}
               >
-                {isAudioActive ? (
+                {isAudioEnabled ? (
                   <>
-                    <Volume2 className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+                    <Volume2 className={`h-3.5 w-3.5 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-70'}`} />
                     <span className="hidden sm:inline">Audio</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase tracking-wider font-mono">
-                      {liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : liveAudioStatus === 'recovering' ? 'LOW' : 'MUTED'}
+                      {isMapAudioPlaying ? (liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : 'LOW') : 'Hover Map'}
                     </span>
                   </>
                 ) : (
@@ -367,7 +395,11 @@ export default function PanayMap({
           </div>
 
           {/* Leaflet GeoJSON map */}
-          <div className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center">
+          <div
+            className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center"
+            onMouseEnter={() => setAudioHovered(true)}
+            onMouseLeave={() => setAudioHovered(false)}
+          >
             {isLoading && allMunicipalities.length === 0 ? (
               <MapLoadingSkeleton />
             ) : (
@@ -377,6 +409,7 @@ export default function PanayMap({
                   selectedId={selectedId}
                   onSelect={onSelect}
                   onHover={setHoveredId}
+                  onMapHoverChange={setAudioHovered}
                   gdacsAlerts={gdacsAlerts}
                   showGdacsMarkers={showGdacsMarkers}
                   activeEventId={activeEventId}
@@ -397,13 +430,18 @@ export default function PanayMap({
                 {/* Hover tooltip */}
                 {hovered && !selected && (
                   <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
-                      />
-                      <span className="text-sm font-semibold text-white">{hovered.name}</span>
-                      <span className="text-xs text-ink-400">{hovered.province}</span>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-2.5 w-2.5 rounded-full"
+                          style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
+                        />
+                        <span className="text-sm font-semibold text-white">{hovered.name}</span>
+                        <span className="text-xs text-ink-400">{hovered.province}</span>
+                      </div>
+                      <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                        #{hovered.resilienceRank ?? hovered.rank ?? (resilienceRankMap.get(hovered.id) || 1)} Lowest
+                      </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs">
                       <span className="text-ink-300">
@@ -416,10 +454,10 @@ export default function PanayMap({
                       </span>
                     </div>
                     <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
-                    {isAudioActive && (
+                    {isAudioEnabled && (
                       <div className="flex items-center gap-1.5 text-[10px] text-emerald-300/90 mt-1.5 pt-1.5 border-t border-white/5">
-                        <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />
-                        <span>Spatial Audio: {audioStatusLabel}</span>
+                        <Volume2 className={`h-3 w-3 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
+                        <span>Spatial Audio: {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}</span>
                       </div>
                     )}
                   </div>
@@ -457,7 +495,12 @@ export default function PanayMap({
                     <MapPin className="h-3.5 w-3.5 text-ocean-400" />
                     <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
                   </div>
-                  <h3 className="text-xl font-extrabold text-white">{selected.name}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-extrabold text-white">{selected.name}</h3>
+                    <span className="text-[11px] font-semibold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/30">
+                      #{selected.resilienceRank ?? selected.rank ?? (selected.id === selectedId && globalRank ? globalRank : null) ?? (resilienceRankMap.get(selected.id) || 1)} Lowest ({selected.recoveryScore}%)
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -471,10 +514,10 @@ export default function PanayMap({
               </div>
 
               {/* Audio-Spatial Indicator Status Badge */}
-              {isAudioActive && (
+              {isAudioEnabled && (
                 <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-ink-950/60 border border-emerald-500/20 mb-4">
                   <span className="flex items-center gap-1.5 text-ink-300">
-                    <Volume2 className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+                    <Volume2 className={`h-3.5 w-3.5 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
                     <span>Spatial Audio Profile</span>
                   </span>
                   <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${
@@ -486,7 +529,7 @@ export default function PanayMap({
                       ? 'bg-ocean-500/20 text-ocean-300'
                       : 'bg-emerald-500/20 text-emerald-300'
                   }`}>
-                    {audioStatusLabel}
+                    {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
                   </span>
                 </div>
               )}
@@ -685,6 +728,7 @@ function LeafletMap({
   selectedId,
   onSelect,
   onHover,
+  onMapHoverChange,
   gdacsAlerts = [],
   showGdacsMarkers = true,
   activeEventId,
@@ -703,6 +747,7 @@ function LeafletMap({
   const selectedIdRef = useRef<string | null>(selectedId);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
+  const onMapHoverChangeRef = useRef(onMapHoverChange);
   const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
@@ -727,6 +772,10 @@ function LeafletMap({
   useEffect(() => {
     onHoverRef.current = onHover;
   }, [onHover]);
+
+  useEffect(() => {
+    onMapHoverChangeRef.current = onMapHoverChange;
+  }, [onMapHoverChange]);
 
   // Default mobile view to locked so users can scroll past without getting trapped
   const [isLocked, setIsLocked] = useState<boolean>(() => isMobileOrTouchDevice());
@@ -802,7 +851,11 @@ function LeafletMap({
 
     if (newToRegister.length > 0) {
       const generated = createMunicipalities(newToRegister);
-      generated.forEach((m: Municipality) => municipalitiesByIdRef.current.set(m.id, m));
+      generated.forEach((m: Municipality) => {
+        if (!municipalitiesByIdRef.current.has(m.id)) {
+          municipalitiesByIdRef.current.set(m.id, m);
+        }
+      });
       onChunkLoaded?.(generated);
     }
 
@@ -977,6 +1030,28 @@ function LeafletMap({
     mapRef.current = map;
     defaultBoundsRef.current = PANAY_BOUNDS;
 
+    // Track mouse hover state across the interactive map surface
+    map.on('mouseover', () => {
+      onMapHoverChangeRef.current?.(true);
+    });
+    map.on('mouseout', (e) => {
+      const container = map.getContainer();
+      if (!container) {
+        onMapHoverChangeRef.current?.(false);
+        return;
+      }
+      const rect = container.getBoundingClientRect();
+      const clientX = (e.originalEvent as MouseEvent)?.clientX;
+      const clientY = (e.originalEvent as MouseEvent)?.clientY;
+      if (
+        clientX == null || clientY == null ||
+        clientX < rect.left || clientX > rect.right ||
+        clientY < rect.top || clientY > rect.bottom
+      ) {
+        onMapHoverChangeRef.current?.(false);
+      }
+    });
+
     // Dedicated layer group for GDACS live hazard pins and impact zones
     const gdacsGroup = L.layerGroup().addTo(map);
     gdacsGroupRef.current = gdacsGroup;
@@ -1051,6 +1126,36 @@ function LeafletMap({
       }
     });
     municipalitiesByIdRef.current = map;
+
+    // Direct GeoJSON layer-level restyling ensures canvas renderer re-paints all polygons immediately
+    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
+      (geoJsonLayerRef.current as any).setStyle((feature: any) => {
+        const props = feature?.properties || {};
+        const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          map.get(id) ||
+          (pcode ? map.get(pcode) : null) ||
+          (name ? map.get(name.toLowerCase().trim()) : null) ||
+          (normName ? map.get(normName) : null);
+
+        const score = municipality?.recoveryScore ?? 50;
+        const color = getRecoveryColor(score);
+        const isSelected = id === selectedId || (municipality && municipality.id === selectedId);
+        return {
+          renderer: canvasRendererRef.current || undefined,
+          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+          weight: isSelected ? 2.5 : 1.2,
+          fillColor: color,
+          fillOpacity: isSelected ? 0.95 : 0.65,
+          lineJoin: 'round',
+          lineCap: 'round',
+        };
+      });
+    }
 
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       const props = (layer as any)?.feature?.properties || {};
@@ -1202,7 +1307,11 @@ function LeafletMap({
   }, [gdacsAlerts, showGdacsMarkers, activeEventId, onSimulateGdacs]);
 
   return (
-    <div className="relative w-full overflow-hidden rounded-xl">
+    <div
+      className="relative w-full overflow-hidden rounded-xl"
+      onMouseEnter={() => onMapHoverChange?.(true)}
+      onMouseLeave={() => onMapHoverChange?.(false)}
+    >
       <div
         ref={mapElement}
         className={`leaflet-map ${isLocked ? 'is-locked' : 'is-unlocked'}`}

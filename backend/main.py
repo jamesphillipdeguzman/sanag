@@ -6,7 +6,8 @@ import sqlite3
 import math
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Union
+from functools import lru_cache
+from typing import List, Optional, Dict, Any, Union, Tuple
 from calculator import compute_recovery_index
 from weather_service import (
     fetch_historical_weather,
@@ -680,7 +681,25 @@ def get_event_radiance(
     """
     Connects historical event records to spatial/time radiance data across Panay municipalities.
     Exposes both municipality_name and pcode for direct GIS map layers.
+    Cached in-memory via lru_cache to avoid redundant database reads.
     """
+    lookup_id = "panay-blackout-2024" if event_id.strip() == "1" else event_id.strip()
+    clean_mun = municipality.strip().lower() if municipality and isinstance(municipality, str) else None
+    
+    event_dict, spatial_time_data = _cached_event_radiance_query(lookup_id, observation_date, clean_mun)
+    
+    return {
+        "event": event_dict,
+        "spatial_time_records_count": len(spatial_time_data),
+        "data": list(spatial_time_data)
+    }
+
+@lru_cache(maxsize=128)
+def _cached_event_radiance_query(
+    lookup_id: str,
+    observation_date: Optional[str],
+    municipality: Optional[str]
+) -> Tuple[Dict[str, Any], Tuple[Dict[str, Any], ...]]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -701,18 +720,17 @@ def get_event_radiance(
     else:
         evt_sql = "SELECT id, municipality_code, name, description, date, category, image_url FROM events WHERE id = ?"
         
-    lookup_id = "panay-blackout-2024" if event_id.strip() == "1" else event_id
     cursor.execute(evt_sql, (lookup_id,))
     event = cursor.fetchone()
     if not event:
         conn.close()
-        raise HTTPException(status_code=404, detail=f"Event ID '{event_id}' not found.")
+        raise HTTPException(status_code=404, detail=f"Event ID '{lookup_id}' not found.")
 
     event_dict = dict(event)
     if event_dict.get("id") is not None:
         event_dict["id"] = str(event_dict["id"])
     raw_date = observation_date or event_dict.get("date")
-    target_date: Optional[str] = str(raw_date) if raw_date is not None else None
+    target_date: Optional[str] = str(raw_date)[:10] if raw_date is not None else None
     
     query = """
         SELECT 
@@ -744,10 +762,9 @@ def get_event_radiance(
     """
     params = [target_date]
     
-    if municipality and isinstance(municipality, str):
-        mun_q = municipality.strip().lower()
+    if municipality:
         query += " AND (LOWER(o.municipality_name) = ? OR LOWER(COALESCE(o.municipality_pcode, m.code)) = ?)"
-        params.extend([mun_q, mun_q])
+        params.extend([municipality, municipality])
         
     query += " ORDER BY o.municipality_name ASC"
     
@@ -789,11 +806,7 @@ def get_event_radiance(
             "r_t": r_t
         })
         
-    return {
-        "event": event_dict,
-        "spatial_time_records_count": len(spatial_time_data),
-        "data": spatial_time_data
-    }
+    return (event_dict, tuple(spatial_time_data))
 
 
 @app.get("/api/v1/resilience/timeline", response_model=TimelineResponse, tags=["Timeline"])

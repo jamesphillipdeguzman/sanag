@@ -16,6 +16,8 @@ export interface Municipality {
   estimatedDaysToRecover: number;
   area: number;
   recoveryDate?: string | null;
+  resilienceRank?: number;
+  rank?: number;
 }
 
 export type DisasterType = 'blackout' | 'typhoon' | 'flood' | 'earthquake' | 'disaster';
