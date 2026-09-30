@@ -63,6 +63,7 @@ class EventModel(BaseModel):
     date: str
     category: str
     image_url: Optional[str] = None
+    affected_population: Optional[int] = None
 
 class EventsResponse(BaseModel):
     events: List[EventModel]
@@ -75,6 +76,107 @@ class TimelineResponse(BaseModel):
     municipality: str
     pcode: Optional[str] = None
     timeline: List[Dict[str, Any]]
+
+
+# --- Population Cache & Aggregation Logic ---
+
+_MUNICIPALITY_POP_CACHE: Optional[Dict[str, int]] = None
+
+def get_municipality_population_lookup() -> Dict[str, int]:
+    global _MUNICIPALITY_POP_CACHE
+    if _MUNICIPALITY_POP_CACHE is not None:
+        return _MUNICIPALITY_POP_CACHE
+    try:
+        from loader import load_panay_municipalities_geojson
+        fc = load_panay_municipalities_geojson()
+        pop_map = {}
+        for f in fc.get("features", []):
+            props = f.get("properties", {})
+            pcode = props.get("ADM3_PCODE")
+            name = props.get("ADM3_EN")
+            area = float(props.get("AREA_SQKM", 50))
+            pop = round(area * 860)
+            if pcode:
+                pop_map[pcode] = pop
+                pop_map[pcode.lower()] = pop
+            if name:
+                pop_map[name.lower()] = pop
+        _MUNICIPALITY_POP_CACHE = pop_map
+        return pop_map
+    except Exception as e:
+        print(f"Error loading municipality population lookup: {e}")
+        _MUNICIPALITY_POP_CACHE = {}
+        return {}
+
+def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: str) -> int:
+    """
+    Sums the population totals of all municipalities flagged as affected
+    or under critical thresholds (R(t) < 0.60 or < 0.90) for an event date.
+    """
+    try:
+        pop_lookup = get_municipality_population_lookup()
+
+        query = """
+            SELECT 
+                o.municipality_name,
+                COALESCE(o.municipality_pcode, m.code) AS pcode,
+                o.daily_radiance,
+                COALESCE(
+                    (SELECT b1.baseline_radiance FROM baselines b1 
+                     WHERE (b1.municipality_name = o.municipality_name OR b1.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
+                       AND b1.baseline_radiance IS NOT NULL 
+                       AND (b1.month_date = substr(o.observation_date, 1, 7) OR b1.month_date = substr(o.observation_date, 1, 7) || '-01')
+                     LIMIT 1),
+                    (SELECT b2.baseline_radiance FROM baselines b2 
+                     WHERE (b2.municipality_name = o.municipality_name OR b2.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
+                       AND b2.baseline_radiance IS NOT NULL 
+                       AND (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) <= o.observation_date
+                     ORDER BY (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) DESC LIMIT 1),
+                    0.75
+                ) AS baseline_radiance
+            FROM radiance_observations o
+            LEFT JOIN municipalities m ON (o.municipality_name = m.name OR o.municipality_pcode = m.code)
+            WHERE o.observation_date = ?
+        """
+        cursor.execute(query, (event_date,))
+        rows = cursor.fetchall()
+
+        if not rows:
+            cursor.execute("""
+                SELECT observation_date, ABS(JULIANDAY(observation_date) - JULIANDAY(?)) AS diff
+                FROM radiance_observations
+                ORDER BY diff ASC LIMIT 1
+            """, (event_date,))
+            nearest = cursor.fetchone()
+            if nearest and nearest["diff"] is not None and nearest["diff"] <= 3:
+                cursor.execute(query, (nearest["observation_date"],))
+                rows = cursor.fetchall()
+
+        if not rows:
+            return 0
+
+        crit_warn_pop = 0
+        unrestored_pop = 0
+
+        for r in rows:
+            rad = r["daily_radiance"]
+            base = r["baseline_radiance"]
+            if rad is None or base is None or base <= 0:
+                continue
+            r_t = rad / base
+            pcode = r["pcode"]
+            name = (r["municipality_name"] or "").lower()
+            pop = pop_lookup.get(pcode, pop_lookup.get(name, 80000))
+
+            if r_t < 0.60:
+                crit_warn_pop += pop
+            if r_t < 0.90:
+                unrestored_pop += pop
+
+        return crit_warn_pop if crit_warn_pop > 0 else unrestored_pop
+    except Exception as e:
+        print(f"Error computing affected population for date {event_date}: {e}")
+        return 0
 
 
 # --- Endpoints ---
@@ -110,7 +212,8 @@ def get_municipalities():
 @app.get("/api/v1/events", response_model=EventsResponse, tags=["Events"])
 def get_events():
     """
-    Returns all historical disaster and power disruption event records.
+    Returns all historical disaster and power disruption event records
+    with computed total affected population based on municipal radiance recovery.
     """
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -136,15 +239,17 @@ def get_events():
             
         cursor.execute(sql)
         rows = cursor.fetchall()
-        conn.close()
 
         events = []
         for row in rows:
             event = dict(row)
             if event.get("id") is not None:
                 event["id"] = str(event["id"])
+            # Compute total affected population dynamically from satellite observations
+            event["affected_population"] = compute_event_affected_population(cursor, event["date"])
             events.append(event)
 
+        conn.close()
         return {"events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -267,6 +372,7 @@ def get_event_radiance(
             cursor.execute(query, params)
             rows = cursor.fetchall()
 
+    event_dict["affected_population"] = compute_event_affected_population(cursor, target_date)
     conn.close()
     
     spatial_time_data = []

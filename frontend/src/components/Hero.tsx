@@ -1,6 +1,6 @@
-import { Satellite, Activity, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Satellite, Activity, AlertTriangle, TrendingUp, Users } from 'lucide-react';
 import type { Municipality, DisasterEvent } from '@/types';
-import { getSeverityColor } from '@/data/mockData';
+import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 
 interface HeroProps {
   municipalities: Municipality[];
@@ -10,11 +10,17 @@ interface HeroProps {
 }
 
 export default function Hero({ municipalities, activeEvent, onSelectEvent, events }: HeroProps) {
-  const avgRecovery = Math.round(
-    municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length,
-  );
+  const avgRecovery = municipalities.length > 0
+    ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
+    : 0;
   const restoredCount = municipalities.filter((m) => m.status === 'restored').length;
   const criticalCount = municipalities.filter((m) => m.status === 'critical').length;
+  const affectedLGUs = municipalities.filter(
+    (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
+  );
+  const affectedPopulation = affectedLGUs.length > 0
+    ? affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0)
+    : (activeEvent.affectedPopulation || 0);
 
   return (
     <section id="overview" className="relative pt-24 pb-12 overflow-hidden">
@@ -103,7 +109,7 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
             </div>
 
             {/* Quick stats */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <StatCard
                 icon={<Activity className="h-4 w-4" />}
                 label="Avg Recovery"
@@ -121,6 +127,12 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
                 label="Critical"
                 value={criticalCount.toString()}
                 accent="text-rose-300"
+              />
+              <StatCard
+                icon={<Users className="h-4 w-4" />}
+                label="Affected Pop"
+                value={formatAffectedPopulation(affectedPopulation)}
+                accent="text-amber-300"
               />
             </div>
           </div>

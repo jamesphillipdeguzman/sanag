@@ -58,6 +58,8 @@ export function getSeverityColor(severity: DisasterEvent['severity']): string {
   return severity === 'Severe' ? '#f43f5e' : severity === 'High' ? '#fbbf24' : '#599ffd';
 }
 
+export { formatAffectedPopulation, formatAffectedCompact } from '../utils/formatters';
+
 export function generateRecoveryCurve(baseline: number, startDay: number, days: number, rate: number) {
   return Array.from({ length: days }, (_, index) => {
     const day = index + startDay;

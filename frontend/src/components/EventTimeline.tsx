@@ -1,5 +1,5 @@
 import type { DisasterEvent } from '@/types';
-import { getSeverityColor } from '@/data/mockData';
+import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 import { Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
 
 interface EventTimelineProps {
@@ -65,8 +65,8 @@ export default function EventTimeline({ events, activeEventId, onSelect }: Event
                     >
                       {event.severity}
                     </span>
-                    <span className="text-[10px] text-ink-400">
-                      {(event.affectedPopulation / 1000).toFixed(0)}K affected
+                    <span className="text-[10px] text-ink-300 font-medium">
+                      {formatAffectedPopulation(event.affectedPopulation)}
                     </span>
                   </div>
                 </button>
@@ -94,9 +94,14 @@ export default function EventTimeline({ events, activeEventId, onSelect }: Event
                   <span className="text-xs text-ink-400">{active.date} → {active.endDate}</span>
                 </div>
                 <p className="text-sm text-ink-300 leading-relaxed">{active.description}</p>
-                <div className="mt-3 flex items-center gap-4 text-xs">
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                   <span className="text-ink-400">
-                    Affected: <span className="font-semibold text-white">{active.affectedPopulation.toLocaleString()}</span>
+                    Affected: <span className="font-semibold text-white">{formatAffectedPopulation(active.affectedPopulation)}</span>
+                    {active.affectedPopulation > 0 && (
+                      <span className="text-ink-500 text-[11px] ml-1.5 font-normal">
+                        ({active.affectedPopulation.toLocaleString()} citizens)
+                      </span>
+                    )}
                   </span>
                   <span className="text-ink-400">
                     Type: <span className="font-semibold capitalize text-white">{active.type}</span>

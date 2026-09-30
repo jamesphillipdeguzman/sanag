@@ -25,4 +25,5 @@ export interface DisasterEvent {
   type: DisasterType;
   affectedPopulation: number;
   description: string;
+  category?: string;
 }
