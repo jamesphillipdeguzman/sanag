@@ -6,7 +6,6 @@ import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
-import WeatherForecast from './components/WeatherForecast.jsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import './App.css'
 
@@ -682,41 +681,42 @@ function App() {
       )}
       {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}
       <main className="dashboard-main">
-        <section id="recovery" className="dashboard-section">
-          <RecoveryChart
-            municipalities={municipalitiesWithRank}
-            selectedId={selectedId}
-            globalRank={selectedGlobalRank}
-            records={recoveryRecords}
-            events={events}
-            activeEventId={activeEventId}
-            onEventChange={handleSelectEvent}
-            eventDate={activeEvent?.date}
-            onSelect={selectMunicipality}
-            startDate={recoveryStartDate}
-            endDate={recoveryEndDate}
-            onDateRangeChange={(startDate, endDate) => {
-              if (!activeEvent) return
-              const cleanStart = formatIsoDate(startDate)
-              const cleanEnd = formatIsoDate(endDate)
-              if (cleanStart && cleanEnd) {
-                setRecoveryDateRange({ eventId: activeEvent.id, startDate: cleanStart, endDate: cleanEnd })
-              }
-            }}
-          />
-        </section>
-        <section className="dashboard-section">
-          <MunicipalityTable municipalities={municipalitiesWithRank} selectedId={selectedId} onSelect={selectMunicipality} />
-        </section>
-        <section id="events" className="dashboard-section">
-          <EventTimeline events={events} activeEventId={activeEventId} onSelect={handleSelectEvent} onDismiss={handleDismissEvent} />
-        </section>
-        <section className="dashboard-section">
-          {activeEvent && <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />}
-        </section>
-        <section id="weather" className="dashboard-section">
-          <WeatherForecast />
-        </section>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full flex flex-col gap-6 sm:gap-8 py-6 sm:py-8">
+          <section id="recovery" className="w-full">
+            <RecoveryChart
+              municipalities={municipalitiesWithRank}
+              selectedId={selectedId}
+              globalRank={selectedGlobalRank}
+              records={recoveryRecords}
+              events={events}
+              activeEventId={activeEventId}
+              onEventChange={handleSelectEvent}
+              eventDate={activeEvent?.date}
+              onSelect={selectMunicipality}
+              startDate={recoveryStartDate}
+              endDate={recoveryEndDate}
+              onDateRangeChange={(startDate, endDate) => {
+                if (!activeEvent) return
+                const cleanStart = formatIsoDate(startDate)
+                const cleanEnd = formatIsoDate(endDate)
+                if (cleanStart && cleanEnd) {
+                  setRecoveryDateRange({ eventId: activeEvent.id, startDate: cleanStart, endDate: cleanEnd })
+                }
+              }}
+            />
+          </section>
+          <section className="w-full">
+            <MunicipalityTable municipalities={municipalitiesWithRank} selectedId={selectedId} onSelect={selectMunicipality} />
+          </section>
+          <section id="events" className="w-full">
+            <EventTimeline events={events} activeEventId={activeEventId} onSelect={handleSelectEvent} onDismiss={handleDismissEvent} />
+          </section>
+          {activeEvent && (
+            <section className="w-full">
+              <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
+            </section>
+          )}
+        </div>
       </main>
       <Footer />
     </div>
