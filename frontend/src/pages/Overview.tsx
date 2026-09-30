@@ -166,22 +166,9 @@ export default function Overview({
                 {events.length} Incidents Tracked
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-ink-400 hidden sm:inline">
-                Select an incident to recompute spatial radiance &amp; recovery curves
-              </span>
-              {onDismissEvent && (
-                <button
-                  type="button"
-                  onClick={onDismissEvent}
-                  title="Dismiss current active event"
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-rose-500/10 hover:border-rose-500/30 text-ink-400 hover:text-rose-300 text-xs font-medium transition-all cursor-pointer shrink-0"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Dismiss Event</span>
-                </button>
-              )}
-            </div>
+            <span className="text-xs text-ink-400 hidden sm:inline">
+              Select an incident to recompute spatial radiance &amp; recovery curves
+            </span>
           </div>
 
           {/* Cards Grid */}
@@ -191,66 +178,79 @@ export default function Overview({
               const severityColor = getSeverityColor(event.severity);
 
               return (
-                <button
-                  key={event.id}
-                  type="button"
-                  onClick={() => onSelectEvent(event.id)}
-                  aria-pressed={isSelected}
-                  className={`group relative text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    isSelected
-                      ? 'border-ocean-500/80 bg-gradient-to-br from-ocean-500/15 via-ink-900/90 to-ink-900 shadow-[0_0_20px_rgba(89,159,253,0.18)] ring-1 ring-ocean-400/50'
-                      : 'border-white/10 bg-ink-900/60 hover:bg-ink-900/90 hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2 w-full">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-500/20' : 'bg-white/5'}`}>
-                        {getEventIcon(event)}
+                <div key={event.id} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => onSelectEvent(event.id)}
+                    aria-pressed={isSelected}
+                    className={`group relative text-left w-full p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-ocean-500/80 bg-gradient-to-br from-ocean-500/15 via-ink-900/90 to-ink-900 shadow-[0_0_20px_rgba(89,159,253,0.18)] ring-1 ring-ocean-400/50'
+                        : 'border-white/10 bg-ink-900/60 hover:bg-ink-900/90 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2 w-full">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-500/20' : 'bg-white/5'}`}>
+                          {getEventIcon(event)}
+                        </div>
+                        <h3 className={`text-sm font-bold truncate pr-5 ${isSelected ? 'text-white' : 'text-ink-200 group-hover:text-white'}`}>
+                          {event.name}
+                        </h3>
                       </div>
-                      <h3 className={`text-sm font-bold truncate ${isSelected ? 'text-white' : 'text-ink-200 group-hover:text-white'}`}>
-                        {event.name}
-                      </h3>
+
+                      {isSelected && (
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-300 shrink-0">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-ocean-400" />
+                          <span className="hidden xl:inline">Active</span>
+                        </span>
+                      )}
                     </div>
 
-                    {isSelected && (
-                      <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-300 shrink-0">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-ocean-400" />
-                        <span className="hidden xl:inline">Active</span>
+                    <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full gap-1">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 text-ink-400 shrink-0" />
+                        <span className="truncate">{event.date}</span>
                       </span>
-                    )}
-                  </div>
+                      <span
+                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
+                          event.viirs_data_available !== false
+                            ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
+                            : 'text-amber-300 bg-amber-500/10 border-amber-500/25'
+                        }`}
+                        title={
+                          event.viirs_data_available !== false
+                            ? 'NASA VIIRS Radiance Observations Confirmed Across Grid'
+                            : 'VIIRS Ground Sensor Radiance Pending Confirmation'
+                        }
+                      >
+                        {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
+                      </span>
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                        style={{
+                          color: severityColor,
+                          backgroundColor: `${severityColor}18`,
+                          border: `1px solid ${severityColor}35`,
+                        }}
+                      >
+                        {event.severity}
+                      </span>
+                    </div>
+                  </button>
 
-                  <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full gap-1">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-ink-400 shrink-0" />
-                      <span className="truncate">{event.date}</span>
-                    </span>
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
-                        event.viirs_data_available !== false
-                          ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-                          : 'text-amber-300 bg-amber-500/10 border-amber-500/25'
-                      }`}
-                      title={
-                        event.viirs_data_available !== false
-                          ? 'NASA VIIRS Radiance Observations Confirmed Across Grid'
-                          : 'VIIRS Ground Sensor Radiance Pending Confirmation'
-                      }
+                  {/* X dismiss button — only visible on the active card, top-right corner */}
+                  {isSelected && onDismissEvent && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDismissEvent(); }}
+                      title="Dismiss active event"
+                      className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-md bg-white/10 hover:bg-rose-500/25 text-ink-400 hover:text-rose-300 transition-all cursor-pointer z-10"
                     >
-                      {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
-                    </span>
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                      style={{
-                        color: severityColor,
-                        backgroundColor: `${severityColor}18`,
-                        border: `1px solid ${severityColor}35`,
-                      }}
-                    >
-                      {event.severity}
-                    </span>
-                  </div>
-                </button>
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
