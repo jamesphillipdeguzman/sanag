@@ -64,8 +64,10 @@ def check_viirs_data_availability(
                 pass
 
 
-# Fallback realistic disaster alerts with spatial coordinates around Panay & Western Visayas
-FALLBACK_PH_ALERTS = [
+# Fallback realistic disaster alerts with spatial coordinates around Panay & Western Visayas.
+# viirs_data_available is intentionally omitted here — it is resolved dynamically at runtime
+# by resolve_fallback_viirs() so it always reflects actual DB observation records.
+_FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
     {
         "event_id": "1002891",
         "id": "gdacs-1002891",
@@ -83,12 +85,8 @@ FALLBACK_PH_ALERTS = [
         "longitude": 123.10,
         "coordinates": [11.45, 123.10],
         "bbox": [121.5, 10.4, 123.5, 12.0],
-        "geometry": {
-            "type": "Point",
-            "coordinates": [123.10, 11.45]
-        },
+        "geometry": {"type": "Point", "coordinates": [123.10, 11.45]},
         "is_imported": False,
-        "viirs_data_available": False
     },
     {
         "event_id": "1568718",
@@ -107,12 +105,8 @@ FALLBACK_PH_ALERTS = [
         "longitude": 122.35,
         "coordinates": [10.82, 122.35],
         "bbox": [122.1, 10.6, 122.6, 11.0],
-        "geometry": {
-            "type": "Point",
-            "coordinates": [122.35, 10.82]
-        },
+        "geometry": {"type": "Point", "coordinates": [122.35, 10.82]},
         "is_imported": False,
-        "viirs_data_available": True
     },
     {
         "event_id": "1003412",
@@ -131,14 +125,24 @@ FALLBACK_PH_ALERTS = [
         "longitude": 122.75,
         "coordinates": [11.38, 122.75],
         "bbox": [122.5, 11.2, 123.0, 11.7],
-        "geometry": {
-            "type": "Point",
-            "coordinates": [122.75, 11.38]
-        },
+        "geometry": {"type": "Point", "coordinates": [122.75, 11.38]},
         "is_imported": False,
-        "viirs_data_available": False
-    }
+    },
 ]
+
+
+def _get_fallback_alerts() -> List[Dict[str, Any]]:
+    """
+    Returns a fresh copy of the fallback alert list with `viirs_data_available`
+    resolved against the live DB for each alert's date — not hardcoded.
+    """
+    result = []
+    for template in _FALLBACK_PH_ALERTS_TEMPLATE:
+        alert = dict(template)
+        alert["viirs_data_available"] = check_viirs_data_availability(alert.get("date"))
+        result.append(alert)
+    return result
+
 
 
 def format_gdacs_feature(
@@ -289,7 +293,7 @@ def get_latest_philippines_disasters(limit: int = 25) -> List[Dict[str, Any]]:
             # If no Red alert or Typhoon is present in live feed, append prominent regional disaster scenarios
             has_red = any(e.get("alert_level") == "Red" for e in deduped)
             has_tc = any(e.get("type") == "TC" for e in deduped)
-            for fb in FALLBACK_PH_ALERTS:
+            for fb in _get_fallback_alerts():
                 if (fb.get("alert_level") == "Red" and not has_red) or (fb.get("type") == "TC" and not has_tc):
                     if fb["event_id"] not in seen_ids:
                         seen_ids.add(fb["event_id"])
@@ -297,11 +301,12 @@ def get_latest_philippines_disasters(limit: int = 25) -> List[Dict[str, Any]]:
             return deduped
 
         # If GDACS feed has no current active PH alerts, provide realistic fallback alerts
-        return FALLBACK_PH_ALERTS
-    
+        # _get_fallback_alerts() resolves viirs_data_available dynamically from the DB.
+        return _get_fallback_alerts()
+
     except GDACSAPIError as error:
         print(f"GDACS API Error: {error}")
-        return FALLBACK_PH_ALERTS
+        return _get_fallback_alerts()
     except Exception as e:
         print(f"Unexpected error fetching GDACS feed: {e}")
-        return FALLBACK_PH_ALERTS
+        return _get_fallback_alerts()
