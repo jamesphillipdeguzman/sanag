@@ -10,6 +10,14 @@ import WeatherForecast from './components/WeatherForecast.jsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import './App.css'
 
+function normalizeMunicipalityName(name) {
+  if (!name) return ''
+  return name
+    .toLowerCase()
+    .replace(/\s*\(.*?\)\s*/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
 function applyRecoveryScores(municipalities, records) {
   const latestByPcode = new Map()
   const latestByName = new Map()
@@ -17,27 +25,50 @@ function applyRecoveryScores(municipalities, records) {
   records
     .filter((record) => record.r_t !== null && record.r_t !== undefined)
     .forEach((record) => {
+      const recDate = record.date || record.observation_date || ''
+      const entry = { ...record, date: recDate }
       if (record.pcode && record.pcode !== 'UNKNOWN') {
         const current = latestByPcode.get(record.pcode)
-        if (!current || record.date > current.date) latestByPcode.set(record.pcode, record)
+        if (!current || recDate > (current.date || current.observation_date || '')) {
+          latestByPcode.set(record.pcode, entry)
+        }
+      }
+      if (record.municipality_pcode && record.municipality_pcode !== 'UNKNOWN') {
+        const current = latestByPcode.get(record.municipality_pcode)
+        if (!current || recDate > (current.date || current.observation_date || '')) {
+          latestByPcode.set(record.municipality_pcode, entry)
+        }
       }
       if (record.municipality_name) {
         const normName = record.municipality_name.toLowerCase().trim()
+        const cleanName = normalizeMunicipalityName(record.municipality_name)
         const current = latestByName.get(normName)
-        if (!current || record.date > current.date) latestByName.set(normName, record)
+        if (!current || recDate > (current.date || current.observation_date || '')) {
+          latestByName.set(normName, entry)
+          if (cleanName) latestByName.set(cleanName, entry)
+        }
       }
     })
 
   return municipalities.map((municipality) => {
-    const score = latestByPcode.get(municipality.id) || latestByName.get(municipality.name.toLowerCase().trim())
+    const pcode = municipality.pcode || municipality.id
+    const rawName = (municipality.name || '').toLowerCase().trim()
+    const cleanName = normalizeMunicipalityName(municipality.name)
+
+    const score =
+      (pcode ? latestByPcode.get(pcode) : null) ||
+      (municipality.id ? latestByPcode.get(municipality.id) : null) ||
+      latestByName.get(rawName) ||
+      (cleanName ? latestByName.get(cleanName) : null)
+
     if (!score) {
       return {
         ...municipality,
-        recoveryScore: municipality.recoveryScore ?? 50,
-        status: municipality.status ?? 'recovering',
+        recoveryScore: municipality.recoveryScore ?? 100,
+        status: municipality.status ?? 'restored',
         baselineRadiance: municipality.baselineRadiance ?? 0,
         currentRadiance: municipality.currentRadiance ?? 0,
-        estimatedDaysToRecover: municipality.estimatedDaysToRecover ?? 0,
+        estimatedDaysToRecover: 0,
         recoveryDate: municipality.recoveryDate ?? null,
       }
     }
@@ -50,7 +81,7 @@ function applyRecoveryScores(municipalities, records) {
       recoveryScore,
       status,
       baselineRadiance: score.baseline_radiance ?? municipality.baselineRadiance,
-      currentRadiance: score.daily_radiance ?? municipality.currentRadiance,
+      currentRadiance: score.daily_radiance ?? score.post_event_radiance ?? municipality.currentRadiance,
       daysSinceEvent: Math.max(0, Math.round((Date.now() - new Date(score.date).getTime()) / 86400000)),
       estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
       recoveryDate: score.date,
@@ -517,6 +548,10 @@ function App() {
             .sort()
             .at(-1)
           if (maxDate) setLatestObservationDate(maxDate)
+
+          // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
+          setMunicipalities((current) => applyRecoveryScores(current, payload.data))
+          setRecoveryDate(maxDate || recoveryEndDate)
         }
       })
       .catch((error) => {

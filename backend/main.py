@@ -734,7 +734,9 @@ def get_event_radiance(
                 (SELECT b3.baseline_radiance FROM baselines b3 
                  WHERE (b3.municipality_name = o.municipality_name OR b3.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
                    AND b3.baseline_radiance IS NOT NULL 
-                 ORDER BY b3.month_date ASC LIMIT 1)
+                 ORDER BY b3.month_date ASC LIMIT 1),
+                (SELECT AVG(b4.baseline_radiance) FROM baselines b4 WHERE b4.baseline_radiance IS NOT NULL),
+                0.7885
             ) AS baseline_radiance
         FROM radiance_observations o
         LEFT JOIN municipalities m ON (o.municipality_name = m.name OR o.municipality_pcode = m.code)

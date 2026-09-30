@@ -3,7 +3,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
-import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers } from 'lucide-react';
+import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX } from 'lucide-react';
+import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 
 export interface RegionPreset {
   id: string;
@@ -177,6 +178,55 @@ export default function PanayMap({
   const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
   const selected = allMunicipalities.find((m: Municipality) => m.id === selectedId);
 
+  // Audio-Spatial Emergency Indicator: dynamically resolve target municipality
+  // Prioritizes hovered municipality first for instant spatial acoustic feedback,
+  // then selected municipality, then falls back to regional baseline.
+  const activeFocusMunicipality = hovered ?? selected ?? null;
+
+  const currentTargetAudioStatus: EmergencyAudioStatus = useMemo(() => {
+    if (activeFocusMunicipality) {
+      if (
+        activeFocusMunicipality.status === 'critical' ||
+        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 40)
+      ) {
+        return 'critical';
+      }
+      if (
+        activeFocusMunicipality.status === 'warning' ||
+        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 60)
+      ) {
+        return 'warning';
+      }
+      if (
+        activeFocusMunicipality.status === 'recovering' ||
+        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 80)
+      ) {
+        return 'recovering';
+      }
+      return 'restored';
+    }
+
+    // Default regional baseline when no municipality is specifically hovered or selected
+    const criticals = allMunicipalities.filter((m) => m.status === 'critical');
+    if (criticals.length >= 4) return 'critical';
+    if (criticals.length > 0) return 'warning';
+
+    const warnings = allMunicipalities.filter((m) => m.status === 'warning');
+    if (warnings.length > 0) return 'warning';
+
+    const recovering = allMunicipalities.filter((m) => m.status === 'recovering');
+    if (recovering.length > 0) return 'recovering';
+
+    return 'restored';
+  }, [activeFocusMunicipality, allMunicipalities]);
+
+  const {
+    isActive: isAudioActive,
+    status: liveAudioStatus,
+    toggle: toggleAudio,
+    statusLabel: audioStatusLabel,
+  } = useAudioSpatialIndicator(currentTargetAudioStatus);
+
   const alertsWithCoords = (gdacsAlerts || []).filter(
     (a: GdacsAlert) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
   );
@@ -276,6 +326,39 @@ export default function PanayMap({
                   <span>Live Hazards ({alertsWithCoords.length})</span>
                 </button>
               )}
+              {/* Audio-Spatial Emergency Indicator Toggle */}
+              <button
+                type="button"
+                id="audio-spatial-indicator-toggle"
+                onClick={() => toggleAudio()}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  isAudioActive
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                    : 'bg-white/5 text-ink-400 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+                title={
+                  isAudioActive
+                    ? `Audio-Spatial Indicator: ACTIVE (${audioStatusLabel}) - Click to mute`
+                    : 'Enable Audio-Spatial Emergency Indicator (Simulated Nighttime Cricket Telemetry)'
+                }
+                aria-pressed={isAudioActive}
+              >
+                {isAudioActive ? (
+                  <>
+                    <Volume2 className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+                    <span className="hidden sm:inline">Audio</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase tracking-wider font-mono">
+                      {liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : liveAudioStatus === 'recovering' ? 'LOW' : 'MUTED'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="h-3.5 w-3.5 text-ink-400" />
+                    <span className="hidden sm:inline">Spatial Audio</span>
+                  </>
+                )}
+              </button>
+
               <LegendDot color="#10b981" label="Restored" />
               <LegendDot color="#599ffd" label="Recovering" />
               <LegendDot color="#fbbf24" label="Limited" />
@@ -333,6 +416,12 @@ export default function PanayMap({
                       </span>
                     </div>
                     <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
+                    {isAudioActive && (
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-300/90 mt-1.5 pt-1.5 border-t border-white/5">
+                        <Volume2 className="h-3 w-3 text-emerald-400 animate-pulse" />
+                        <span>Spatial Audio: {audioStatusLabel}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -380,6 +469,27 @@ export default function PanayMap({
                   <X className="h-4 w-4" />
                 </button>
               </div>
+
+              {/* Audio-Spatial Indicator Status Badge */}
+              {isAudioActive && (
+                <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-ink-950/60 border border-emerald-500/20 mb-4">
+                  <span className="flex items-center gap-1.5 text-ink-300">
+                    <Volume2 className="h-3.5 w-3.5 text-emerald-400 animate-pulse" />
+                    <span>Spatial Audio Profile</span>
+                  </span>
+                  <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${
+                    liveAudioStatus === 'critical'
+                      ? 'bg-rose-500/20 text-rose-300'
+                      : liveAudioStatus === 'warning'
+                      ? 'bg-amber-500/20 text-amber-300'
+                      : liveAudioStatus === 'recovering'
+                      ? 'bg-ocean-500/20 text-ocean-300'
+                      : 'bg-emerald-500/20 text-emerald-300'
+                  }`}>
+                    {audioStatusLabel}
+                  </span>
+                </div>
+              )}
 
               {/* Recovery gauge */}
               <div className="mb-5 bg-ink-950/50 rounded-xl p-3.5 border border-white/5">
