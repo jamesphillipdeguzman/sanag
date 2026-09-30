@@ -2,6 +2,7 @@ import httpx
 from typing import Dict, Any
 
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
 # Centroid for Panay Island
 DEFAULT_LAT = 11.15
@@ -28,5 +29,30 @@ async def fetch_historical_weather(
     }
     async with httpx.AsyncClient() as client:
         response = await client.get(OPEN_METEO_ARCHIVE_URL, params=params, timeout=15.0)
+        response.raise_for_status()
+        return response.json()
+
+
+async def fetch_weather_forecast(
+    latitude: float = DEFAULT_LAT,
+    longitude: float = DEFAULT_LON,
+    days: int = 5,
+) -> Dict[str, Any]:
+    params = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "daily": [
+            "weather_code",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "precipitation_sum",
+            "precipitation_probability_max",
+            "wind_speed_10m_max",
+        ],
+        "forecast_days": days,
+        "timezone": "Asia/Manila",
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.get(OPEN_METEO_FORECAST_URL, params=params, timeout=15.0)
         response.raise_for_status()
         return response.json()

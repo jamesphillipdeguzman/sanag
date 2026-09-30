@@ -6,6 +6,7 @@ import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
+import WeatherForecast from './components/WeatherForecast.jsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import './App.css'
 
@@ -532,6 +533,7 @@ function App() {
         <section className="dashboard-section">
           {activeEvent && <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />}
         </section>
+        <WeatherForecast />
       </main>
       <Footer />
     </div>
