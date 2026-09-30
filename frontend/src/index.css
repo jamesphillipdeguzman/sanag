@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode override for Tailwind CSS v4 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-ink-200: #d8e1ef;
   --color-ink-300: #aab7c9;
@@ -23,24 +26,23 @@
 }
 
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --text: #334155;
+  --text-h: #0f172a;
+  --bg: #f8fafc;
+  --border: #e2e8f0;
+  --code-bg: #f1f5f9;
+  --accent: #599ffd;
+  --accent-bg: rgba(89, 159, 253, 0.1);
+  --accent-border: rgba(89, 159, 253, 0.4);
+  --social-bg: rgba(241, 245, 249, 0.8);
+  --shadow: rgba(0, 0, 0, 0.06) 0 10px 15px -3px, rgba(0, 0, 0, 0.03) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --heading: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  letter-spacing: -0.01em;
   color-scheme: light;
   color: var(--text);
   background: var(--bg);
@@ -58,11 +60,30 @@
   }
 }
 
+html.dark {
+  --text: #94a3b8;
+  --text-h: #f8fafc;
+  --bg: #080d16;
+  --border: rgba(255, 255, 255, 0.1);
+  --code-bg: #111927;
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+}
+
 body {
   margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .dashboard-main {
+  background: #f8fafc;
+  transition: background-color 0.25s ease;
+}
+
+html.dark .dashboard-main {
   background: #080d16;
 }
 
@@ -73,19 +94,35 @@ body {
 }
 
 .glass {
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(16px);
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+
+html.dark .glass {
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(17, 25, 39, 0.72);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
 }
 
 .grid-bg {
-  background-image: linear-gradient(rgba(89, 159, 253, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(89, 159, 253, 0.06) 1px, transparent 1px);
+  background-image: linear-gradient(rgba(59, 130, 246, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.06) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
+html.dark .grid-bg {
+  background-image: linear-gradient(rgba(89, 159, 253, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(89, 159, 253, 0.06) 1px, transparent 1px);
+}
+
 .dot-bg {
-  background-image: radial-gradient(rgba(89, 159, 253, 0.16) 1px, transparent 1px);
+  background-image: radial-gradient(rgba(59, 130, 246, 0.12) 1px, transparent 1px);
   background-size: 18px 18px;
+}
+
+html.dark .dot-bg {
+  background-image: radial-gradient(rgba(89, 159, 253, 0.16) 1px, transparent 1px);
 }
 
 .leaflet-map {
@@ -94,6 +131,11 @@ body {
   width: 100%;
   border-radius: 12px;
   overflow: hidden;
+  background: #f1f5f9;
+  transition: background-color 0.25s ease;
+}
+
+html.dark .leaflet-map {
   background: #0d1117;
 }
 
@@ -129,21 +171,47 @@ body {
 
 .leaflet-container {
   font: inherit;
+  background: #f1f5f9;
+}
+
+html.dark .leaflet-container {
   background: #0d1117;
 }
 
 .leaflet-control-zoom a {
-  color: #d8e1ef;
-  background: #111927;
-  border-color: rgba(255, 255, 255, 0.12);
+  color: #1e293b;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .leaflet-control-zoom a:hover {
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+html.dark .leaflet-control-zoom a {
+  color: #d8e1ef;
+  background: #111927;
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+html.dark .leaflet-control-zoom a:hover {
   color: #ffffff;
   background: #1c2738;
 }
 
 .leaflet-tooltip {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+  border-radius: 8px;
+}
+
+html.dark .leaflet-tooltip {
   color: #ffffff;
   background: #111927;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -334,15 +402,23 @@ code {
   animation: spin 10s linear infinite;
 }
 
-/* GDACS Leaflet Dark-Mode Popup */
+/* GDACS Leaflet Light & Dark Mode Popup */
 .leaflet-popup.gdacs-leaflet-popup .leaflet-popup-content-wrapper {
-  background: rgba(8, 13, 22, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid #cbd5e1;
   border-radius: 14px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12), 0 0 20px rgba(56, 189, 248, 0.12);
   padding: 0;
   overflow: hidden;
+  color: #0f172a;
+}
+
+html.dark .leaflet-popup.gdacs-leaflet-popup .leaflet-popup-content-wrapper {
+  background: rgba(8, 13, 22, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15);
+  color: #ffffff;
 }
 
 .leaflet-popup.gdacs-leaflet-popup .leaflet-popup-content {
@@ -355,18 +431,33 @@ code {
 }
 
 .leaflet-popup.gdacs-leaflet-popup .leaflet-popup-tip {
-  background: rgba(8, 13, 22, 0.94);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid #cbd5e1;
+  border-right: 1px solid #cbd5e1;
   box-shadow: none;
 }
 
+html.dark .leaflet-popup.gdacs-leaflet-popup .leaflet-popup-tip {
+  background: rgba(8, 13, 22, 0.94);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+
 .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button {
-  color: #94a3b8;
+  color: #64748b;
   padding: 8px 8px 0 0;
   font-size: 16px;
 }
 
 .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button:hover {
+  color: #0f172a;
+}
+
+html.dark .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button {
+  color: #94a3b8;
+}
+
+html.dark .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button:hover {
   color: #ffffff;
 }
+

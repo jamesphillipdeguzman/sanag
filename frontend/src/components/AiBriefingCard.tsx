@@ -142,22 +142,22 @@ ${benchmarkHeader}: ${benchmarkString}
   }, [event?.id, municipalities.length]);
 
   return (
-    <div id="briefing" className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-2xl">
+    <div id="briefing" className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-lg dark:shadow-2xl transition-colors">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-3 bg-ink-950/40">
+      <div className="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-ink-950/40">
         <div className="flex items-center gap-3">
           <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-md shadow-ocean-500/20">
             <Sparkles className={`h-5 w-5 text-white ${isLoading ? 'animate-spin' : ''}`} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white">AI Situational Briefing</h3>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ocean-500/10 text-ocean-300 border border-ocean-500/25">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">AI Situational Briefing</h3>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/25">
                 {isLoading ? 'Synthesizing...' : briefingData?.source === 'gemini' ? 'Gemini 3.8 Flash' : 'Satellite Telemetry'}
               </span>
             </div>
-            <p className="text-xs text-ink-400 mt-0.5">
-              Incident: <span className="text-white font-medium">{event.name}</span> · VIIRS Radiance Metrics ·{' '}
+            <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5">
+              Incident: <span className="text-slate-900 dark:text-white font-medium">{event.name}</span> · VIIRS Radiance Metrics ·{' '}
               {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
@@ -166,13 +166,13 @@ ${benchmarkHeader}: ${benchmarkString}
         {/* View toggles & actions */}
         <div className="flex items-center gap-2">
           {!isLoading && briefingData && (
-            <div className="flex items-center rounded-lg border border-white/10 bg-ink-950/60 p-1 text-xs">
+            <div className="flex items-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-ink-950/60 p-1 text-xs">
               <button
                 type="button"
                 onClick={() => setActiveTab('structured')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'structured'
-                    ? 'bg-ocean-500/20 text-ocean-200 shadow-sm border border-ocean-500/30'
-                    : 'text-ink-400 hover:text-white'
+                    ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
                   }`}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -183,8 +183,8 @@ ${benchmarkHeader}: ${benchmarkString}
                 type="button"
                 onClick={() => setActiveTab('markdown')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'markdown'
-                    ? 'bg-ocean-500/20 text-ocean-200 shadow-sm border border-ocean-500/30'
-                    : 'text-ink-400 hover:text-white'
+                    ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
                   }`}
               >
                 <FileText className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ ${benchmarkHeader}: ${benchmarkString}
             type="button"
             onClick={fetchBriefing}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-semibold text-ink-300 hover:text-white transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-slate-900 dark:bg-white/5 dark:hover:bg-white/10 text-xs font-semibold dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer disabled:opacity-50"
             title="Refresh AI briefing"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -211,40 +211,40 @@ ${benchmarkHeader}: ${benchmarkString}
         {isLoading ? (
           /* Loading Skeleton State */
           <div className="animate-pulse space-y-5">
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-2.5">
-              <div className="h-4 w-36 rounded bg-white/20" />
-              <div className="h-3 w-full rounded bg-white/10" />
-              <div className="h-3 w-5/6 rounded bg-white/10" />
-              <div className="h-3 w-4/6 rounded bg-white/10" />
+            <div className="rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 space-y-2.5">
+              <div className="h-4 w-36 rounded bg-slate-200 dark:bg-white/20" />
+              <div className="h-3 w-full rounded bg-slate-200 dark:bg-white/10" />
+              <div className="h-3 w-5/6 rounded bg-slate-200 dark:bg-white/10" />
+              <div className="h-3 w-4/6 rounded bg-slate-200 dark:bg-white/10" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-2">
+                <div key={i} className="rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-5 w-5 rounded bg-white/20" />
-                    <div className="h-3 w-24 rounded bg-white/20" />
+                    <div className="h-5 w-5 rounded bg-slate-200 dark:bg-white/20" />
+                    <div className="h-3 w-24 rounded bg-slate-200 dark:bg-white/20" />
                   </div>
-                  <div className="h-2.5 w-full rounded bg-white/10" />
-                  <div className="h-2.5 w-4/5 rounded bg-white/10" />
+                  <div className="h-2.5 w-full rounded bg-slate-200 dark:bg-white/10" />
+                  <div className="h-2.5 w-4/5 rounded bg-slate-200 dark:bg-white/10" />
                 </div>
               ))}
             </div>
 
-            <div className="rounded-xl bg-white/5 border border-white/10 p-4 space-y-3">
-              <div className="h-3 w-48 rounded bg-white/20" />
+            <div className="rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 space-y-3">
+              <div className="h-3 w-48 rounded bg-slate-200 dark:bg-white/20" />
               <div className="space-y-2">
                 {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="h-9 rounded-lg bg-white/5" />
+                  <div key={i} className="h-9 rounded-lg bg-slate-200 dark:bg-white/5" />
                 ))}
               </div>
             </div>
           </div>
         ) : activeTab === 'markdown' ? (
           /* Full Raw Markdown Document View */
-          <div className="rounded-xl bg-ink-950/50 border border-white/10 p-5 sm:p-6">
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10 text-xs text-ink-400">
-              <span className="font-semibold text-ocean-300 uppercase tracking-wider">
+          <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/10 p-5 sm:p-6 transition-colors">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10 text-xs text-slate-500 dark:text-ink-400">
+              <span className="font-semibold text-ocean-600 dark:text-ocean-300 uppercase tracking-wider">
                 Full AI Document Response
               </span>
               <span>Markdown Render Mode</span>
@@ -256,10 +256,10 @@ ${benchmarkHeader}: ${benchmarkString}
           <div className="space-y-6">
             {/* 1. Executive Summary Card */}
             {briefingData?.summary && (
-              <div className="rounded-xl bg-gradient-to-r from-ocean-500/10 via-ink-900/60 to-ink-900/80 border border-ocean-500/25 p-4 sm:p-5 shadow-lg">
+              <div className="rounded-xl bg-ocean-50/80 border border-ocean-200 dark:bg-gradient-to-r dark:from-ocean-500/10 dark:via-ink-900/60 dark:to-ink-900/80 dark:border-ocean-500/25 p-4 sm:p-5 shadow-sm dark:shadow-lg transition-colors">
                 <div className="flex items-center gap-2 mb-2.5">
-                  <Sparkles className="h-4 w-4 text-ocean-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-ocean-300">
+                  <Sparkles className="h-4 w-4 text-ocean-500 dark:text-ocean-400" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-ocean-700 dark:text-ocean-300">
                     Executive Situation Summary
                   </h4>
                 </div>
@@ -270,23 +270,23 @@ ${benchmarkHeader}: ${benchmarkString}
             {/* 2. Structured Key Takeaways Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {/* Critical Alerts Card */}
-              <div className="rounded-xl bg-rose-500/5 border border-rose-500/20 p-4 flex flex-col justify-between">
+              <div className="rounded-xl bg-rose-50/70 border border-rose-200 dark:bg-rose-500/5 dark:border-rose-500/20 p-4 flex flex-col justify-between transition-colors">
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-500/20 text-rose-400">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400">
                         <ShieldAlert className="h-4 w-4" />
                       </div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">
                         Critical Alerts
                       </h4>
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30">
                       {briefingData?.criticalAlerts.length || critical.length} Flags
                     </span>
                   </div>
 
-                  <ul className="space-y-2.5 text-xs text-ink-200">
+                  <ul className="space-y-2.5 text-xs text-slate-700 dark:text-ink-200">
                     {(briefingData?.criticalAlerts && briefingData.criticalAlerts.length > 0
                       ? briefingData.criticalAlerts
                       : [
@@ -295,7 +295,7 @@ ${benchmarkHeader}: ${benchmarkString}
                       ]
                     ).map((alert, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
-                        <span className="h-1.5 w-1.5 rounded-full bg-rose-400 mt-1.5 shrink-0" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 dark:bg-rose-400 mt-1.5 shrink-0" />
                         <span className="flex-1">{renderInlineFormatting(alert)}</span>
                       </li>
                     ))}
@@ -304,23 +304,23 @@ ${benchmarkHeader}: ${benchmarkString}
               </div>
 
               {/* Restoration Benchmarks Card */}
-              <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-4 flex flex-col justify-between">
+              <div className="rounded-xl bg-emerald-50/70 border border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20 p-4 flex flex-col justify-between transition-colors">
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">
                         <TrendingUp className="h-4 w-4" />
                       </div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                         {restored.length > 0 ? 'Restoration Benchmarks' : 'Top Performing Hubs'}
                       </h4>
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30">
                       {restored.length} Restored
                     </span>
                   </div>
 
-                  <ul className="space-y-2.5 text-xs text-ink-200">
+                  <ul className="space-y-2.5 text-xs text-slate-700 dark:text-ink-200">
                     {(briefingData?.benchmarks && briefingData.benchmarks.length > 0
                       ? briefingData.benchmarks
                       : (restored.length > 0
@@ -335,7 +335,7 @@ ${benchmarkHeader}: ${benchmarkString}
                         )
                     ).map((benchmark, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 mt-1.5 shrink-0" />
                         <span className="flex-1">{renderInlineFormatting(benchmark)}</span>
                       </li>
                     ))}
@@ -344,23 +344,23 @@ ${benchmarkHeader}: ${benchmarkString}
               </div>
 
               {/* Priority Recommendations Card */}
-              <div className="rounded-xl bg-ocean-500/5 border border-ocean-500/20 p-4 flex flex-col justify-between">
+              <div className="rounded-xl bg-ocean-50/70 border border-ocean-200 dark:bg-ocean-500/5 dark:border-ocean-500/20 p-4 flex flex-col justify-between transition-colors">
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ocean-500/20 text-ocean-400">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-400">
                         <Zap className="h-4 w-4" />
                       </div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-ocean-300">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-ocean-700 dark:text-ocean-300">
                         Response Actions
                       </h4>
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-ocean-500/15 text-ocean-300 border border-ocean-500/30">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-ocean-100 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/15 dark:text-ocean-300 dark:border-ocean-500/30">
                       Targeted Next Steps
                     </span>
                   </div>
 
-                  <ul className="space-y-2.5 text-xs text-ink-200">
+                  <ul className="space-y-2.5 text-xs text-slate-700 dark:text-ink-200">
                     {(briefingData?.recommendations && briefingData.recommendations.length > 0
                       ? briefingData.recommendations
                       : [
@@ -370,7 +370,7 @@ ${benchmarkHeader}: ${benchmarkString}
                       ]
                     ).map((rec, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
-                        <span className="h-1.5 w-1.5 rounded-full bg-ocean-400 mt-1.5 shrink-0" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 dark:bg-ocean-400 mt-1.5 shrink-0" />
                         <span className="flex-1">{renderInlineFormatting(rec)}</span>
                       </li>
                     ))}
@@ -383,8 +383,8 @@ ${benchmarkHeader}: ${benchmarkString}
             {briefingData?.otherSections && briefingData.otherSections.length > 0 && (
               <div className="space-y-3">
                 {briefingData.otherSections.map((sec, idx) => (
-                  <div key={idx} className="rounded-xl bg-ink-950/40 border border-white/5 p-4">
-                    <h5 className="text-xs font-bold uppercase tracking-wider text-ink-300 mb-2">
+                  <div key={idx} className="rounded-xl bg-slate-50 dark:bg-ink-950/40 border border-slate-200 dark:border-white/5 p-4 transition-colors">
+                    <h5 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-ink-300 mb-2">
                       {sec.title}
                     </h5>
                     <MarkdownContent content={sec.content} />
@@ -396,21 +396,21 @@ ${benchmarkHeader}: ${benchmarkString}
             {/* 4. Priority Areas Table Needing Immediate Assistance */}
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-ink-400 uppercase tracking-wider">
+                <h4 className="text-xs font-semibold text-slate-600 dark:text-ink-400 uppercase tracking-wider">
                   Top Priority Areas Needing Immediate Assistance
                 </h4>
-                <span className="text-xs text-ink-400">Ranked by lowest recovery score</span>
+                <span className="text-xs text-slate-500 dark:text-ink-400">Ranked by lowest recovery score</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {priorityLGUs.slice(0, 4).map((m, i) => (
                   <div
                     key={m.id}
-                    className="flex flex-col justify-between rounded-xl bg-ink-950/50 border border-white/10 p-3.5 hover:border-ocean-500/30 transition-all shadow-md"
+                    className="flex flex-col justify-between rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/10 p-3.5 hover:border-ocean-300 dark:hover:border-ocean-500/30 transition-all shadow-sm dark:shadow-md"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-bold text-ink-400">#{i + 1} LGU</span>
+                        <span className="text-xs font-bold text-slate-500 dark:text-ink-400">#{i + 1} LGU</span>
                         <span
                           className="text-xs font-bold px-2 py-0.5 rounded-full"
                           style={{
@@ -421,13 +421,13 @@ ${benchmarkHeader}: ${benchmarkString}
                           {m.recoveryScore}%
                         </span>
                       </div>
-                      <h5 className="text-sm font-bold text-white truncate">{m.name}</h5>
-                      <span className="text-xs text-ink-400">{m.province} Province</span>
+                      <h5 className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</h5>
+                      <span className="text-xs text-slate-500 dark:text-ink-400">{m.province} Province</span>
                     </div>
 
-                    <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-ink-400">
+                    <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px] text-slate-500 dark:text-ink-400">
                       <span>Est. Days:</span>
-                      <span className="font-semibold text-ink-200">
+                      <span className="font-semibold text-slate-800 dark:text-ink-200">
                         {m.estimatedDaysToRecover === 0 ? 'Restored' : `${m.estimatedDaysToRecover} days`}
                       </span>
                     </div>
@@ -439,12 +439,12 @@ ${benchmarkHeader}: ${benchmarkString}
         )}
 
         {/* Disclaimer / Telemetry Citation */}
-        <div className="mt-6 pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-ink-500">
+        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-ink-500">
           <p>
             AI situational briefings are computed using NASA VIIRS satellite day-night band observations. Always
             verify with local utility command centers (ILECO, ANTECO, CAPELCO, AKELCO).
           </p>
-          <span className="shrink-0 font-mono text-[10px] text-ink-400">
+          <span className="shrink-0 font-mono text-[10px] text-slate-500 dark:text-ink-400">
             Engine: {briefingData?.source === 'gemini' ? 'Gemini 2.5 Flash API' : 'SANAG Telemetry Synthesis'}
           </span>
         </div>
@@ -469,19 +469,19 @@ function renderInlineFormatting(text: string): React.ReactNode {
     const token = match[0];
     if (token.startsWith('**') && token.endsWith('**')) {
       parts.push(
-        <strong key={match.index} className="font-semibold text-white">
+        <strong key={match.index} className="font-semibold text-slate-900 dark:text-white">
           {token.slice(2, -2)}
         </strong>
       );
     } else if (token.startsWith('*') && token.endsWith('*')) {
       parts.push(
-        <em key={match.index} className="italic text-ink-200">
+        <em key={match.index} className="italic text-slate-700 dark:text-ink-200">
           {token.slice(1, -1)}
         </em>
       );
     } else if (token.startsWith('`') && token.endsWith('`')) {
       parts.push(
-        <code key={match.index} className="px-1.5 py-0.5 rounded bg-white/10 text-ocean-300 font-mono text-xs">
+        <code key={match.index} className="px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-white/10 text-ocean-700 dark:text-ocean-300 font-mono text-xs">
           {token.slice(1, -1)}
         </code>
       );
@@ -507,7 +507,7 @@ function MarkdownContent({ content }: { content: string }) {
       const pText = paragraphBuffer.join(' ').trim();
       if (pText) {
         elements.push(
-          <p key={`p-${elements.length}`} className="text-sm text-ink-200 leading-relaxed mb-3">
+          <p key={`p-${elements.length}`} className="text-sm text-slate-700 dark:text-ink-200 leading-relaxed mb-3">
             {renderInlineFormatting(pText)}
           </p>
         );
@@ -522,8 +522,8 @@ function MarkdownContent({ content }: { content: string }) {
         elements.push(
           <ul key={`ul-${elements.length}`} className="space-y-2 mb-3.5 pl-1">
             {currentList.items.map((item, idx) => (
-              <li key={idx} className="flex items-start gap-2.5 text-sm text-ink-200 leading-relaxed">
-                <span className="h-1.5 w-1.5 rounded-full bg-ocean-400 mt-2 shrink-0" />
+              <li key={idx} className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-ink-200 leading-relaxed">
+                <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 dark:bg-ocean-400 mt-2 shrink-0" />
                 <span className="flex-1">{renderInlineFormatting(item)}</span>
               </li>
             ))}
@@ -531,7 +531,7 @@ function MarkdownContent({ content }: { content: string }) {
         );
       } else {
         elements.push(
-          <ol key={`ol-${elements.length}`} className="space-y-2 mb-3.5 list-decimal list-inside text-sm text-ink-200 leading-relaxed">
+          <ol key={`ol-${elements.length}`} className="space-y-2 mb-3.5 list-decimal list-inside text-sm text-slate-700 dark:text-ink-200 leading-relaxed">
             {currentList.items.map((item, idx) => (
               <li key={idx} className="pl-1">
                 <span>{renderInlineFormatting(item)}</span>
@@ -558,7 +558,7 @@ function MarkdownContent({ content }: { content: string }) {
       flushParagraph();
       flushList();
       elements.push(
-        <h5 key={`h5-${elements.length}`} className="text-xs font-bold uppercase tracking-wider text-ink-300 mt-3.5 mb-1.5">
+        <h5 key={`h5-${elements.length}`} className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-ink-300 mt-3.5 mb-1.5">
           {renderInlineFormatting(line.slice(5))}
         </h5>
       );
@@ -566,8 +566,8 @@ function MarkdownContent({ content }: { content: string }) {
       flushParagraph();
       flushList();
       elements.push(
-        <h4 key={`h4-${elements.length}`} className="text-sm font-bold text-white mt-4 mb-2 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-ocean-400" />
+        <h4 key={`h4-${elements.length}`} className="text-sm font-bold text-slate-900 dark:text-white mt-4 mb-2 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-ocean-500 dark:bg-ocean-400" />
           {renderInlineFormatting(line.slice(4))}
         </h4>
       );
@@ -575,7 +575,7 @@ function MarkdownContent({ content }: { content: string }) {
       flushParagraph();
       flushList();
       elements.push(
-        <h3 key={`h3-${elements.length}`} className="text-base font-extrabold text-white mt-4 mb-2">
+        <h3 key={`h3-${elements.length}`} className="text-base font-extrabold text-slate-900 dark:text-white mt-4 mb-2">
           {renderInlineFormatting(line.slice(3))}
         </h3>
       );
@@ -583,7 +583,7 @@ function MarkdownContent({ content }: { content: string }) {
       flushParagraph();
       flushList();
       elements.push(
-        <h2 key={`h2-${elements.length}`} className="text-lg font-black text-white mt-4 mb-2">
+        <h2 key={`h2-${elements.length}`} className="text-lg font-black text-slate-900 dark:text-white mt-4 mb-2">
           {renderInlineFormatting(line.slice(2))}
         </h2>
       );
@@ -609,7 +609,7 @@ function MarkdownContent({ content }: { content: string }) {
       flushParagraph();
       flushList();
       elements.push(
-        <blockquote key={`quote-${elements.length}`} className="border-l-2 border-ocean-500/60 pl-3.5 py-1 text-sm italic text-ocean-200/90 my-2.5 bg-ocean-500/5 rounded-r-lg">
+        <blockquote key={`quote-${elements.length}`} className="border-l-2 border-ocean-500/60 pl-3.5 py-1 text-sm italic text-ocean-800 dark:text-ocean-200/90 my-2.5 bg-ocean-50 dark:bg-ocean-500/5 rounded-r-lg">
           {renderInlineFormatting(line.slice(2))}
         </blockquote>
       );
