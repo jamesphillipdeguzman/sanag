@@ -1,0 +1,117 @@
+{
+  "panay": {
+    "file": "/regions/panay.geojson",
+    "count": 96,
+    "size_kb": 113.3
+  },
+  "iloilo": {
+    "file": "/regions/iloilo.geojson",
+    "count": 42,
+    "size_kb": 49.5
+  },
+  "capiz": {
+    "file": "/regions/capiz.geojson",
+    "count": 16,
+    "size_kb": 18.0
+  },
+  "aklan": {
+    "file": "/regions/aklan.geojson",
+    "count": 17,
+    "size_kb": 21.2
+  },
+  "antique": {
+    "file": "/regions/antique.geojson",
+    "count": 18,
+    "size_kb": 23.1
+  },
+  "philippines": {
+    "file": "/regions/philippines.geojson",
+    "count": 185,
+    "size_kb": 165.5
+  },
+  "ncr": {
+    "file": "/regions/ncr.geojson",
+    "count": 17,
+    "size_kb": 10.3
+  },
+  "r7": {
+    "file": "/regions/r7.geojson",
+    "count": 10,
+    "size_kb": 5.9
+  },
+  "r6_negros": {
+    "file": "/regions/r6_negros.geojson",
+    "count": 6,
+    "size_kb": 3.7
+  },
+  "r8": {
+    "file": "/regions/r8.geojson",
+    "count": 5,
+    "size_kb": 3.0
+  },
+  "r11": {
+    "file": "/regions/r11.geojson",
+    "count": 7,
+    "size_kb": 4.2
+  },
+  "r3": {
+    "file": "/regions/r3.geojson",
+    "count": 9,
+    "size_kb": 5.4
+  },
+  "r4a": {
+    "file": "/regions/r4a.geojson",
+    "count": 9,
+    "size_kb": 5.3
+  },
+  "r5": {
+    "file": "/regions/r5.geojson",
+    "count": 3,
+    "size_kb": 1.9
+  },
+  "r1": {
+    "file": "/regions/r1.geojson",
+    "count": 4,
+    "size_kb": 2.5
+  },
+  "r2": {
+    "file": "/regions/r2.geojson",
+    "count": 3,
+    "size_kb": 1.9
+  },
+  "car": {
+    "file": "/regions/car.geojson",
+    "count": 3,
+    "size_kb": 1.9
+  },
+  "r4b": {
+    "file": "/regions/r4b.geojson",
+    "count": 2,
+    "size_kb": 1.3
+  },
+  "r10": {
+    "file": "/regions/r10.geojson",
+    "count": 3,
+    "size_kb": 1.9
+  },
+  "r9": {
+    "file": "/regions/r9.geojson",
+    "count": 2,
+    "size_kb": 1.3
+  },
+  "r12": {
+    "file": "/regions/r12.geojson",
+    "count": 2,
+    "size_kb": 1.3
+  },
+  "r13": {
+    "file": "/regions/r13.geojson",
+    "count": 2,
+    "size_kb": 1.3
+  },
+  "barmm": {
+    "file": "/regions/barmm.geojson",
+    "count": 2,
+    "size_kb": 1.3
+  }
+}

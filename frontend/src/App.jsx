@@ -289,6 +289,15 @@ function App() {
     setSelectedId(null)
   }, [])
 
+  const handleMunicipalitiesLoaded = useCallback((newItems) => {
+    if (!newItems || newItems.length === 0) return
+    setMunicipalities((prev) => {
+      const existing = new Set(prev.map((m) => m.id))
+      const toAdd = newItems.filter((m) => !existing.has(m.id))
+      return toAdd.length > 0 ? [...prev, ...toAdd] : prev
+    })
+  }, [])
+
   // Dynamically keep events list updated with current affected population calculation
   useEffect(() => {
     if (!activeEventId || activeAffectedPopulation === 0) return
@@ -313,7 +322,7 @@ function App() {
         return geojsonFeaturesRef.current
       }
       try {
-        const res = await fetch('/philippines_boundaries.geojson')
+        const res = await fetch('/regions/panay.geojson')
         if (res.ok) {
           const json = await res.json()
           if (json.features && json.features.length > 0) {
@@ -322,7 +331,7 @@ function App() {
           }
         }
       } catch (err) {
-        console.warn('Failed to load nationwide boundaries, trying Panay fallback', err)
+        console.warn('Failed to load Panay region boundaries, trying fallback', err)
       }
       const res = await fetch('/panay_municipalities.geojson')
       if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
@@ -473,6 +482,7 @@ function App() {
           onRefreshGdacs={fetchGdacsAlerts}
           importingGdacsId={importingId}
           importedEventIds={importedEventIds}
+          onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
         />
       ) : (
         /* Empty state shown when no event is active */
