@@ -194,7 +194,7 @@ function App() {
           date: alert.date,
           description: alert.description,
           severity: alert.severity_text,
-          window_days: 14,
+          window_days: 31,
         }),
       })
       if (!res.ok) {
@@ -277,9 +277,37 @@ function App() {
   const recoveryStartDate = activeEvent?.date
     ? hasRecoveryDateRange ? recoveryDateRange.startDate : activeEvent.date
     : ''
+  const isObservationDateValidForEvent = latestObservationDate && activeEvent?.date &&
+    latestObservationDate >= activeEvent.date &&
+    latestObservationDate <= addDays(activeEvent.date, 60)
   const recoveryEndDate = activeEvent?.date
-    ? hasRecoveryDateRange ? recoveryDateRange.endDate : latestObservationDate ?? addDays(activeEvent.date, 30)
+    ? hasRecoveryDateRange
+      ? recoveryDateRange.endDate
+      : (activeEvent.endDate && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
+          ? activeEvent.endDate.slice(0, 10)
+          : (isObservationDateValidForEvent ? latestObservationDate : addDays(activeEvent.date, 31)))
     : ''
+
+  const handleSelectEvent = useCallback((eventId) => {
+    setActiveEventId(eventId)
+    const targetEvent = events.find((e) => String(e.id) === String(eventId))
+    if (targetEvent) {
+      const sDate = targetEvent.date ? targetEvent.date.slice(0, 10) : ''
+      let eDate = ''
+      if (targetEvent.endDate && targetEvent.endDate.length >= 10 && !isNaN(new Date(targetEvent.endDate).getTime())) {
+        eDate = targetEvent.endDate.slice(0, 10)
+      } else if (sDate) {
+        eDate = addDays(sDate, 31)
+      }
+      if (sDate && eDate) {
+        setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
+      }
+    }
+  }, [events])
+
+  useEffect(() => {
+    setLatestObservationDate(null)
+  }, [activeEventId])
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
@@ -478,7 +506,19 @@ function App() {
         if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
         return response.json()
       })
-      .then((payload) => setRecoveryRecords(payload.data))
+      .then((payload) => {
+        setRecoveryRecords(payload.data)
+        // Derive the latest observation date from returned records so the default
+        // end-date tracks real data rather than the static event+30 fallback
+        if (payload.data && payload.data.length > 0) {
+          const maxDate = payload.data
+            .map((r) => r.date || r.observation_date)
+            .filter(Boolean)
+            .sort()
+            .at(-1)
+          if (maxDate) setLatestObservationDate(maxDate)
+        }
+      })
       .catch((error) => {
         if (error.name !== 'AbortError') setEventsError(error.message)
       })
@@ -564,6 +604,9 @@ function App() {
             municipalities={municipalities}
             selectedId={selectedId}
             records={recoveryRecords}
+            events={events}
+            activeEventId={activeEventId}
+            onEventChange={handleSelectEvent}
             eventDate={activeEvent?.date}
             onSelect={selectMunicipality}
             startDate={recoveryStartDate}
