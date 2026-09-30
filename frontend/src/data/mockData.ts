@@ -104,8 +104,8 @@ export function generateRecoveryCurve(baseline: number, startDay: number, days: 
 export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[] {
   return features.map((feature, index) => {
     const properties = feature.properties ?? {};
-    const recoveryScore = 38 + ((index * 17) % 59);
-    const status: RecoveryStatus = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical';
+    const recoveryScore = 100;
+    const status: RecoveryStatus = 'restored';
     const area = Number(properties.AREA_SQKM ?? 50);
     const id = String(properties.ADM3_PCODE ?? properties.psgc_code ?? properties.ADM2_PCODE ?? index);
     const name = String(properties.ADM3_EN ?? properties.ADM2_EN ?? properties.ADM1_EN ?? 'Unnamed municipality');
