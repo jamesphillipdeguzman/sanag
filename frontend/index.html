@@ -1,36 +1,57 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SANAG — Satellite Analytics for Nightlight & Assessment Grid</title>
-    <meta name="description" content="Satellite-Based Disaster and Power Recovery Dashboard for Panay Island" />
-    <meta property="og:title" content="SANAG — Satellite Analytics for Nightlight & Assessment Grid" />
-    <meta property="og:description" content="Satellite-Based Disaster and Power Recovery Dashboard for Panay Island" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <script>
-      (function() {
-        try {
-          var saved = localStorage.getItem('theme') || localStorage.getItem('sanag-theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (saved === 'dark' || (!saved && prefersDark)) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.style.colorScheme = 'dark';
-          } else if (saved === 'light') {
-            document.documentElement.classList.remove('dark');
-            document.documentElement.classList.add('light');
-            document.documentElement.style.colorScheme = 'light';
-          }
-        } catch (e) {}
-      })();
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SANAG — Satellite Analytics for Nightlight & Assessment Grid</title>
+
+  <!-- Standard & Social Media Meta Tags -->
+  <meta name="description" content="Satellite-Based Disaster and Power Recovery Dashboard for Panay Island" />
+
+  <!-- Open Graph / Facebook / Messenger -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://sanag-project.netlify.app/" />
+  <meta property="og:title" content="SANAG — Satellite Analytics for Nightlight & Assessment Grid" />
+  <meta property="og:description" content="Satellite-Based Disaster and Power Recovery Dashboard for Panay Island" />
+  <meta property="og:image" content="https://sanag-project.netlify.app/og-image.png" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SANAG — Satellite Analytics for Nightlight & Assessment Grid" />
+  <meta name="twitter:description" content="Satellite-Based Disaster and Power Recovery Dashboard for Panay Island" />
+  <meta name="twitter:image" content="https://sanag-project.netlify.app/og-image.png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+
+  <!-- Theme Script -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('theme') || localStorage.getItem('sanag-theme');
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) {
+          document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = 'dark';
+        } else if (saved === 'light') {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
+          document.documentElement.style.colorScheme = 'light';
+        }
+      } catch (e) { }
+    })();
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>
