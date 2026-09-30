@@ -95,14 +95,14 @@ export default function Overview({
   return (
     <section id="overview" className="relative pt-20 lg:pt-24 pb-8 overflow-hidden">
       {/* Background aesthetics */}
-      <div className="absolute inset-0 bg-ink-950 pointer-events-none" />
+      <div className="absolute inset-0 bg-slate-50 dark:bg-ink-950 pointer-events-none transition-colors" />
       <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
       <div className="absolute top-0 left-1/3 -translate-x-1/2 w-[700px] h-[320px] bg-ocean-600/15 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute top-40 right-10 w-[450px] h-[260px] bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ROW 1: Header + Summary Metrics (aligned for standard viewport visibility) */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-white/10 mb-3 animate-fade-in-up">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10 mb-3 animate-fade-in-up">
           {/* Header left */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
@@ -110,15 +110,15 @@ export default function Overview({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span className="text-[11px] font-semibold text-ocean-200 uppercase tracking-wider">
+              <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
                 NASA VIIRS Nightlight Analytics · 93 Panay LGUs
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-white leading-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
               Panay Island <span className="gradient-text">Power Recovery Grid</span>
             </h1>
-            <p className="text-xs sm:text-sm text-ink-300 mt-1 max-w-2xl">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
               High-resolution satellite radiance tracking and daily restoration indexes across Iloilo, Capiz, Aklan, and Antique.
             </p>
           </div>
@@ -129,28 +129,28 @@ export default function Overview({
               icon={<Activity className="h-4 w-4" />}
               label="Avg Recovery"
               value={`${avgRecovery}%`}
-              accent="text-ocean-300"
+              accent="text-ocean-500 dark:text-ocean-300"
               badge="Island-wide"
             />
             <StatCard
               icon={<TrendingUp className="h-4 w-4" />}
               label="Restored"
               value={`${restoredCount}/${municipalities.length}`}
-              accent="text-emerald-300"
+              accent="text-emerald-500 dark:text-emerald-300"
               badge="LGUs >= 90%"
             />
             <StatCard
               icon={<AlertTriangle className="h-4 w-4" />}
               label="Critical"
               value={criticalCount.toString()}
-              accent="text-rose-300"
+              accent="text-rose-500 dark:text-rose-300"
               badge="Outages < 30%"
             />
             <StatCard
               icon={<Users className="h-4 w-4" />}
               label="Affected Pop"
               value={formatAffectedPopulation(affectedPopulation)}
-              accent="text-amber-300"
+              accent="text-amber-500 dark:text-amber-300"
               badge="Impacted LGUs"
             />
           </div>
@@ -175,14 +175,14 @@ export default function Overview({
         <div className="mb-5 animate-fade-in-up" style={{ animationDelay: '0.08s' }}>
           <div className="flex items-center justify-between mb-2.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-ink-300">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-ink-300">
                 Disaster Event Monitoring
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 text-ink-400 border border-white/10">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 border border-slate-300 dark:bg-white/5 dark:text-ink-400 dark:border-white/10">
                 {events.length} Incidents Tracked
               </span>
             </div>
-            <span className="text-xs text-ink-400 hidden sm:inline">
+            <span className="text-xs text-slate-500 dark:text-ink-400 hidden sm:inline">
               Select an incident to recompute spatial radiance &amp; recovery curves
             </span>
           </div>
@@ -201,38 +201,38 @@ export default function Overview({
                     aria-pressed={isSelected}
                     className={`group relative text-left w-full p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                       isSelected
-                        ? 'border-ocean-500/80 bg-gradient-to-br from-ocean-500/15 via-ink-900/90 to-ink-900 shadow-[0_0_20px_rgba(89,159,253,0.18)] ring-1 ring-ocean-400/50'
-                        : 'border-white/10 bg-ink-900/60 hover:bg-ink-900/90 hover:border-white/20'
+                        ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 dark:border-ocean-500/80 dark:bg-gradient-to-br dark:from-ocean-500/15 dark:via-ink-900/90 dark:to-ink-900 dark:shadow-[0_0_20px_rgba(89,159,253,0.18)] dark:ring-1 dark:ring-ocean-400/50'
+                        : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 dark:border-white/10 dark:bg-ink-900/60 dark:hover:bg-ink-900/90 dark:hover:border-white/20 shadow-sm dark:shadow-none'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2 w-full">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-500/20' : 'bg-white/5'}`}>
+                        <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-100 dark:bg-ocean-500/20' : 'bg-slate-100 dark:bg-white/5'}`}>
                           {getEventIcon(event)}
                         </div>
-                        <h3 className={`text-sm font-bold truncate pr-5 ${isSelected ? 'text-white' : 'text-ink-200 group-hover:text-white'}`}>
+                        <h3 className={`text-sm font-bold truncate pr-5 ${isSelected ? 'text-slate-900 dark:text-white' : 'text-slate-800 dark:text-ink-200 group-hover:text-ocean-600 dark:group-hover:text-white'}`}>
                           {event.name}
                         </h3>
                       </div>
 
                       {isSelected && (
-                        <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-300 shrink-0">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-ocean-400" />
+                        <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-600 dark:text-ocean-300 shrink-0">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
                           <span className="hidden xl:inline">Active</span>
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between text-xs text-ink-400 mt-1 pt-2 border-t border-white/5 w-full gap-1">
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-ink-400 mt-1 pt-2 border-t border-slate-100 dark:border-white/5 w-full gap-1">
                       <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-ink-400 shrink-0" />
+                        <Calendar className="h-3 w-3 text-slate-400 dark:text-ink-400 shrink-0" />
                         <span className="truncate">{event.date}</span>
                       </span>
                       <span
                         className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
                           event.viirs_data_available !== false
-                            ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-                            : 'text-amber-300 bg-amber-500/10 border-amber-500/25'
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25'
+                            : 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25'
                         }`}
                         title={
                           event.viirs_data_available !== false
@@ -261,7 +261,7 @@ export default function Overview({
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onDismissEvent(); }}
                       title="Dismiss active event"
-                      className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-md bg-white/10 hover:bg-rose-500/25 text-ink-400 hover:text-rose-300 transition-all cursor-pointer z-10"
+                      className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 hover:bg-rose-100 text-slate-500 hover:text-rose-600 dark:bg-white/10 dark:hover:bg-rose-500/25 dark:text-ink-400 dark:hover:text-rose-300 transition-all cursor-pointer z-10"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -306,15 +306,15 @@ function StatCard({
   badge: string;
 }) {
   return (
-    <div className="glass rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-white/10 flex flex-col justify-between min-w-[85px] sm:min-w-[105px]">
+    <div className="rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-slate-200 dark:border-white/10 bg-white/95 dark:glass flex flex-col justify-between min-w-[85px] sm:min-w-[105px] shadow-sm dark:shadow-none transition-colors">
       <div className={`flex items-center gap-1.5 mb-1 ${accent}`}>
         {icon}
-        <span className="text-[10px] sm:text-[11px] font-semibold text-ink-400 uppercase tracking-wider truncate">
+        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider truncate">
           {label}
         </span>
       </div>
-      <p className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black text-white tracking-tight truncate">{value}</p>
-      <span className="text-[10px] text-ink-400 mt-0.5 truncate">{badge}</span>
+      <p className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">{value}</p>
+      <span className="text-[10px] text-slate-500 dark:text-ink-400 mt-0.5 truncate">{badge}</span>
     </div>
   );
 }

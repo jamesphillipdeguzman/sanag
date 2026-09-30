@@ -80,19 +80,19 @@ export default function GdacsAlertBanner({
 
   return (
     <div 
-      className="relative rounded-lg border border-white/10 bg-slate-950/70 backdrop-blur-md overflow-hidden shadow-sm transition-all"
+      className="relative rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/70 backdrop-blur-md overflow-hidden shadow-xs dark:shadow-sm transition-all"
       title="Live GDACS Hazard Telemetry — Hover to pause scrolling"
     >
       <div className="flex items-center h-9 sm:h-10 px-2 sm:px-3 text-xs">
         {/* Fixed Left Telemetry Anchor */}
-        <div className="flex items-center gap-2 pr-3 border-r border-white/10 shrink-0 z-20 bg-slate-950/90 py-1">
+        <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-white/10 shrink-0 z-20 bg-white/95 dark:bg-slate-950/90 py-1">
           <span className="relative flex h-2 w-2 shrink-0">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
           </span>
           <div className="flex items-center gap-1.5">
-            <Radio className="h-3 w-3 text-rose-400 animate-pulse shrink-0" />
-            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-ink-200">
+            <Radio className="h-3 w-3 text-rose-500 dark:text-rose-400 animate-pulse shrink-0" />
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-800 dark:text-ink-200">
               <span className="hidden sm:inline">GDACS</span> Telemetry
             </span>
           </div>
@@ -101,16 +101,16 @@ export default function GdacsAlertBanner({
         {/* Center Marquee Scroll Track */}
         <div className="relative flex-1 overflow-hidden h-full flex items-center">
           {/* Subtle Left & Right Edge Fade Gradients */}
-          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 sm:w-10 bg-gradient-to-r from-slate-950 via-slate-950/80 to-transparent z-10" />
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 sm:w-10 bg-gradient-to-l from-slate-950 via-slate-950/80 to-transparent z-10" />
+          <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 sm:w-10 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-slate-950 dark:via-slate-950/80 dark:to-transparent z-10" />
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 sm:w-10 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-slate-950 dark:via-slate-950/80 dark:to-transparent z-10" />
 
           {isLoading && alerts.length === 0 ? (
-            <div className="flex items-center gap-2 text-[11px] text-ink-400 px-4">
-              <Loader2 className="h-3 w-3 animate-spin text-ocean-400" />
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-ink-400 px-4">
+              <Loader2 className="h-3 w-3 animate-spin text-ocean-500 dark:text-ocean-400" />
               <span>Connecting to live GDACS disaster alert telemetry...</span>
             </div>
           ) : alerts.length === 0 ? (
-            <div className="text-[11px] text-ink-400 px-4 italic">
+            <div className="text-[11px] text-slate-500 dark:text-ink-400 px-4 italic">
               No active Philippine disaster alerts flagged by GDACS in current telemetry window.
             </div>
           ) : (
@@ -177,7 +177,7 @@ export default function GdacsAlertBanner({
 
                     {/* Alert Title */}
                     <span 
-                      className="text-[11px] sm:text-xs font-medium text-white/95 group-hover/item:text-ocean-200 transition-colors whitespace-nowrap"
+                      className="text-[11px] sm:text-xs font-medium text-slate-900 group-hover/item:text-ocean-600 dark:text-white/95 dark:group-hover/item:text-ocean-200 transition-colors whitespace-nowrap"
                       title={alert.description || alert.name}
                     >
                       {alert.name}
@@ -185,13 +185,13 @@ export default function GdacsAlertBanner({
 
                     {/* Severity / Date Subtitle */}
                     {alert.severity_text && (
-                      <span className="text-[10px] text-amber-200/80 hidden sm:inline whitespace-nowrap">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-200/80 hidden sm:inline whitespace-nowrap">
                         ({alert.severity_text})
                       </span>
                     )}
 
                     {alert.date && !alert.severity_text && (
-                      <span className="text-[10px] text-ink-400 hidden lg:inline whitespace-nowrap">
+                      <span className="text-[10px] text-slate-500 dark:text-ink-400 hidden lg:inline whitespace-nowrap">
                         {alert.date}
                       </span>
                     )}
@@ -202,18 +202,18 @@ export default function GdacsAlertBanner({
                       {!isImported && !isActive && (
                         viirsAvailable ? (
                           <span 
-                            className="hidden md:inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-default"
+                            className="hidden md:inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-default"
                             title="Ready to Simulate: NASA VIIRS DNB nightlight radiance data confirmed across Panay LGU grid."
                           >
-                            <Satellite className="h-2.5 w-2.5 text-emerald-400" />
+                            <Satellite className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
                             <span>Ready to Simulate</span>
                           </span>
                         ) : (
                           <span 
-                            className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-300/90 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-help"
+                            className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-800 bg-amber-50 border border-amber-200 dark:text-amber-300/90 dark:bg-amber-500/15 dark:border-amber-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-help"
                             title="VIIRS Data Pending: Live hazard has not impacted ground sensors yet or satellite overpass telemetry is awaiting downlink confirmation."
                           >
-                            <Satellite className="h-2.5 w-2.5 text-amber-400 animate-pulse" />
+                            <Satellite className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400 animate-pulse" />
                             <span className="hidden sm:inline">VIIRS Data Pending</span>
                             <span className="sm:hidden">VIIRS Pending</span>
                           </span>
@@ -221,8 +221,8 @@ export default function GdacsAlertBanner({
                       )}
 
                       {isActive ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
-                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 px-1.5 py-0.5 rounded">
+                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
                           <span>Active</span>
                         </span>
                       ) : isImported ? (
@@ -232,10 +232,10 @@ export default function GdacsAlertBanner({
                             e.stopPropagation();
                             onSelectEvent?.(resolvedEventId);
                           }}
-                          className="inline-flex items-center gap-1 text-[10px] font-medium text-ocean-300 hover:text-white bg-ocean-500/15 hover:bg-ocean-500/30 border border-ocean-500/30 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-ocean-700 hover:text-ocean-900 bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 dark:text-ocean-300 dark:hover:text-white dark:bg-ocean-500/15 dark:hover:bg-ocean-500/30 dark:border-ocean-500/30 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
                           title="View simulation on grid"
                         >
-                          <Play className="h-2.5 w-2.5 text-ocean-300" />
+                          <Play className="h-2.5 w-2.5 text-ocean-600 dark:text-ocean-300" />
                           <span>Select</span>
                         </button>
                       ) : viirsAvailable ? (
@@ -246,7 +246,7 @@ export default function GdacsAlertBanner({
                             onImport?.(alert);
                           }}
                           disabled={isImporting}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600/90 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
                           title="Simulate Event: Confirmed NASA VIIRS radiance data available across 93 LGUs"
                         >
                           {isImporting ? (
@@ -267,10 +267,10 @@ export default function GdacsAlertBanner({
                           disabled={true}
                           aria-disabled="true"
                           onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded opacity-60 cursor-not-allowed select-none"
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-ink-400 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded opacity-60 cursor-not-allowed select-none"
                           title="Simulation Unavailable: VIIRS satellite radiance data pending for this live hazard date."
                         >
-                          <Lock className="h-2.5 w-2.5 text-ink-400" />
+                          <Lock className="h-2.5 w-2.5 text-slate-400 dark:text-ink-400" />
                           <span>Simulate Event</span>
                         </button>
                       )}
@@ -282,7 +282,7 @@ export default function GdacsAlertBanner({
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-ink-400 hover:text-white transition-colors p-0.5"
+                          className="text-slate-400 hover:text-slate-700 dark:text-ink-400 dark:hover:text-white transition-colors p-0.5"
                           title="Official GDACS Dossier"
                         >
                           <ExternalLink className="h-2.5 w-2.5" />
@@ -291,7 +291,7 @@ export default function GdacsAlertBanner({
                     </div>
 
                     {/* Separator */}
-                    <span className="text-white/20 select-none text-[11px] ml-1">•</span>
+                    <span className="text-slate-300 dark:text-white/20 select-none text-[11px] ml-1">•</span>
                   </div>
                 );
               })}
@@ -300,8 +300,8 @@ export default function GdacsAlertBanner({
         </div>
 
         {/* Fixed Right Sync & Count */}
-        <div className="flex items-center gap-2 pl-3 border-l border-white/10 shrink-0 z-20 bg-slate-950/90 py-1">
-          <span className="text-[10px] font-medium text-ink-400 hidden md:inline">
+        <div className="flex items-center gap-2 pl-3 border-l border-slate-200 dark:border-white/10 shrink-0 z-20 bg-white/95 dark:bg-slate-950/90 py-1">
+          <span className="text-[10px] font-medium text-slate-500 dark:text-ink-400 hidden md:inline">
             {alerts.length} {alerts.length === 1 ? 'alert' : 'alerts'}
           </span>
           {onRefresh && (
@@ -309,10 +309,10 @@ export default function GdacsAlertBanner({
               type="button"
               onClick={onRefresh}
               disabled={isLoading}
-              className="flex items-center gap-1 text-[10px] text-ink-300 hover:text-white px-1.5 py-0.5 rounded border border-white/10 hover:border-white/20 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer"
+              className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-slate-100 hover:bg-slate-200 dark:text-ink-300 dark:hover:text-white dark:border-white/10 dark:hover:border-white/20 dark:bg-white/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 cursor-pointer"
               title="Sync live GDACS feed"
             >
-              <RefreshCw className={`h-2.5 w-2.5 ${isLoading ? 'animate-spin text-ocean-400' : ''}`} />
+              <RefreshCw className={`h-2.5 w-2.5 ${isLoading ? 'animate-spin text-ocean-500 dark:text-ocean-400' : ''}`} />
               <span className="hidden sm:inline">Sync</span>
             </button>
           )}

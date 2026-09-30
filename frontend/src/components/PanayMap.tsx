@@ -5,6 +5,7 @@ import type { Municipality, GdacsAlert } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
 import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
+import { useTheme } from '@/context/ThemeContext';
 
 export interface RegionPreset {
   id: string;
@@ -263,27 +264,27 @@ export default function PanayMap({
     <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
       {/* Map */}
       <div className="lg:col-span-8 flex flex-col">
-        <div className="relative rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm overflow-hidden flex flex-col h-full shadow-xl">
+        <div className="relative rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden flex flex-col h-full shadow-sm dark:shadow-xl">
           {/* Map header with Region Selector */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b border-white/10 bg-ink-950/40">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold text-white">Philippine Satellite Grid</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-300 border border-ocean-500/30">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30">
                   {currentRegionKey === 'panay' ? 'Panay Default' : activePreset.name}
                 </span>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                   Canvas 2D Engine
                 </span>
                 {isRegionChunkLoading && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-300 bg-ocean-500/15 border border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
-                    <Loader2 className="h-3 w-3 animate-spin text-ocean-300" />
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 bg-ocean-500/15 border border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin text-ocean-500 dark:text-ocean-300" />
                     Loading {activePreset.name}...
                   </span>
                 )}
               </div>
-              <p className="text-xs text-ink-400 mt-0.5">
+              <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5">
                 NASA VIIRS radiance overlay · Nationwide Philippine boundaries (Panay-First Default)
                 {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
               </p>
@@ -291,48 +292,48 @@ export default function PanayMap({
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
               {/* Region Navigator Selector */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-200">
-                <Compass className="h-3.5 w-3.5 text-ocean-400 shrink-0" />
-                <label htmlFor="panay-map-region-selector" className="text-[11px] font-semibold text-ocean-300 hidden sm:inline">Region:</label>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-700 dark:text-ocean-200">
+                <Compass className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
+                <label htmlFor="panay-map-region-selector" className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 hidden sm:inline">Region:</label>
                 <select
                   id="panay-map-region-selector"
                   value={currentRegionKey}
                   onChange={(e) => handleRegionChange(e.target.value)}
-                  className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer pr-1"
+                  className="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1"
                   aria-label="Select Philippine Region or Province"
                 >
                   <optgroup label="Primary Scope">
-                    <option value="panay" className="bg-ink-950 text-white">Panay Island (Default)</option>
-                    <option value="iloilo" className="bg-ink-950 text-white">↳ Iloilo Province</option>
-                    <option value="capiz" className="bg-ink-950 text-white">↳ Capiz Province</option>
-                    <option value="aklan" className="bg-ink-950 text-white">↳ Aklan Province</option>
-                    <option value="antique" className="bg-ink-950 text-white">↳ Antique Province</option>
+                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island (Default)</option>
+                    <option value="iloilo" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Iloilo Province</option>
+                    <option value="capiz" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Capiz Province</option>
+                    <option value="aklan" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Aklan Province</option>
+                    <option value="antique" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Antique Province</option>
                   </optgroup>
                   <optgroup label="Nationwide">
-                    <option value="philippines" className="bg-ink-950 text-white">Nationwide Overview (Philippines)</option>
+                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Nationwide Overview (Philippines)</option>
                   </optgroup>
                   <optgroup label="Luzon">
-                    <option value="ncr" className="bg-ink-950 text-white">NCR (Metro Manila)</option>
-                    <option value="r3" className="bg-ink-950 text-white">Region III (Central Luzon)</option>
-                    <option value="r4a" className="bg-ink-950 text-white">Region IV-A (CALABARZON)</option>
-                    <option value="r5" className="bg-ink-950 text-white">Region V (Bicol Region)</option>
-                    <option value="r1" className="bg-ink-950 text-white">Region I (Ilocos Region)</option>
-                    <option value="r2" className="bg-ink-950 text-white">Region II (Cagayan Valley)</option>
-                    <option value="car" className="bg-ink-950 text-white">CAR (Cordillera)</option>
-                    <option value="r4b" className="bg-ink-950 text-white">MIMAROPA (Region IV-B)</option>
+                    <option value="ncr" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">NCR (Metro Manila)</option>
+                    <option value="r3" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region III (Central Luzon)</option>
+                    <option value="r4a" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region IV-A (CALABARZON)</option>
+                    <option value="r5" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region V (Bicol Region)</option>
+                    <option value="r1" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region I (Ilocos Region)</option>
+                    <option value="r2" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region II (Cagayan Valley)</option>
+                    <option value="car" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">CAR (Cordillera)</option>
+                    <option value="r4b" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">MIMAROPA (Region IV-B)</option>
                   </optgroup>
                   <optgroup label="Visayas">
-                    <option value="r7" className="bg-ink-950 text-white">Region VII (Central Visayas / Cebu)</option>
-                    <option value="r8" className="bg-ink-950 text-white">Region VIII (Eastern Visayas / Leyte)</option>
-                    <option value="r6_negros" className="bg-ink-950 text-white">Region VI (Negros Occidental)</option>
+                    <option value="r7" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VII (Central Visayas / Cebu)</option>
+                    <option value="r8" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VIII (Eastern Visayas / Leyte)</option>
+                    <option value="r6_negros" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VI (Negros Occidental)</option>
                   </optgroup>
                   <optgroup label="Mindanao">
-                    <option value="r11" className="bg-ink-950 text-white">Region XI (Davao Region)</option>
-                    <option value="r10" className="bg-ink-950 text-white">Region X (Northern Mindanao)</option>
-                    <option value="r9" className="bg-ink-950 text-white">Region IX (Zamboanga Peninsula)</option>
-                    <option value="r12" className="bg-ink-950 text-white">Region XII (SOCCSKSARGEN)</option>
-                    <option value="r13" className="bg-ink-950 text-white">Region XIII (Caraga)</option>
-                    <option value="barmm" className="bg-ink-950 text-white">BARMM (Bangsamoro)</option>
+                    <option value="r11" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XI (Davao Region)</option>
+                    <option value="r10" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region X (Northern Mindanao)</option>
+                    <option value="r9" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region IX (Zamboanga Peninsula)</option>
+                    <option value="r12" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XII (SOCCSKSARGEN)</option>
+                    <option value="r13" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XIII (Caraga)</option>
+                    <option value="barmm" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">BARMM (Bangsamoro)</option>
                   </optgroup>
                 </select>
               </div>
@@ -343,12 +344,12 @@ export default function PanayMap({
                   onClick={() => setShowGdacsMarkers(!showGdacsMarkers)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                     showGdacsMarkers
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
-                      : 'bg-white/5 text-ink-400 border-white/10 hover:bg-white/10 hover:text-white'
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
                   }`}
                   title="Toggle live GDACS hazard epicenter markers on map"
                 >
-                  <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-400 animate-pulse' : 'text-ink-400'}`} />
+                  <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-500 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
                   <span>Live Hazards ({alertsWithCoords.length})</span>
                 </button>
               )}
@@ -359,8 +360,8 @@ export default function PanayMap({
                 onClick={() => toggleAudio()}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                   isAudioEnabled
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
-                    : 'bg-white/5 text-ink-400 border-white/10 hover:bg-white/10 hover:text-white'
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title={
                   isAudioEnabled
@@ -373,15 +374,15 @@ export default function PanayMap({
               >
                 {isAudioEnabled ? (
                   <>
-                    <Volume2 className={`h-3.5 w-3.5 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-70'}`} />
+                    <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-70'}`} />
                     <span className="hidden sm:inline">Audio</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase tracking-wider font-mono">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 uppercase tracking-wider font-mono">
                       {isMapAudioPlaying ? (liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : 'LOW') : 'Hover Map'}
                     </span>
                   </>
                 ) : (
                   <>
-                    <VolumeX className="h-3.5 w-3.5 text-ink-400" />
+                    <VolumeX className="h-3.5 w-3.5 text-slate-500 dark:text-ink-400" />
                     <span className="hidden sm:inline">Spatial Audio</span>
                   </>
                 )}
@@ -487,17 +488,17 @@ export default function PanayMap({
       {/* Detail side panel */}
       <div className="lg:col-span-4 flex flex-col">
         {selected ? (
-          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-xl">
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
             <div>
-              <div className="flex items-start justify-between pb-3 mb-4 border-b border-white/10">
+              <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10">
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
-                    <MapPin className="h-3.5 w-3.5 text-ocean-400" />
-                    <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
+                    <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+                    <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-xl font-extrabold text-white">{selected.name}</h3>
-                    <span className="text-[11px] font-semibold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/30">
+                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">{selected.name}</h3>
+                    <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
                       #{selected.resilienceRank ?? selected.rank ?? (selected.id === selectedId && globalRank ? globalRank : null) ?? (resilienceRankMap.get(selected.id) || 1)} Lowest ({selected.recoveryScore}%)
                     </span>
                   </div>
@@ -505,7 +506,7 @@ export default function PanayMap({
                 <button
                   type="button"
                   onClick={() => onSelect('')}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-ink-400 dark:hover:text-white dark:hover:bg-white/10 transition-all cursor-pointer"
                   title="Deselect municipality"
                   aria-label="Close details"
                 >
@@ -515,19 +516,19 @@ export default function PanayMap({
 
               {/* Audio-Spatial Indicator Status Badge */}
               {isAudioEnabled && (
-                <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-ink-950/60 border border-emerald-500/20 mb-4">
-                  <span className="flex items-center gap-1.5 text-ink-300">
-                    <Volume2 className={`h-3.5 w-3.5 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
+                <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-ink-950/60 border border-emerald-500/30 dark:border-emerald-500/20 mb-4 transition-colors">
+                  <span className="flex items-center gap-1.5 text-slate-700 dark:text-ink-300">
+                    <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
                     <span>Spatial Audio Profile</span>
                   </span>
                   <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${
                     liveAudioStatus === 'critical'
-                      ? 'bg-rose-500/20 text-rose-300'
+                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
                       : liveAudioStatus === 'warning'
-                      ? 'bg-amber-500/20 text-amber-300'
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
                       : liveAudioStatus === 'recovering'
-                      ? 'bg-ocean-500/20 text-ocean-300'
-                      : 'bg-emerald-500/20 text-emerald-300'
+                      ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
+                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
                   }`}>
                     {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
                   </span>
@@ -535,18 +536,18 @@ export default function PanayMap({
               )}
 
               {/* Recovery gauge */}
-              <div className="mb-5 bg-ink-950/50 rounded-xl p-3.5 border border-white/5">
+              <div className="mb-5 bg-slate-50 dark:bg-ink-950/50 rounded-xl p-3.5 border border-slate-200 dark:border-white/5 transition-colors">
                 <div className="flex items-end justify-between mb-2">
-                  <span className="text-xs font-semibold text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
                   <span
                     className="text-3xl font-black tracking-tight"
                     style={{ color: getRecoveryColor(selected.recoveryScore) }}
                   >
                     {selected.recoveryScore}
-                    <span className="text-base text-ink-500 font-normal">/100</span>
+                    <span className="text-base text-slate-400 dark:text-ink-500 font-normal">/100</span>
                   </span>
                 </div>
-                <div className="h-2.5 rounded-full bg-ink-800 overflow-hidden">
+                <div className="h-2.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{
@@ -565,7 +566,7 @@ export default function PanayMap({
                       {statusLabels[selected.status]}
                     </span>
                   </div>
-                  <span className="text-ink-400">Target: 90%+ restored</span>
+                  <span className="text-slate-500 dark:text-ink-400">Target: 90%+ restored</span>
                 </div>
               </div>
 
@@ -585,15 +586,15 @@ export default function PanayMap({
             </div>
 
             {/* Recovery projection */}
-            <div className="rounded-xl bg-ink-950/50 border border-white/5 p-3.5 mt-auto">
+            <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/5 p-3.5 mt-auto transition-colors">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-ink-400">Est. Full Restoration</span>
-                <span className="text-base font-bold text-white">
+                <span className="text-xs font-medium text-slate-500 dark:text-ink-400">Est. Full Restoration</span>
+                <span className="text-base font-bold text-slate-900 dark:text-white">
                   {selected.estimatedDaysToRecover === 0 ? 'Restored' : `~${selected.estimatedDaysToRecover} days`}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 rounded-full bg-ink-800 overflow-hidden">
+                <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-ocean-500 to-emerald-500 transition-all duration-700"
                     style={{
@@ -601,35 +602,35 @@ export default function PanayMap({
                     }}
                   />
                 </div>
-                <span className="text-[11px] text-ink-400 whitespace-nowrap">
+                <span className="text-[11px] text-slate-500 dark:text-ink-400 whitespace-nowrap">
                   {selected.estimatedDaysToRecover === 0 ? '100% capacity' : `${selected.estimatedDaysToRecover}d remaining`}
                 </span>
               </div>
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-xl">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <span className="text-xs font-semibold uppercase tracking-wider text-ink-300">
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-lg dark:shadow-xl transition-colors">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-ink-300">
                 Municipality Telemetry
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-500/10 text-ocean-300 border border-ocean-500/20">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/20 font-medium">
                 {currentRegionKey === 'panay' ? 'Panay Grid' : activePreset.name}
               </span>
             </div>
 
             <div className="flex flex-col items-center justify-center text-center py-8">
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-3 shadow-inner">
-                <MapPin className="h-6 w-6 text-ocean-400 animate-bounce" />
+              <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-3 shadow-inner">
+                <MapPin className="h-6 w-6 text-ocean-500 dark:text-ocean-400 animate-bounce" />
               </div>
-              <h4 className="text-sm font-bold text-white mb-1">Select an LGU Boundary</h4>
-              <p className="text-xs text-ink-400 max-w-xs leading-relaxed">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Select an LGU Boundary</h4>
+              <p className="text-xs text-slate-500 dark:text-ink-400 max-w-xs leading-relaxed">
                 Click any fine-grained municipality polygon or live hazard epicenter on the map to pin its satellite radiance indicators.
               </p>
 
               {/* Quick sample town buttons */}
               <div className="mt-5 w-full">
-                <span className="text-[11px] font-semibold text-ink-400 uppercase tracking-wider block mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider block mb-2">
                   Quick Select Major Hubs
                 </span>
                 <div className="flex flex-wrap justify-center gap-1.5">
@@ -679,7 +680,7 @@ export default function PanayMap({
                           key={m.id}
                           type="button"
                           onClick={() => onSelect(m.id)}
-                          className="px-2.5 py-1 text-xs rounded-lg border border-white/10 bg-white/5 hover:bg-ocean-500/20 hover:border-ocean-500/40 text-ink-300 hover:text-white transition-all cursor-pointer"
+                          className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
                         >
                           {m.name}
                         </button>
@@ -691,7 +692,7 @@ export default function PanayMap({
                         key={m.id}
                         type="button"
                         onClick={() => onSelect(m.id)}
-                        className="px-2.5 py-1 text-xs rounded-lg border border-white/10 bg-white/5 hover:bg-ocean-500/20 hover:border-ocean-500/40 text-ink-300 hover:text-white transition-all cursor-pointer"
+                        className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
                       >
                         {m.name}
                       </button>
@@ -701,7 +702,7 @@ export default function PanayMap({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-white/10 text-[11px] text-ink-400 text-center">
+            <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-[11px] text-slate-500 dark:text-ink-400 text-center">
               {currentRegionKey === 'panay'
                 ? 'Covers 93 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
                 : `Covers fine-grained municipalities in ${activePreset.name}`}
@@ -738,8 +739,14 @@ function LeafletMap({
   onChunkLoaded,
   onChunkLoadingChange,
 }: LeafletMapProps) {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+  const isLightRef = useRef(isLight);
+  isLightRef.current = isLight;
+
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const layersRef = useRef<Record<string, any>>({});
   const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
@@ -877,12 +884,15 @@ function LeafletMap({
         const score = municipality?.recoveryScore ?? 50;
         const color = getRecoveryColor(score);
         const isSelected = id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current);
+        const lightMode = isLightRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+          color: isSelected
+            ? (lightMode ? '#0f172a' : '#ffffff')
+            : (lightMode ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
           weight: isSelected ? 2.5 : 1.2,
           fillColor: color,
-          fillOpacity: isSelected ? 0.95 : 0.65,
+          fillOpacity: isSelected ? 0.95 : (lightMode ? 0.68 : 0.65),
           lineJoin: 'round',
           lineCap: 'round',
         };
@@ -919,8 +929,13 @@ function LeafletMap({
           click: () => onSelectRef.current(id),
           mouseover: () => {
             onHoverRef.current(id);
+            const activeLight = isLightRef.current;
             if (typeof (featureLayer as any).setStyle === 'function') {
-              (featureLayer as any).setStyle({ weight: 2.8, color: '#ffffff', fillOpacity: 0.95 });
+              (featureLayer as any).setStyle({
+                weight: 2.8,
+                color: activeLight ? '#0f172a' : '#ffffff',
+                fillOpacity: 0.95
+              });
             }
             if (typeof (featureLayer as any).bringToFront === 'function') {
               (featureLayer as any).bringToFront();
@@ -928,15 +943,20 @@ function LeafletMap({
           },
           mouseout: () => {
             onHoverRef.current(null);
+            const activeLight = isLightRef.current;
             const currentM =
               municipalitiesByIdRef.current.get(id) ||
               (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
               (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
               (normName ? municipalitiesByIdRef.current.get(normName) : null);
             if (currentM) {
-              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current);
+              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current, activeLight);
             } else if (typeof (featureLayer as any).setStyle === 'function') {
-              (featureLayer as any).setStyle({ weight: 1.2, color: 'rgba(255,255,255,0.4)', fillOpacity: 0.65 });
+              (featureLayer as any).setStyle({
+                weight: 1.2,
+                color: activeLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)',
+                fillOpacity: activeLight ? 0.68 : 0.65
+              });
             }
           },
         });
@@ -1030,6 +1050,19 @@ function LeafletMap({
     mapRef.current = map;
     defaultBoundsRef.current = PANAY_BOUNDS;
 
+    // Initialize CartoDB base tile layer based on active theme
+    const initialTileUrl = isLightRef.current
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const initialTileLayer = L.tileLayer(initialTileUrl, {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    });
+    initialTileLayer.addTo(map);
+    tileLayerRef.current = initialTileLayer;
+
     // Track mouse hover state across the interactive map surface
     map.on('mouseover', () => {
       onMapHoverChangeRef.current?.(true);
@@ -1082,6 +1115,10 @@ function LeafletMap({
 
     return () => {
       disposed = true;
+      if (tileLayerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(tileLayerRef.current);
+        tileLayerRef.current = null;
+      }
       if (geoJsonLayerRef.current && mapRef.current) {
         mapRef.current.removeLayer(geoJsonLayerRef.current);
         geoJsonLayerRef.current = null;
@@ -1092,6 +1129,81 @@ function LeafletMap({
       gdacsGroupRef.current = null;
     };
   }, []);
+
+  // Dynamically swap Leaflet base tile layer and polygon borders when theme changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+      tileLayerRef.current = null;
+    }
+
+    const tileUrl = isLight
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+    const newTileLayer = L.tileLayer(tileUrl, {
+      subdomains: 'abcd',
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    });
+    newTileLayer.addTo(map);
+    if (typeof (newTileLayer as any).bringToBack === 'function') {
+      (newTileLayer as any).bringToBack();
+    }
+    tileLayerRef.current = newTileLayer;
+
+    // Immediately re-paint all GeoJSON polygons with appropriate boundary stroke contrast
+    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
+      (geoJsonLayerRef.current as any).setStyle((feature: any) => {
+        const props = feature?.properties || {};
+        const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          municipalitiesByIdRef.current.get(id) ||
+          (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+          (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+          (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+        const score = municipality?.recoveryScore ?? 50;
+        const color = getRecoveryColor(score);
+        const isSelected = id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current);
+
+        return {
+          renderer: canvasRendererRef.current || undefined,
+          color: isSelected
+            ? (isLight ? '#0f172a' : '#ffffff')
+            : (isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
+          weight: isSelected ? 2.5 : 1.2,
+          fillColor: color,
+          fillOpacity: isSelected ? 0.95 : (isLight ? 0.68 : 0.65),
+          lineJoin: 'round',
+          lineCap: 'round',
+        };
+      });
+    }
+
+    Object.entries(layersRef.current).forEach(([id, layer]) => {
+      const props = (layer as any)?.feature?.properties || {};
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+      const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+      const m =
+        municipalitiesByIdRef.current.get(id) ||
+        (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+        (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+        (normName ? municipalitiesByIdRef.current.get(normName) : null);
+      if (m) {
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight);
+      }
+    });
+  }, [isLight]);
 
   // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
   useEffect(() => {
@@ -1145,12 +1257,15 @@ function LeafletMap({
         const score = municipality?.recoveryScore ?? 50;
         const color = getRecoveryColor(score);
         const isSelected = id === selectedId || (municipality && municipality.id === selectedId);
+        const lightMode = isLightRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+          color: isSelected
+            ? (lightMode ? '#0f172a' : '#ffffff')
+            : (lightMode ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
           weight: isSelected ? 2.5 : 1.2,
           fillColor: color,
-          fillOpacity: isSelected ? 0.95 : 0.65,
+          fillOpacity: isSelected ? 0.95 : (lightMode ? 0.68 : 0.65),
           lineJoin: 'round',
           lineCap: 'round',
         };
@@ -1170,7 +1285,7 @@ function LeafletMap({
         (normName ? map.get(normName) : null);
 
       if (municipality) {
-        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId);
+        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current);
         layer.setTooltipContent(`${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery`);
       }
     });
@@ -1366,13 +1481,15 @@ function LeafletMap({
   );
 }
 
-function updateLayerStyle(layer: any, municipality: Municipality, selected: boolean) {
+function updateLayerStyle(layer: any, municipality: Municipality, selected: boolean, isLight = false) {
   if (layer && typeof layer.setStyle === 'function') {
     layer.setStyle({
-      color: selected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+      color: selected
+        ? (isLight ? '#0f172a' : '#ffffff')
+        : (isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
       weight: selected ? 2.5 : 1.2,
       fillColor: getRecoveryColor(municipality.recoveryScore),
-      fillOpacity: selected ? 0.95 : 0.65,
+      fillOpacity: selected ? 0.95 : (isLight ? 0.68 : 0.65),
     });
   }
 }
@@ -1381,16 +1498,16 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-[11px] text-ink-400 hidden sm:inline">{label}</span>
+      <span className="text-[11px] text-slate-600 dark:text-ink-400 hidden sm:inline">{label}</span>
     </div>
   );
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-ink-950/50 border border-white/5 p-3">
-      <p className="text-[11px] text-ink-400 uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-sm font-semibold text-white">{value}</p>
+    <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/5 p-3 transition-colors">
+      <p className="text-[11px] text-slate-500 dark:text-ink-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-sm font-semibold text-slate-900 dark:text-white">{value}</p>
     </div>
   );
 }

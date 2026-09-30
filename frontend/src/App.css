@@ -44,6 +44,12 @@
 
  .dashboard {
    min-height: 100svh;
+   background: #f8fafc;
+   color: #1e293b;
+   transition: background-color 0.25s ease, color 0.25s ease;
+ }
+
+ html.dark .dashboard {
    background: #080d16;
    color: #d8e1ef;
  }
@@ -54,6 +60,10 @@
    justify-content: space-between;
    gap: 24px;
    padding: 26px 32px;
+   border-bottom: 1px solid #e2e8f0;
+ }
+
+ html.dark .dashboard-header {
    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
  }
  
@@ -73,17 +83,25 @@
  }
  
  .dashboard h1 {
-   color: #f7faff;
+   color: #0f172a;
    font-size: clamp(24px, 3vw, 38px);
    letter-spacing: -0.8px;
+ }
+
+ html.dark .dashboard h1 {
+   color: #f7faff;
  }
  
  .live-status {
    display: flex;
    align-items: center;
    gap: 8px;
-   color: #8492a7;
+   color: #64748b;
    font-size: 12px;
+ }
+
+ html.dark .live-status {
+   color: #8492a7;
  }
  
  .live-status span,
@@ -105,8 +123,16 @@
  .map-card,
  .detail-card {
    overflow: hidden;
-   border: 1px solid rgba(255, 255, 255, 0.1);
+   border: 1px solid #e2e8f0;
    border-radius: 16px;
+   background: #ffffff;
+   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+   transition: background-color 0.25s ease, border-color 0.25s ease;
+ }
+
+ html.dark .map-card,
+ html.dark .detail-card {
+   border: 1px solid rgba(255, 255, 255, 0.1);
    background: rgba(17, 25, 39, 0.72);
    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
  }
@@ -117,20 +143,34 @@
    justify-content: space-between;
    gap: 20px;
    padding: 18px 20px;
+   border-bottom: 1px solid #e2e8f0;
+ }
+
+ html.dark .map-card-header {
    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
  }
  
  .map-card-header h2 {
-   color: #f7faff;
+   color: #0f172a;
    font-size: 14px;
+ }
+
+ html.dark .map-card-header h2 {
+   color: #f7faff;
  }
  
  .map-card-header p,
  .details-heading p,
  .empty-detail p {
    margin-top: 5px;
-   color: #718096;
+   color: #64748b;
    font-size: 11px;
+ }
+
+ html.dark .map-card-header p,
+ html.dark .details-heading p,
+ html.dark .empty-detail p {
+   color: #718096;
  }
  
  .legend {
@@ -256,8 +296,15 @@
  .weather-forecast-section {
    margin-top: 8px;
    padding: 24px 28px 28px;
-   border: 1px solid rgba(255, 255, 255, 0.1);
+   border: 1px solid #e2e8f0;
    border-radius: 20px;
+   background: #ffffff;
+   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+   transition: background-color 0.25s ease, border-color 0.25s ease;
+ }
+
+ html.dark .weather-forecast-section {
+   border: 1px solid rgba(255, 255, 255, 0.1);
    background: rgba(15, 23, 42, 0.86);
    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
  }
@@ -271,15 +318,23 @@
  }
 
  .weather-forecast-header p {
-   color: #8ea0bc;
+   color: #64748b;
    font-size: 12px;
    text-align: right;
  }
 
+ html.dark .weather-forecast-header p {
+   color: #8ea0bc;
+ }
+
  .weather-forecast-header h3 {
-   color: #f7faff;
+   color: #0f172a;
    font-size: 1.1rem;
    font-weight: 700;
+ }
+
+ html.dark .weather-forecast-header h3 {
+   color: #f7faff;
  }
 
  .weather-forecast-grid {
@@ -293,15 +348,25 @@
    flex-direction: column;
    gap: 10px;
    padding: 16px 14px 14px;
-   border: 1px solid rgba(148, 163, 184, 0.18);
+   border: 1px solid #e2e8f0;
    border-radius: 16px;
-   background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(11, 17, 28, 0.92));
+   background: #f8fafc;
    min-height: 190px;
+   transition: background-color 0.25s ease, border-color 0.25s ease;
+ }
+
+ html.dark .weather-day-card {
+   border: 1px solid rgba(148, 163, 184, 0.18);
+   background: linear-gradient(180deg, rgba(15, 23, 42, 0.8), rgba(11, 17, 28, 0.92));
  }
 
  .weather-day-card strong {
-   color: #f7faff;
+   color: #0f172a;
    font-size: 0.82rem;
+ }
+
+ html.dark .weather-day-card strong {
+   color: #f7faff;
  }
 
  .weather-icon-wrap {
@@ -312,6 +377,10 @@
    height: 52px;
    border-radius: 15px;
    background: rgba(89, 159, 253, 0.12);
+   color: #3b82f6;
+ }
+
+ html.dark .weather-icon-wrap {
    color: #8ec5ff;
  }
 
@@ -319,6 +388,10 @@
    display: flex;
    align-items: baseline;
    gap: 8px;
+   color: #0f172a;
+ }
+
+ html.dark .weather-temp-row {
    color: #f7faff;
  }
 
@@ -328,16 +401,24 @@
  }
 
  .weather-temp-row span {
-   color: #8ea0bc;
+   color: #64748b;
    font-size: 0.8rem;
+ }
+
+ html.dark .weather-temp-row span {
+   color: #8ea0bc;
  }
 
  .weather-meta {
    display: flex;
    flex-direction: column;
    gap: 4px;
-   color: #b9c2d1;
+   color: #64748b;
    font-size: 0.75rem;
+ }
+
+ html.dark .weather-meta {
+   color: #b9c2d1;
  }
 
  .weather-meta span {
