@@ -10,7 +10,9 @@ import {
   Wind, 
   Droplets, 
   Zap,
-  Play
+  Play,
+  Satellite,
+  Lock
 } from 'lucide-react';
 import type { GdacsAlert } from '@/types';
 
@@ -117,6 +119,7 @@ export default function GdacsAlertBanner({
                 const isImported = importedEventIds.has(eventId) || importedEventIds.has(String(alert.event_id)) || alert.is_imported;
                 const isActive = activeEventId === eventId || activeEventId === String(alert.event_id);
                 const badgeClass = getAlertBadge(alert.alert_level);
+                const viirsAvailable = alert.viirs_data_available ?? false;
 
                 return (
                   <div
@@ -152,8 +155,30 @@ export default function GdacsAlertBanner({
                       </span>
                     )}
 
-                    {/* Interactive Action Button */}
+                    {/* Interactive Action Button & Telemetry Feedback */}
                     <div className="ml-1 shrink-0 flex items-center gap-1.5">
+                      {/* Satellite Availability Badge for unimported events */}
+                      {!isImported && !isActive && (
+                        viirsAvailable ? (
+                          <span 
+                            className="hidden md:inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-default"
+                            title="Ready to Simulate: NASA VIIRS DNB nightlight radiance data confirmed across Panay LGU grid."
+                          >
+                            <Satellite className="h-2.5 w-2.5 text-emerald-400" />
+                            <span>Ready to Simulate</span>
+                          </span>
+                        ) : (
+                          <span 
+                            className="inline-flex items-center gap-1 text-[9px] font-medium text-amber-300/90 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded shrink-0 cursor-help"
+                            title="VIIRS Data Pending: Live hazard has not impacted ground sensors yet or satellite overpass telemetry is awaiting downlink confirmation."
+                          >
+                            <Satellite className="h-2.5 w-2.5 text-amber-400 animate-pulse" />
+                            <span className="hidden sm:inline">VIIRS Data Pending</span>
+                            <span className="sm:hidden">VIIRS Pending</span>
+                          </span>
+                        )
+                      )}
+
                       {isActive ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded">
                           <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" />
@@ -172,7 +197,7 @@ export default function GdacsAlertBanner({
                           <Play className="h-2.5 w-2.5 text-ocean-300" />
                           <span>Select</span>
                         </button>
-                      ) : (
+                      ) : viirsAvailable ? (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -180,8 +205,8 @@ export default function GdacsAlertBanner({
                             onImport?.(alert);
                           }}
                           disabled={isImporting}
-                          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600/80 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
-                          title="Simulate disaster radiance & recovery curve across 93 LGUs"
+                          className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600/90 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
+                          title="Simulate Event: Confirmed NASA VIIRS radiance data available across 93 LGUs"
                         >
                           {isImporting ? (
                             <>
@@ -191,9 +216,21 @@ export default function GdacsAlertBanner({
                           ) : (
                             <>
                               <Radio className="h-2.5 w-2.5 text-white" />
-                              <span>Simulate</span>
+                              <span>Simulate Event</span>
                             </>
                           )}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={true}
+                          aria-disabled="true"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-ink-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded opacity-60 cursor-not-allowed select-none"
+                          title="Simulation Unavailable: VIIRS satellite radiance data pending for this live hazard date."
+                        >
+                          <Lock className="h-2.5 w-2.5 text-ink-400" />
+                          <span>Simulate Event</span>
                         </button>
                       )}
 

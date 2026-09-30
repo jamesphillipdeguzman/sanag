@@ -27,6 +27,7 @@ export interface DisasterEvent {
   description: string;
   category?: string;
   alert_level?: string;
+  viirs_data_available?: boolean;
   critical_municipalities?: Array<{
     name: string;
     pcode: string;
@@ -56,4 +57,5 @@ export interface GdacsAlert {
   bbox?: number[] | null;
   geometry?: any;
   is_imported?: boolean;
+  viirs_data_available?: boolean;
 }
