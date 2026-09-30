@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor } from '@/data/mockData';
-import { MapPin, X } from 'lucide-react';
+import { Lock, MapPin, RotateCcw, Unlock, X } from 'lucide-react';
 
 interface PanayMapProps {
   municipalities: Municipality[];
@@ -58,7 +58,7 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
 
             {/* Hover tooltip */}
             {hovered && !selected && (
-              <div className="absolute pointer-events-none top-4 left-4 glass rounded-xl px-4 py-3 max-w-xs animate-fade-in">
+              <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in">
                 <div className="flex items-center gap-2 mb-1">
                   <div
                     className="h-2.5 w-2.5 rounded-full"
@@ -198,6 +198,16 @@ export default function PanayMap({ municipalities, selectedId, onSelect, recover
   );
 }
 
+function isMobileOrTouchDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.innerWidth < 768 ||
+    window.matchMedia('(pointer: coarse)').matches ||
+    'ontouchstart' in window ||
+    navigator.maxTouchPoints > 0
+  );
+}
+
 function LeafletMap({
   municipalities,
   selectedId,
@@ -212,14 +222,64 @@ function LeafletMap({
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<Record<string, L.Path>>({});
+  const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
+
+  // Default mobile view to locked so users can scroll past without getting trapped
+  const [isLocked, setIsLocked] = useState<boolean>(() => isMobileOrTouchDevice());
+
+  const resetToPanayBounds = (animate = true) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (defaultBoundsRef.current) {
+      map.fitBounds(defaultBoundsRef.current, { padding: [18, 18], animate });
+    } else {
+      map.setView([11.2, 122.5], 8, { animate });
+    }
+  };
+
+  const handleUnlock = () => {
+    setIsLocked(false);
+  };
+
+  const handleLock = () => {
+    setIsLocked(true);
+    resetToPanayBounds(true);
+  };
+
+  const handleReset = () => {
+    resetToPanayBounds(true);
+  };
+
+  // Sync Leaflet drag, touch, and zoom handlers with lock state
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (isLocked) {
+      map.dragging?.disable();
+      map.touchZoom?.disable();
+      map.doubleClickZoom?.disable();
+      map.boxZoom?.disable();
+    } else {
+      map.dragging?.enable();
+      map.touchZoom?.enable();
+      map.doubleClickZoom?.enable();
+      map.boxZoom?.enable();
+    }
+  }, [isLocked]);
 
   useEffect(() => {
     if (!mapElement.current || mapRef.current || municipalities.length === 0) return;
 
+    const initialLocked = isMobileOrTouchDevice();
     const map = L.map(mapElement.current, {
       zoomControl: true,
       scrollWheelZoom: false,
       attributionControl: false,
+      dragging: !initialLocked,
+      touchZoom: !initialLocked,
+      doubleClickZoom: !initialLocked,
+      boxZoom: !initialLocked,
     });
     mapRef.current = map;
     let disposed = false;
@@ -268,6 +328,7 @@ function LeafletMap({
 
         const bounds = layer.getBounds();
         if (!disposed && mapRef.current === map && bounds.isValid()) {
+          defaultBoundsRef.current = bounds;
           map.fitBounds(bounds, { padding: [18, 18] });
         }
       })
@@ -290,7 +351,60 @@ function LeafletMap({
     });
   }, [municipalities, selectedId]);
 
-  return <div ref={mapElement} className="leaflet-map" aria-label="Panay municipality recovery map" />;
+  return (
+    <div className="relative w-full overflow-hidden rounded-xl">
+      <div
+        ref={mapElement}
+        className={`leaflet-map ${isLocked ? 'is-locked' : 'is-unlocked'}`}
+        aria-label="Panay municipality recovery map"
+      />
+
+      {/* Sleek UI overlay controls */}
+      <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+        {isLocked ? (
+          <button
+            type="button"
+            onClick={handleUnlock}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ocean-300 hover:text-white border border-ocean-500/35 hover:border-ocean-400/60 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 group focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+            aria-label="Unlock map to interact, pan, and zoom"
+            title="Unlock map to pan and zoom"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-ocean-500"></span>
+            </span>
+            <Lock className="w-3.5 h-3.5 text-ocean-400 group-hover:text-ocean-300 transition-colors" />
+            <span>Tap to Interact</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ink-300 hover:text-white border border-white/10 hover:border-white/25 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+              aria-label="Reset map view to Panay Island"
+              title="Re-center on Panay Island"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-ink-400" />
+              <span className="hidden sm:inline">Reset View</span>
+              <span className="sm:hidden">Reset</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLock}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-500/20 hover:bg-ocean-500/30 text-ocean-200 hover:text-white border border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+              aria-label="Lock map viewport and re-center on Panay Island"
+              title="Lock map and re-center on Panay Island"
+            >
+              <Lock className="w-3.5 h-3.5 text-ocean-300" />
+              <span>Lock Map</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function updateLayerStyle(layer: L.Path, municipality: Municipality, selected: boolean) {

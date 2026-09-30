@@ -96,6 +96,30 @@ body {
   background: #0d1117;
 }
 
+.leaflet-map.is-locked,
+.leaflet-map.is-locked .leaflet-container {
+  touch-action: pan-y;
+}
+
+.leaflet-map.is-unlocked,
+.leaflet-map.is-unlocked .leaflet-container {
+  touch-action: none;
+}
+
+.leaflet-map.is-locked .leaflet-control-zoom {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(0.5);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+.leaflet-map.is-unlocked .leaflet-control-zoom {
+  opacity: 1;
+  pointer-events: auto;
+  filter: none;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
 .leaflet-container {
   font: inherit;
   background: #0d1117;
