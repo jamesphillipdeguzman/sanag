@@ -305,66 +305,36 @@ export default function WeatherForecast() {
   }, [data])
 
   /*
-   * Loading state
+   * Loading state (compact horizontal strip)
    */
   if (loading) {
     return (
-      <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 backdrop-blur-sm shadow-sm dark:shadow-none transition-colors">
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 px-4 py-3">
-          <div>
-            <div className="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-ink-800" />
-            <div className="mt-1.5 h-3 w-44 animate-pulse rounded bg-gray-100 dark:bg-ink-800/70" />
-          </div>
-
-          <div className="hidden h-5 w-20 animate-pulse rounded-md bg-gray-200 dark:bg-ink-800 sm:block" />
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/80 backdrop-blur-md shadow-sm dark:shadow-none transition-colors overflow-hidden">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="h-4 w-4 rounded-full bg-gray-200 dark:bg-ink-800 animate-pulse" />
+          <div className="h-3.5 w-24 rounded bg-gray-200 dark:bg-ink-800 animate-pulse" />
         </div>
-
-        <div className="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
+        <div className="flex items-center gap-1.5 overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div
-              key={index}
-              className="min-h-[160px] animate-pulse rounded-xl border border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-ink-900/80 p-3.5 flex flex-col justify-between"
-            >
-              <div>
-                <div className="h-3 w-14 rounded bg-gray-200 dark:bg-ink-800" />
-                <div className="mt-1 h-3.5 w-18 rounded bg-gray-200 dark:bg-ink-800" />
-              </div>
-
-              <div className="mx-auto my-3 h-10 w-10 rounded-full bg-gray-200 dark:bg-ink-800" />
-
-              <div className="text-center">
-                <div className="mx-auto h-5 w-16 rounded bg-gray-200 dark:bg-ink-800" />
-                <div className="mx-auto mt-1 h-2.5 w-14 rounded bg-gray-100 dark:bg-ink-800/70" />
-              </div>
-            </div>
+              key={i}
+              className="h-7 w-20 sm:w-28 rounded-lg border border-gray-200/60 dark:border-white/5 bg-gray-50 dark:bg-ink-900 animate-pulse shrink-0"
+            />
           ))}
         </div>
-      </section>
+      </div>
     )
   }
 
   /*
-   * Error state
+   * Error state (compact strip)
    */
   if (error) {
     return (
-      <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 p-4 backdrop-blur-sm shadow-sm dark:shadow-none transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-400/20 bg-red-400/10">
-            <AlertTriangle className="h-4 w-4 text-red-500 dark:text-red-400" />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-              Weather data unavailable
-            </p>
-
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-ink-400">
-              {error}
-            </p>
-          </div>
-        </div>
-      </section>
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50/70 dark:bg-red-500/10 text-xs text-red-600 dark:text-red-300">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span>Weather telemetry unavailable ({error})</span>
+      </div>
     )
   }
 
@@ -372,185 +342,71 @@ export default function WeatherForecast() {
    * Empty state
    */
   if (!days.length) {
-    return (
-      <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 p-4 backdrop-blur-sm shadow-sm dark:shadow-none transition-colors">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ocean-500/10">
-            <Cloud className="h-4 w-4 text-ocean-500 dark:text-ocean-400" />
-          </div>
-
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-              No forecast available
-            </p>
-
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-ink-400">
-              Environmental forecast data is currently unavailable.
-            </p>
-          </div>
-        </div>
-      </section>
-    )
+    return null
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 backdrop-blur-sm shadow-sm dark:shadow-none transition-colors">
-      {/* =========================================================
-          HEADER
-      ========================================================== */}
-      <div className="flex flex-col gap-2 border-b border-gray-200 dark:border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between transition-colors">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold tracking-wide text-gray-900 dark:text-white">
-              Weather Forecast
-            </h3>
-
-            <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/[0.04] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-gray-600 dark:text-ink-400">
-              5-Day
-            </span>
-          </div>
-
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-ink-400">
-            Environmental conditions across Panay Island
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start rounded-lg border border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] px-2.5 py-1 text-gray-600 dark:text-ink-400 sm:self-auto">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/80 backdrop-blur-md shadow-sm dark:shadow-none transition-colors">
+      {/* Left indicator */}
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
-
-          <span className="text-[10px] font-medium uppercase tracking-wider text-gray-600 dark:text-ink-400">
-            Environmental Data
-          </span>
+          <CloudSun className="h-4 w-4 text-ocean-500 dark:text-ocean-400 shrink-0" />
+          <span>Panay Weather</span>
         </div>
+        <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-ink-400 border border-gray-200 dark:border-white/5 hidden md:inline">
+          5-Day Forecast
+        </span>
       </div>
 
-      {/* =========================================================
-          FORECAST CARDS
-      ========================================================== */}
-      <div className="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+      {/* Right/center pill list */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
         {days.map((day, index) => {
-          const {
-            icon: Icon,
-            label,
-          } = getWeatherConfig(day.code)
-
+          const { icon: Icon, label, shortLabel } = getWeatherConfig(day.code)
           const isToday = index === 0
 
           return (
-            <article
+            <div
               key={day.date}
               className={`
-                group relative flex min-w-0 flex-col justify-between
-                rounded-xl border
-                px-3 py-3 sm:px-3.5 sm:py-3.5
-                transition-all duration-200
+                group relative flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 rounded-lg border text-xs whitespace-nowrap shrink-0 transition-all cursor-default
                 ${
                   isToday
-                    ? 'border-ocean-400/40 dark:border-ocean-500/30 bg-ocean-50/70 dark:bg-ocean-500/[0.08] shadow-sm'
-                    : 'border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-ink-900 hover:bg-gray-100/70 dark:hover:bg-ink-800/60'
+                    ? 'border-ocean-400/50 dark:border-ocean-500/40 bg-ocean-50/80 dark:bg-ocean-500/15 shadow-sm'
+                    : 'border-gray-200/80 dark:border-white/5 bg-gray-50/80 dark:bg-ink-950/60 hover:bg-gray-100 dark:hover:bg-white/5'
                 }
-                hover:-translate-y-0.5
-                hover:border-ocean-400/40
               `}
+              title={`${day.label} (${formatDate(day.date)}): ${label} · High ${Math.round(day.max ?? 0)}°C / Low ${Math.round(day.min ?? 0)}°C · Precip ${day.rain}mm · Wind ${Math.round(day.wind)}km/h`}
             >
-              {/* Day Header */}
-              <div className="flex items-center justify-between sm:block">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500 dark:text-ink-400">
-                  {isToday ? 'Current' : day.label}
-                </p>
+              <span className={`text-[11px] font-semibold ${isToday ? 'text-ocean-700 dark:text-ocean-300' : 'text-gray-500 dark:text-ink-400'}`}>
+                {isToday ? 'Today' : day.label}
+              </span>
 
-                <h4 className="mt-0.5 text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
-                  {isToday ? 'Today' : formatDate(day.date)}
-                </h4>
+              <Icon
+                aria-hidden="true"
+                className={`h-3.5 w-3.5 shrink-0 ${isToday ? 'text-ocean-500 dark:text-ocean-400' : 'text-gray-600 dark:text-ink-300'}`}
+                strokeWidth={2}
+              />
+
+              <div className="flex items-baseline gap-1 text-[11px] font-bold">
+                <span className="text-gray-900 dark:text-white">
+                  {Math.round(day.max ?? 0)}°
+                </span>
+                <span className="text-[10px] font-medium text-gray-400 dark:text-ink-500">
+                  {Math.round(day.min ?? 0)}°
+                </span>
               </div>
 
-              {/* =================================================
-                  WEATHER ICON (Compact)
-              ================================================== */}
-              <div className="relative my-2 sm:my-3 flex h-14 sm:h-16 items-center justify-center">
-                {/* Soft gradient glow */}
-                <div
-                  className="
-                    absolute h-12 w-12 rounded-full
-                    opacity-[0.08] dark:opacity-[0.14]
-                    blur-xl
-                    transition-opacity duration-300
-                    group-hover:opacity-[0.2]
-                  "
-                  style={{
-                    background:
-                      'linear-gradient(135deg, #599ffd 0%, #34d399 100%)',
-                  }}
-                />
-
-                {/* SVG gradient definition */}
-                <svg
-                  aria-hidden="true"
-                  className="absolute h-0 w-0"
-                >
-                  <defs>
-                    <linearGradient
-                      id={`weatherGradient-${day.date}`}
-                      x1="0%"
-                      y1="0%"
-                      x2="100%"
-                      y2="100%"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#599ffd"
-                      />
-
-                      <stop
-                        offset="100%"
-                        stopColor="#34d399"
-                      />
-                    </linearGradient>
-                  </defs>
-                </svg>
-
-                <Icon
-                  aria-hidden="true"
-                  className="
-                    relative z-10
-                    h-10 w-10 sm:h-11 sm:w-11
-                    transition-transform duration-300
-                    group-hover:scale-110
-                  "
-                  stroke={`url(#weatherGradient-${day.date})`}
-                  strokeWidth={1.5}
-                />
-              </div>
-
-              {/* =================================================
-                  TEMPERATURE (Compact)
-              ================================================== */}
-              <div className="text-center mt-1">
-                <div className="flex items-baseline justify-center gap-1.5">
-                  <span className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                    {Math.round(day.max ?? 0)}°
-                  </span>
-
-                  <span className="text-xs text-gray-400 dark:text-ink-500">
-                    /
-                  </span>
-
-                  <span className="text-xs sm:text-sm font-medium text-gray-500 dark:text-ink-400">
-                    {Math.round(day.min ?? 0)}°
-                  </span>
-                </div>
-
-                <p className="mt-0.5 text-[11px] font-medium text-gray-600 dark:text-ink-300 truncate">
-                  {label}
-                </p>
-              </div>
-            </article>
+              <span className="text-[10px] font-medium text-gray-500 dark:text-ink-400 hidden xl:inline max-w-[85px] truncate">
+                {shortLabel || label}
+              </span>
+            </div>
           )
         })}
       </div>
-    </section>
+    </div>
   )
 }

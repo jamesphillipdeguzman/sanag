@@ -4,6 +4,7 @@ import type { Municipality, DisasterEvent, GdacsAlert } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 import PanayMap from '@/components/PanayMap';
 import GdacsAlertBanner from '@/components/GdacsAlertBanner';
+import WeatherForecast from '@/components/WeatherForecast';
 
 interface OverviewProps {
   municipalities: Municipality[];
@@ -154,6 +155,11 @@ export default function Overview({
               badge="Impacted LGUs"
             />
           </div>
+        </div>
+
+        {/* Weather Forecast Mini-Widget Strip directly above GDACS telemetry bar */}
+        <div className="mb-3 animate-fade-in-up" style={{ animationDelay: '0.02s' }}>
+          <WeatherForecast />
         </div>
 
         {/* GDACS Situational Telemetry Marquee Banner directly beneath Header */}

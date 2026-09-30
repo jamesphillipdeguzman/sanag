@@ -285,8 +285,7 @@
  .dashboard-main {
    display: flex;
    flex-direction: column;
-   gap: 24px;
-   padding: 0 32px 32px;
+   padding: 0;
  }
 
  .dashboard-section {
@@ -465,7 +464,7 @@
    .map-layout { grid-template-columns: 1fr; }
    .detail-card { min-height: 0; }
    .empty-detail { min-height: 250px; }
-   .dashboard-main { padding: 0 18px 24px; }
+   .dashboard-main { padding: 0; }
    .weather-forecast-grid {
      grid-template-columns: repeat(2, minmax(0, 1fr));
    }

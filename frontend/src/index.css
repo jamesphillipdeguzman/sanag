@@ -88,9 +88,7 @@ html.dark .dashboard-main {
 }
 
 .dashboard-section {
-  width: min(1200px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 24px 0;
+  width: 100%;
 }
 
 .glass {
@@ -290,7 +288,7 @@ html.dark .leaflet-tooltip {
 }
 
 @media (max-width: 640px) {
-  .dashboard-section { width: min(100% - 24px, 1200px); padding: 12px 0; }
+  .dashboard-section { width: 100%; }
 }
 
 #root {
