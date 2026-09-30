@@ -1,12 +1,13 @@
 import React from 'react';
 import type { DisasterEvent } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
-import { Activity, Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
+import { Activity, X, Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
 
 interface EventTimelineProps {
   events: DisasterEvent[];
   activeEventId: string;
   onSelect: (id: string) => void;
+  onDismiss?: () => void;
 }
 
 const typeIcon: Record<string, React.ReactNode> = {
@@ -20,14 +21,27 @@ const typeIcon: Record<string, React.ReactNode> = {
   EQ: <Activity className="h-4 w-4" />,
 };
 
-export default function EventTimeline({ events, activeEventId, onSelect }: EventTimelineProps) {
+export default function EventTimeline({ events, activeEventId, onSelect, onDismiss }: EventTimelineProps) {
   const active = events.find((e) => e.id === activeEventId);
 
   return (
     <div className="rounded-2xl border border-white/10 bg-ink-900/60 backdrop-blur-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-white/10">
-        <h3 className="text-sm font-semibold text-white">Disaster Event Timeline</h3>
-        <p className="text-xs text-ink-400 mt-0.5">Select an event to inspect before, during, and after scenarios</p>
+      <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Disaster Event Timeline</h3>
+          <p className="text-xs text-ink-400 mt-0.5">Select an event to inspect before, during, and after scenarios</p>
+        </div>
+        {activeEventId && onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            title="Dismiss active event"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-rose-500/10 hover:border-rose-500/30 text-ink-400 hover:text-rose-300 text-xs font-medium transition-all cursor-pointer group"
+          >
+            <X className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Dismiss</span>
+          </button>
+        )}
       </div>
 
       {/* Timeline */}
