@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
 from calculator import compute_recovery_index
-from weather_service import fetch_historical_weather
+from weather_service import fetch_historical_weather, fetch_weather_forecast
 from ai_briefing import generate_recovery_briefing
 from contextlib import asynccontextmanager
 from seed_events import seed_observations_for_all_events, seed_single_event, to_naive_utc
@@ -798,7 +798,28 @@ async def get_historical_weather_endpoint(
         return {"status": "success", "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+
+@app.get("/api/v1/weather/forecast", tags=["Weather"])
+async def get_weather_forecast_endpoint(
+    days: int = Query(5, ge=1, le=10),
+    latitude: float = 11.15,
+    longitude: float = 122.50,
+):
+    """
+    Fetches a 5-day weather forecast for the Panay region from Open-Meteo.
+    """
+    try:
+        data = await fetch_weather_forecast(
+            latitude=latitude,
+            longitude=longitude,
+            days=days,
+        )
+        return {"status": "success", "data": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class BriefingRequest(BaseModel):
     event_context: Optional[str] = None
 
