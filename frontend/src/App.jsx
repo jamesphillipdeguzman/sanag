@@ -72,6 +72,7 @@ function mapApiEvent(event) {
     affectedPopulation,
     description: event.description ?? 'No description available.',
     category: event.category,
+    critical_municipalities: event.critical_municipalities ?? [],
   }
 }
 
@@ -213,11 +214,15 @@ function App() {
             setRecoveryDate(payload.data[0]?.observation_date ?? null)
             return mapped
           })
-          if (payload?.event?.affected_population) {
+          if (payload?.event?.affected_population || payload?.event?.critical_municipalities) {
             setEvents((prev) =>
               prev.map((e) =>
                 e.id === activeEventId
-                  ? { ...e, affectedPopulation: payload.event.affected_population }
+                  ? {
+                      ...e,
+                      ...(payload.event.affected_population ? { affectedPopulation: payload.event.affected_population } : {}),
+                      ...(payload.event.critical_municipalities ? { critical_municipalities: payload.event.critical_municipalities } : {}),
+                    }
                   : e
               )
             )
