@@ -42,12 +42,18 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     [municipalities]
   );
   const critical = useMemo(
-    () => sorted.filter((m) => m.status === 'critical' || m.status === 'warning'),
+    () => sorted.filter((m) => m.status === 'critical' || m.status === 'warning' || m.recoveryScore < 60),
     [sorted]
   );
+  // Strict threshold filtering: only select municipalities where recovery score actually meets or exceeds 90%
   const restored = useMemo(
-    () => sorted.filter((m) => m.status === 'restored'),
-    [sorted]
+    () => [...municipalities].filter((m) => m.recoveryScore >= 90).sort((a, b) => b.recoveryScore - a.recoveryScore),
+    [municipalities]
+  );
+  // Accurately sorted descending for highest-performing tiers
+  const topPerforming = useMemo(
+    () => [...municipalities].sort((a, b) => b.recoveryScore - a.recoveryScore),
+    [municipalities]
   );
   const totalCount = municipalities.length || 1;
   const avgScore = useMemo(
@@ -77,6 +83,15 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     setIsLoading(true);
     setErrorMsg(null);
 
+    const hasRestored = restored.length > 0;
+    const benchmarkHeader = hasRestored
+      ? 'Top Benchmark Restored LGUs (>= 90%)'
+      : 'Top Performing Hubs (Sub-90% Leading Tiers)';
+    const benchmarkLGUs = hasRestored ? restored.slice(0, 3) : topPerforming.slice(0, 3);
+    const benchmarkString = benchmarkLGUs
+      .map((m) => `${m.name} (${m.province}): ${m.recoveryScore}% score`)
+      .join('; ');
+
     const contextString = `
 Disaster Incident: ${event.name} (${event.date})
 Incident Severity: ${event.severity} | Category: ${event.type}
@@ -91,10 +106,7 @@ Top Critical Outage LGUs: ${priorityLGUs
             `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
         )
         .join('; ')}
-Top Benchmark Restored LGUs: ${restored
-        .slice(0, 3)
-        .map((m) => `${m.name} (${m.province}): ${m.recoveryScore}% score`)
-        .join('; ')}
+${benchmarkHeader}: ${benchmarkString}
 `.trim();
 
     try {
@@ -111,12 +123,12 @@ Top Benchmark Restored LGUs: ${restored
       }
 
       const payload = await response.json();
-      const parsed = parseBriefingResponse(payload, event, avgScore, critical, restored, municipalities.length);
+      const parsed = parseBriefingResponse(payload, event, avgScore, critical, restored, municipalities.length, topPerforming);
       setBriefingData(parsed);
     } catch (err: any) {
       console.warn('FastAPI Gemini briefing fetch issue, using local telemetry synthesis fallback:', err?.message);
       setErrorMsg(err?.message || 'Connection error');
-      const fallback = createFallbackBriefing(event, avgScore, critical, restored, municipalities.length);
+      const fallback = createFallbackBriefing(event, avgScore, critical, restored, municipalities.length, topPerforming);
       setBriefingData(fallback);
     } finally {
       setIsLoading(false);
@@ -300,7 +312,7 @@ Top Benchmark Restored LGUs: ${restored
                         <TrendingUp className="h-4 w-4" />
                       </div>
                       <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-                        Restoration Benchmarks
+                        {restored.length > 0 ? 'Restoration Benchmarks' : 'Top Performing Hubs'}
                       </h4>
                     </div>
                     <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
@@ -311,10 +323,16 @@ Top Benchmark Restored LGUs: ${restored
                   <ul className="space-y-2.5 text-xs text-ink-200">
                     {(briefingData?.benchmarks && briefingData.benchmarks.length > 0
                       ? briefingData.benchmarks
-                      : [
-                        `Major urban corridors (Iloilo City, Kalibo, Roxas City) have attained >= 90% restoration, stabilizing key healthcare and commercial grids.`,
-                        `Island-wide recovery velocity reached ${avgScore}% baseline radiance across 93 LGUs.`,
-                      ]
+                      : (restored.length > 0
+                          ? [
+                              `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+                              `Island-wide recovery velocity reached ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
+                            ]
+                          : [
+                              `No municipalities have crossed the >= 90% restoration threshold yet. Highest-performing hubs: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+                              `Island-wide recovery average currently tracks at ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
+                            ]
+                        )
                     ).map((benchmark, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
@@ -614,7 +632,8 @@ function parseBriefingResponse(
   avgScore: number,
   critical: Municipality[],
   restored: Municipality[],
-  totalMunicipalities: number
+  totalMunicipalities: number,
+  topPerforming: Municipality[] = []
 ): ParsedBriefing {
   let rawText = '';
   let summary = '';
@@ -665,7 +684,7 @@ function parseBriefingResponse(
     } else if (lowerHeading.includes('critical') || lowerHeading.includes('alert') || lowerHeading.includes('outage') || lowerHeading.includes('vulnerab')) {
       criticalAlerts = extractBullets(body);
       hasParsedSections = true;
-    } else if (lowerHeading.includes('benchmark') || lowerHeading.includes('milestone') || lowerHeading.includes('restor')) {
+    } else if (lowerHeading.includes('benchmark') || lowerHeading.includes('milestone') || lowerHeading.includes('restor') || lowerHeading.includes('performing') || lowerHeading.includes('hub')) {
       benchmarks = extractBullets(body);
       hasParsedSections = true;
     } else if (lowerHeading.includes('recommend') || lowerHeading.includes('action') || lowerHeading.includes('next step') || lowerHeading.includes('takeaway')) {
@@ -743,12 +762,17 @@ function createFallbackBriefing(
   avgScore: number,
   critical: Municipality[],
   restored: Municipality[],
-  totalCount: number
+  totalCount: number,
+  topPerforming: Municipality[] = []
 ): ParsedBriefing {
   const criticalNames = critical.slice(0, 3).map((m) => `${m.name} (${m.province})`).join(', ');
-  const fastest = restored[0] ? `${restored[0].name} (${restored[0].province})` : 'Urban provincial centers';
 
-  const summary = `Following the ${event.name}, the island-wide municipal recovery average stands at ${avgScore}%. Satellite nightlight observations confirm that ${restored.length} of ${totalCount} municipalities have achieved near-full recovery (>= 90%). However, ${critical.length} municipalities remain in limited-power states, exhibiting persistent distribution deficits across rural coastal and highland corridors.`;
+  const hasRestored = restored.length > 0;
+  const summaryStatus = hasRestored
+    ? `Satellite nightlight observations confirm that ${restored.length} of ${totalCount} municipalities have achieved near-full recovery (>= 90%), led by ${restored[0].name} (${restored[0].recoveryScore}%).`
+    : `Satellite nightlight observations indicate that 0 of ${totalCount} municipalities have crossed the >= 90% near-full recovery threshold, with leading hubs paced by ${topPerforming[0]?.name || 'commercial centers'} (${topPerforming[0]?.recoveryScore ?? 0}%).`;
+
+  const summary = `Following the ${event.name}, the island-wide municipal recovery average stands at ${avgScore}%. ${summaryStatus} However, ${critical.length} municipalities remain in limited-power states (<60%), exhibiting persistent distribution deficits across rural coastal and highland corridors.`;
 
   const criticalAlerts = [
     `${critical.length} municipalities register critical power deficits (< 60% baseline radiance), with the heaviest outages concentrated in ${criticalNames || 'southwest Antique'}.`,
@@ -756,10 +780,15 @@ function createFallbackBriefing(
     `Vulnerable coastal healthcare facilities and water pumping stations require dedicated fuel priority for emergency gensets.`,
   ];
 
-  const benchmarks = [
-    `${fastest} has exceeded 90% restoration, demonstrating optimal cooperative response and serving as the regional restoration benchmark.`,
-    `High-voltage 138kV transmission corridors across Panay remain fully energized, with remaining deficits localized to distribution feeders.`,
-  ];
+  const benchmarks = hasRestored
+    ? [
+        `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+        `High-voltage 138kV transmission corridors across Panay remain fully energized, stabilizing regional commercial hubs at >= 90% capacity.`,
+      ]
+    : [
+        `No municipalities have crossed the >= 90% near-full recovery threshold yet. Top-performing hubs currently leading recovery: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+        `High-voltage 138kV transmission corridors across Panay remain energized, while feeder-level restoration works to elevate municipal load centers toward the 90% benchmark.`,
+      ];
 
   const recommendations = [
     `Coordinate mutual aid linemen deployments from restored cooperatives (ILECO) to assist ANTECO and CAPELCO.`,

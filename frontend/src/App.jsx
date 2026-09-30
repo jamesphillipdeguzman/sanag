@@ -42,7 +42,7 @@ function applyRecoveryScores(municipalities, records) {
     }
 
     const recoveryScore = Math.max(0, Math.min(100, Math.round(score.r_t * 100)))
-    const status = recoveryScore >= 80 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical'
+    const status = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical'
 
     return {
       ...municipality,
@@ -51,7 +51,7 @@ function applyRecoveryScores(municipalities, records) {
       baselineRadiance: score.baseline_radiance ?? municipality.baselineRadiance,
       currentRadiance: score.daily_radiance ?? municipality.currentRadiance,
       daysSinceEvent: Math.max(0, Math.round((Date.now() - new Date(score.date).getTime()) / 86400000)),
-      estimatedDaysToRecover: recoveryScore >= 80 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
+      estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
       recoveryDate: score.date,
     }
   })
@@ -273,6 +273,17 @@ function App() {
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
+  // Panay Island LGUs for Panay-focused executive summary & benchmarks by default
+  const panayMunicipalities = useMemo(() => {
+    const list = municipalities.filter(
+      (m) =>
+        ['Iloilo', 'Capiz', 'Aklan', 'Antique', 'Panay'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH06')) ||
+        (!m.province && !m.region)
+    )
+    return list.length > 0 ? list : municipalities
+  }, [municipalities])
+
   const handleDismissEvent = useCallback(() => {
     setActiveEventId(null)
     setSelectedId(null)
@@ -300,6 +311,18 @@ function App() {
     const fetchGeojson = async () => {
       if (geojsonFeaturesRef.current) {
         return geojsonFeaturesRef.current
+      }
+      try {
+        const res = await fetch('/philippines_boundaries.geojson')
+        if (res.ok) {
+          const json = await res.json()
+          if (json.features && json.features.length > 0) {
+            geojsonFeaturesRef.current = json.features
+            return json.features
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load nationwide boundaries, trying Panay fallback', err)
       }
       const res = await fetch('/panay_municipalities.geojson')
       if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
@@ -497,7 +520,7 @@ function App() {
           <EventTimeline events={events} activeEventId={activeEventId} onSelect={setActiveEventId} onDismiss={handleDismissEvent} />
         </section>
         <section className="dashboard-section">
-          {activeEvent && <AiBriefingCard event={activeEvent} municipalities={municipalities} />}
+          {activeEvent && <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />}
         </section>
       </main>
       <Footer />

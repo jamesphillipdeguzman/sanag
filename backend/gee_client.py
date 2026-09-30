@@ -2,7 +2,11 @@ import ee
 import sys
 import json
 import os
-from loader import load_panay_municipalities_geojson
+from loader import (
+    load_panay_municipalities_geojson, 
+    load_philippines_boundaries_geojson,
+    load_boundaries_geojson
+)
 
 def initialize_gee():
     """
@@ -138,10 +142,22 @@ if __name__ == "__main__":
     # 1. Initialize the connection
     initialize_gee()
 
-    # 2. Load actual Panay municipal boundaries
-    print("\n--- Loading Panay Municipal Boundaries ---")
-    panay_geojson = load_panay_municipalities_geojson()
-    panay_feature_collection = ee.FeatureCollection(panay_geojson)
+    # 2. Select Boundary Dataset (Panay Island vs Nationwide Philippines)
+    print("\n--- Boundary Collection Scope ---")
+    print("1. Panay Island (Default Center Focus, 93 Municipalities)")
+    print("2. Nationwide Philippines (All Regions / Provincial & Municipal Boundaries)")
+    scope_choice = input("Enter scope (1 or 2, default=1): ").strip()
+
+    if scope_choice == "2":
+        print("\nLoading Nationwide Philippine Boundaries...")
+        boundary_geojson = load_philippines_boundaries_geojson()
+        scope_tag = "philippines"
+    else:
+        print("\nLoading Panay Municipal Boundaries (Default Focus)...")
+        boundary_geojson = load_panay_municipalities_geojson()
+        scope_tag = "panay"
+
+    feature_collection = ee.FeatureCollection(boundary_geojson)
 
     # 3 Choose Routine (Daily VNP46A2 vs Monthly VCMSLCFG Baseline)
     print("\n--- Choosing Routine ---")
@@ -162,12 +178,12 @@ if __name__ == "__main__":
     try:
         if is_baseline: 
             print(f"\nQuerying NOAA Monthly Baseline (VCMSLCFG) using 'avg_rad' for {user_date}")
-            result = extract_zonal_radiance(panay_feature_collection, user_date, is_baseline=True)
-            routine_tag = "monthly_baseline"
+            result = extract_zonal_radiance(feature_collection, user_date, is_baseline=True)
+            routine_tag = f"{scope_tag}_monthly_baseline"
         else:
             print(f"\nQuerying NASA VIIRS VNP46A2 for {user_date}")
-            result = extract_daily_vnp46a2(panay_feature_collection, user_date)
-            routine_tag = "daily_vnp46a2"
+            result = extract_daily_vnp46a2(feature_collection, user_date)
+            routine_tag = f"{scope_tag}_daily_vnp46a2"
 
         features = result.get('features', [])
         print(f"\nSuccessfully processed {len(features)} municipal features for {user_date}!")
