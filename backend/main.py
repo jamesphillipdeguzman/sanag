@@ -3,14 +3,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import sqlite3
+import math
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Union
 from calculator import compute_recovery_index
-from weather_service import fetch_historical_weather, fetch_weather_forecast
+from weather_service import (
+    fetch_historical_weather,
+    fetch_weather_forecast,
+    get_fallback_weather_forecast,
+    get_fallback_historical_weather,
+)
 from ai_briefing import generate_recovery_briefing
 from contextlib import asynccontextmanager
 from seed_events import seed_observations_for_all_events, seed_single_event, to_naive_utc
 from gdacs_service import get_latest_philippines_disasters, EVENT_TYPE_MAP, check_viirs_data_availability
+
+logger = logging.getLogger(__name__)
 
 # --- 1. Define your lifespan startup handler ---
 @asynccontextmanager
@@ -863,46 +872,90 @@ def get_municipality_timeline(
     }
 
 
+def _parse_int_param(val: Any, default: int = 5, min_val: int = 1, max_val: int = 16) -> int:
+    try:
+        if val is None:
+            return default
+        parsed = int(val)
+        return max(min_val, min(max_val, parsed))
+    except (ValueError, TypeError):
+        return default
+
+
+def _parse_float_param(val: Any, default: float, min_val: float = -90.0, max_val: float = 90.0) -> float:
+    try:
+        if val is None:
+            return default
+        parsed = float(val)
+        if math.isnan(parsed) or math.isinf(parsed):
+            return default
+        return max(min_val, min(max_val, parsed))
+    except (ValueError, TypeError):
+        return default
+
+
 @app.get("/api/v1/weather/historical", tags=["Weather"])
 async def get_historical_weather_endpoint(
     start_date: str = "2024-01-01",
     end_date: str = "2024-01-05",
-    latitude: float = 11.15,
-    longitude: float = 122.50
+    latitude: Optional[Union[float, str]] = 11.15,
+    longitude: Optional[Union[float, str]] = 122.50
 ):
     """
     Fetches historical daily weather data from Open-Meteo for disaster correlation.
+    Gracefully falls back to high-fidelity mock data if the external API is unreachable.
     """
+    safe_lat = _parse_float_param(latitude, default=11.15, min_val=-90.0, max_val=90.0)
+    safe_lon = _parse_float_param(longitude, default=122.50, min_val=-180.0, max_val=180.0)
+
     try:
         data = await fetch_historical_weather(
-            latitude=latitude,
-            longitude=longitude,
+            latitude=safe_lat,
+            longitude=safe_lon,
             start_date=start_date,
             end_date=end_date
         )
         return {"status": "success", "data": data}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Error in historical weather endpoint: {e}")
+        fallback = get_fallback_historical_weather(
+            latitude=safe_lat,
+            longitude=safe_lon,
+            start_date=start_date,
+            end_date=end_date
+        )
+        return {"status": "success", "data": fallback, "fallback": True}
 
 
 @app.get("/api/v1/weather/forecast", tags=["Weather"])
 async def get_weather_forecast_endpoint(
-    days: int = Query(5, ge=1, le=10),
-    latitude: float = 11.15,
-    longitude: float = 122.50,
+    days: Optional[Union[int, str]] = Query(5, description="Number of forecast days (1-16)"),
+    latitude: Optional[Union[float, str]] = Query(11.15, description="Latitude centroid"),
+    longitude: Optional[Union[float, str]] = Query(122.50, description="Longitude centroid"),
 ):
     """
-    Fetches a 5-day weather forecast for the Panay region from Open-Meteo.
+    Fetches a daily weather forecast for the Panay region from Open-Meteo.
+    Gracefully falls back to high-fidelity mock data if the external API is unreachable.
     """
+    safe_days = _parse_int_param(days, default=5, min_val=1, max_val=16)
+    safe_lat = _parse_float_param(latitude, default=11.15, min_val=-90.0, max_val=90.0)
+    safe_lon = _parse_float_param(longitude, default=122.50, min_val=-180.0, max_val=180.0)
+
     try:
         data = await fetch_weather_forecast(
-            latitude=latitude,
-            longitude=longitude,
-            days=days,
+            latitude=safe_lat,
+            longitude=safe_lon,
+            days=safe_days,
         )
         return {"status": "success", "data": data}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(f"Error in weather forecast endpoint: {e}")
+        fallback = get_fallback_weather_forecast(
+            latitude=safe_lat,
+            longitude=safe_lon,
+            days=safe_days
+        )
+        return {"status": "success", "data": fallback, "fallback": True}
 
 
 class BriefingRequest(BaseModel):
