@@ -25,23 +25,23 @@ export interface AudioProfile {
 
 const PROFILES: Record<EmergencyAudioStatus, AudioProfile> = {
   critical: {
-    intervalMs: 420,
+    intervalMs: 480,
     syllables: 4,
-    volume: 0.32,
+    volume: 0.08,
     frequency: 4700,
-    label: 'Critical Outage (Max Chirping)',
+    label: 'Critical Outage (Ambient Chirping)',
   },
   warning: {
-    intervalMs: 1100,
+    intervalMs: 1200,
     syllables: 2,
-    volume: 0.15,
+    volume: 0.04,
     frequency: 4500,
-    label: 'Limited Recovery (Moderate)',
+    label: 'Limited Recovery (Soft Chirping)',
   },
   recovering: {
-    intervalMs: 2400,
+    intervalMs: 2600,
     syllables: 1,
-    volume: 0.05,
+    volume: 0.015,
     frequency: 4400,
     label: 'Substantial Recovery (Subtle)',
   },
@@ -86,9 +86,9 @@ export class AudioSpatialIndicator {
       this.bandpassFilter.frequency.setValueAtTime(4600, this.ctx.currentTime);
       this.bandpassFilter.Q.setValueAtTime(5, this.ctx.currentTime);
 
-      // Master gain node with smooth fading
+      // Master gain node with smooth fading and non-intrusive ambient ceiling
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
 
       this.bandpassFilter.connect(this.masterGain);
       this.masterGain.connect(this.ctx.destination);

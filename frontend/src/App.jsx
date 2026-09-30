@@ -18,35 +18,41 @@ function normalizeMunicipalityName(name) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-function applyRecoveryScores(municipalities, records) {
-  const latestByPcode = new Map()
-  const latestByName = new Map()
+function applyRecoveryScores(municipalities, records, startDate, endDate) {
+  const worstByPcode = new Map()
+  const worstByName = new Map()
 
   records
-    .filter((record) => record.r_t !== null && record.r_t !== undefined)
+    .filter((record) => {
+      if (record.r_t === null || record.r_t === undefined) return false
+      const recDate = record.date || record.observation_date
+      if (startDate && recDate && recDate < startDate) return false
+      if (endDate && recDate && recDate > endDate) return false
+      return true
+    })
     .forEach((record) => {
       const recDate = record.date || record.observation_date || ''
       const entry = { ...record, date: recDate }
-      if (record.pcode && record.pcode !== 'UNKNOWN') {
-        const current = latestByPcode.get(record.pcode)
-        if (!current || recDate > (current.date || current.observation_date || '')) {
-          latestByPcode.set(record.pcode, entry)
+      const rt = Number(record.r_t)
+
+      const updateWorst = (map, key) => {
+        const current = map.get(key)
+        if (!current || rt < Number(current.r_t)) {
+          map.set(key, entry)
         }
       }
+
+      if (record.pcode && record.pcode !== 'UNKNOWN') {
+        updateWorst(worstByPcode, record.pcode)
+      }
       if (record.municipality_pcode && record.municipality_pcode !== 'UNKNOWN') {
-        const current = latestByPcode.get(record.municipality_pcode)
-        if (!current || recDate > (current.date || current.observation_date || '')) {
-          latestByPcode.set(record.municipality_pcode, entry)
-        }
+        updateWorst(worstByPcode, record.municipality_pcode)
       }
       if (record.municipality_name) {
         const normName = record.municipality_name.toLowerCase().trim()
         const cleanName = normalizeMunicipalityName(record.municipality_name)
-        const current = latestByName.get(normName)
-        if (!current || recDate > (current.date || current.observation_date || '')) {
-          latestByName.set(normName, entry)
-          if (cleanName) latestByName.set(cleanName, entry)
-        }
+        updateWorst(worstByName, normName)
+        if (cleanName) updateWorst(worstByName, cleanName)
       }
     })
 
@@ -56,10 +62,10 @@ function applyRecoveryScores(municipalities, records) {
     const cleanName = normalizeMunicipalityName(municipality.name)
 
     const score =
-      (pcode ? latestByPcode.get(pcode) : null) ||
-      (municipality.id ? latestByPcode.get(municipality.id) : null) ||
-      latestByName.get(rawName) ||
-      (cleanName ? latestByName.get(cleanName) : null)
+      (pcode ? worstByPcode.get(pcode) : null) ||
+      (municipality.id ? worstByPcode.get(municipality.id) : null) ||
+      worstByName.get(rawName) ||
+      (cleanName ? worstByName.get(cleanName) : null)
 
     if (!score) {
       return {
@@ -496,10 +502,10 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!activeEventId || !recoveryEndDate) return
+    if (!activeEventId || !recoveryStartDate) return
 
     const controller = new AbortController()
-    const params = new URLSearchParams({ observation_date: recoveryEndDate })
+    const params = new URLSearchParams({ observation_date: recoveryStartDate })
     fetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) return null
@@ -513,8 +519,8 @@ function App() {
             date: item.observation_date,
           }))
           setMunicipalities((current) => {
-            const mapped = applyRecoveryScores(current, records)
-            setRecoveryDate(payload.data[0]?.observation_date ?? null)
+            const mapped = applyRecoveryScores(current, records, recoveryStartDate, recoveryEndDate)
+            setRecoveryDate(payload.data[0]?.observation_date ?? recoveryStartDate)
             return mapped
           })
         }
@@ -525,7 +531,7 @@ function App() {
         }
       })
     return () => controller.abort()
-  }, [activeEventId, recoveryEndDate])
+  }, [activeEventId, recoveryStartDate, recoveryEndDate])
 
   useEffect(() => {
     if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
@@ -550,8 +556,8 @@ function App() {
           if (maxDate) setLatestObservationDate(maxDate)
 
           // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
-          setMunicipalities((current) => applyRecoveryScores(current, payload.data))
-          setRecoveryDate(maxDate || recoveryEndDate)
+          setMunicipalities((current) => applyRecoveryScores(current, payload.data, recoveryStartDate, recoveryEndDate))
+          setRecoveryDate(recoveryStartDate)
         }
       })
       .catch((error) => {
