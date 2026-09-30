@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AiBriefingCard from './components/AiBriefingCard.tsx'
 import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
@@ -6,30 +6,38 @@ import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
-import { createMunicipalities, events as mockEvents } from './data/mockData.ts'
+import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import './App.css'
 
 function applyRecoveryScores(municipalities, records) {
   const latestByPcode = new Map()
+  const latestByName = new Map()
 
   records
     .filter((record) => record.r_t !== null && record.r_t !== undefined)
     .forEach((record) => {
-      const current = latestByPcode.get(record.pcode)
-      if (!current || record.date > current.date) latestByPcode.set(record.pcode, record)
+      if (record.pcode && record.pcode !== 'UNKNOWN') {
+        const current = latestByPcode.get(record.pcode)
+        if (!current || record.date > current.date) latestByPcode.set(record.pcode, record)
+      }
+      if (record.municipality_name) {
+        const normName = record.municipality_name.toLowerCase().trim()
+        const current = latestByName.get(normName)
+        if (!current || record.date > current.date) latestByName.set(normName, record)
+      }
     })
 
   return municipalities.map((municipality) => {
-    const score = latestByPcode.get(municipality.id)
+    const score = latestByPcode.get(municipality.id) || latestByName.get(municipality.name.toLowerCase().trim())
     if (!score) {
       return {
         ...municipality,
-        recoveryScore: 0,
-        status: 'critical',
-        baselineRadiance: 0,
-        currentRadiance: 0,
-        estimatedDaysToRecover: 0,
-        recoveryDate: null,
+        recoveryScore: municipality.recoveryScore ?? 50,
+        status: municipality.status ?? 'recovering',
+        baselineRadiance: municipality.baselineRadiance ?? 0,
+        currentRadiance: municipality.currentRadiance ?? 0,
+        estimatedDaysToRecover: municipality.estimatedDaysToRecover ?? 0,
+        recoveryDate: municipality.recoveryDate ?? null,
       }
     }
 
@@ -91,12 +99,15 @@ function daysSince(dateString) {
 
 function App() {
   const [municipalities, setMunicipalities] = useState([])
-  const [events, setEvents] = useState([])
+  const [events, setEvents] = useState(mockEvents)
   const [selectedId, setSelectedId] = useState(null)
-  const [activeEventId, setActiveEventId] = useState(null)
+  const [activeEventId, setActiveEventId] = useState(PRIMARY_EVENT_ID)
   const [eventsError, setEventsError] = useState('')
   const [recoveryDate, setRecoveryDate] = useState(null)
   const [recoveryRecords, setRecoveryRecords] = useState([])
+  const [isMapLoading, setIsMapLoading] = useState(true)
+
+  const geojsonFeaturesRef = useRef(null)
 
   const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
 
@@ -141,29 +152,79 @@ function App() {
     )
   }, [activeEventId, activeAffectedPopulation])
 
+  // Coordinated loader for GeoJSON boundaries and active event radiance
   useEffect(() => {
-    fetch('/panay_municipalities.geojson')
-      .then((response) => response.json())
-      .then((geojson) => setMunicipalities(createMunicipalities(geojson.features)))
-      .catch((error) => setEventsError(error.message))
-  }, [])
+    if (!activeEventId) return
 
-  useEffect(() => {
-    if (municipalities.length === 0) return
+    let cancelled = false
+    setIsMapLoading(true)
 
-    fetch('/api/v1/recovery-scores').then((response) => {
-        if (!response.ok) throw new Error(`Recovery data request failed: ${response.status}`)
-        return response.json()
+    const fetchGeojson = async () => {
+      if (geojsonFeaturesRef.current) {
+        return geojsonFeaturesRef.current
+      }
+      const res = await fetch('/panay_municipalities.geojson')
+      if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
+      const json = await res.json()
+      geojsonFeaturesRef.current = json.features
+      return json.features
+    }
+
+    const fetchRadiance = async () => {
+      try {
+        const res = await fetch(`/api/v1/events/${activeEventId}/radiance`)
+        if (!res.ok) return null
+        return await res.json()
+      } catch {
+        return null
+      }
+    }
+
+    Promise.all([fetchGeojson(), fetchRadiance()])
+      .then(([features, radiancePayload]) => {
+        if (cancelled) return
+
+        const baseMunicipalities = createMunicipalities(features)
+
+        if (radiancePayload?.data && radiancePayload.data.length > 0) {
+          const records = radiancePayload.data.map((item) => ({
+            ...item,
+            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+            date: item.observation_date,
+          }))
+
+          const mapped = applyRecoveryScores(baseMunicipalities, records)
+          setMunicipalities(mapped)
+          setRecoveryDate(radiancePayload.data[0]?.observation_date ?? null)
+
+          if (radiancePayload?.event?.affected_population || radiancePayload?.event?.critical_municipalities) {
+            setEvents((prev) =>
+              prev.map((e) =>
+                e.id === activeEventId
+                  ? {
+                      ...e,
+                      ...(radiancePayload.event.affected_population ? { affectedPopulation: radiancePayload.event.affected_population } : {}),
+                      ...(radiancePayload.event.critical_municipalities ? { critical_municipalities: radiancePayload.event.critical_municipalities } : {}),
+                    }
+                  : e
+              )
+            )
+          }
+        } else {
+          setMunicipalities(baseMunicipalities)
+        }
+        setIsMapLoading(false)
       })
-      .then((recoveryPayload) => {
-        setMunicipalities((current) => {
-          const mappedMunicipalities = applyRecoveryScores(current, recoveryPayload.data)
-          setRecoveryDate(mappedMunicipalities.find((municipality) => municipality.recoveryDate)?.recoveryDate ?? null)
-          return mappedMunicipalities
-        })
+      .catch((error) => {
+        if (cancelled) return
+        setEventsError(error.message)
+        setIsMapLoading(false)
       })
-      .catch((error) => setEventsError(error.message))
-  }, [municipalities.length])
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeEventId])
 
   useEffect(() => {
     if (!activeEvent?.date) return
@@ -185,54 +246,15 @@ function App() {
         const apiEvents = rawEvents.filter((evt, idx, arr) =>
           idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
         )
-        setEvents(apiEvents)
-        // Default to the flagship Panay blackout event which has verified VIIRS satellite data
-        const defaultEvent = apiEvents.find((e) => e.id === 'panay-blackout-2024') ?? apiEvents[0]
-        setActiveEventId(defaultEvent?.id ?? null)
+        if (apiEvents.length > 0) {
+          setEvents(apiEvents)
+          // Default to the flagship Panay blackout event which has verified VIIRS satellite data
+          const defaultEvent = apiEvents.find((e) => e.id === PRIMARY_EVENT_ID) ?? apiEvents[0]
+          setActiveEventId((prev) => prev || defaultEvent?.id || null)
+        }
       })
       .catch((error) => setEventsError(error.message))
   }, [])
-
-  useEffect(() => {
-    if (!activeEventId) return
-
-    // Connect event-specific spatial radiance to update map layers with actual post-event observations
-    fetch(`/api/v1/events/${activeEventId}/radiance`)
-      .then((response) => {
-        if (!response.ok) return null
-        return response.json()
-      })
-      .then((payload) => {
-        if (payload?.data && payload.data.length > 0) {
-          const records = payload.data.map((item) => ({
-            ...item,
-            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
-            date: item.observation_date,
-          }))
-          setMunicipalities((current) => {
-            const mapped = applyRecoveryScores(current, records)
-            setRecoveryDate(payload.data[0]?.observation_date ?? null)
-            return mapped
-          })
-          if (payload?.event?.affected_population || payload?.event?.critical_municipalities) {
-            setEvents((prev) =>
-              prev.map((e) =>
-                e.id === activeEventId
-                  ? {
-                      ...e,
-                      ...(payload.event.affected_population ? { affectedPopulation: payload.event.affected_population } : {}),
-                      ...(payload.event.critical_municipalities ? { critical_municipalities: payload.event.critical_municipalities } : {}),
-                    }
-                  : e
-              )
-            )
-          }
-        }
-      })
-      .catch(() => {
-        // Fall back gracefully if spatial data is not available for this event
-      })
-  }, [activeEventId])
 
   useEffect(() => {
     if (!activeEvent?.date) return
@@ -261,6 +283,7 @@ function App() {
           selectedId={selectedId}
           onSelectMunicipality={selectMunicipality}
           recoveryDate={recoveryDate}
+          isMapLoading={isMapLoading}
         />
       )}
       {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}

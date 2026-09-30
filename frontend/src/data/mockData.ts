@@ -25,7 +25,19 @@ type Municipality = {
   area: number;
 };
 
+export const PRIMARY_EVENT_ID = 'panay-blackout-2024';
+
 export const events: DisasterEvent[] = [
+  {
+    id: 'panay-blackout-2024',
+    name: 'Panay Island Grid Collapse',
+    date: '2024-01-02',
+    endDate: '2024-01-08',
+    severity: 'Severe',
+    type: 'blackout',
+    affectedPopulation: 4500000,
+    description: 'Major transmission line trips causing complete island-wide blackout across Panay and Guimaras.',
+  },
   {
     id: 'haiyan', name: 'Typhoon Haiyan Aftermath', date: 'Nov 8, 2013', endDate: 'Nov 15, 2013',
     severity: 'Severe', type: 'typhoon', affectedPopulation: 420000,

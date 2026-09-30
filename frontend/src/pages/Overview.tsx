@@ -12,6 +12,7 @@ interface OverviewProps {
   selectedId: string | null;
   onSelectMunicipality: (id: string) => void;
   recoveryDate?: string | null;
+  isMapLoading?: boolean;
 }
 
 export default function Overview({
@@ -22,6 +23,7 @@ export default function Overview({
   selectedId,
   onSelectMunicipality,
   recoveryDate,
+  isMapLoading = false,
 }: OverviewProps) {
   const avgRecovery = municipalities.length > 0
     ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
@@ -204,6 +206,7 @@ export default function Overview({
             selectedId={selectedId}
             onSelect={onSelectMunicipality}
             recoveryDate={recoveryDate}
+            isLoading={isMapLoading}
           />
         </section>
       </div>
