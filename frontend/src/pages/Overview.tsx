@@ -306,15 +306,15 @@ function StatCard({
   badge: string;
 }) {
   return (
-    <div className="rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-slate-200 dark:border-white/10 bg-white/95 dark:glass flex flex-col justify-between min-w-[85px] sm:min-w-[105px] shadow-sm dark:shadow-none transition-colors">
+    <div className="rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 text-gray-900 dark:text-white backdrop-blur-md flex flex-col justify-between min-w-[85px] sm:min-w-[105px] shadow-sm dark:shadow-none transition-colors">
       <div className={`flex items-center gap-1.5 mb-1 ${accent}`}>
         {icon}
-        <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider truncate">
+        <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-ink-400 uppercase tracking-wider truncate">
           {label}
         </span>
       </div>
-      <p className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black text-slate-900 dark:text-white tracking-tight truncate">{value}</p>
-      <span className="text-[10px] text-slate-500 dark:text-ink-400 mt-0.5 truncate">{badge}</span>
+      <p className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black text-gray-900 dark:text-white tracking-tight truncate">{value}</p>
+      <span className="text-[10px] text-gray-500 dark:text-ink-400 mt-0.5 truncate">{badge}</span>
     </div>
   );
 }

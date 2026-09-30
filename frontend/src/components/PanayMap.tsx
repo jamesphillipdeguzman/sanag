@@ -342,11 +342,10 @@ export default function PanayMap({
                 <button
                   type="button"
                   onClick={() => setShowGdacsMarkers(!showGdacsMarkers)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                    showGdacsMarkers
-                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
-                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
-                  }`}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${showGdacsMarkers
+                    ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                   title="Toggle live GDACS hazard epicenter markers on map"
                 >
                   <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-500 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
@@ -358,11 +357,10 @@ export default function PanayMap({
                 type="button"
                 id="audio-spatial-indicator-toggle"
                 onClick={() => toggleAudio()}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  isAudioEnabled
-                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${isAudioEnabled
+                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 title={
                   isAudioEnabled
                     ? isMapAudioPlaying
@@ -430,34 +428,34 @@ export default function PanayMap({
 
                 {/* Hover tooltip */}
                 {hovered && !selected && (
-                  <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl">
+                  <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/90 backdrop-blur-md">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <div
                           className="h-2.5 w-2.5 rounded-full"
                           style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
                         />
-                        <span className="text-sm font-semibold text-white">{hovered.name}</span>
-                        <span className="text-xs text-ink-400">{hovered.province}</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
+                        <span className="text-xs text-gray-500 dark:text-ink-400">{hovered.province}</span>
                       </div>
-                      <span className="text-[10px] font-semibold text-rose-300 bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-500/30">
+                      <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
                         #{hovered.resilienceRank ?? hovered.rank ?? (resilienceRankMap.get(hovered.id) || 1)} Lowest
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs">
-                      <span className="text-ink-300">
-                        Recovery: <span className="font-semibold text-white">{hovered.recoveryScore}%</span>
+                      <span className="text-gray-600 dark:text-ink-300">
+                        Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore}%</span>
                       </span>
-                      <span className="text-ink-300">
+                      <span className="text-gray-600 dark:text-ink-300">
                         Status: <span style={{ color: getRecoveryStatusColor(hovered.status) }}>
                           {statusLabels[hovered.status]}
                         </span>
                       </span>
                     </div>
-                    <p className="text-[11px] text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
+                    <p className="text-[11px] text-gray-500 dark:text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
                     {isAudioEnabled && (
-                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-300/90 mt-1.5 pt-1.5 border-t border-white/5">
-                        <Volume2 className={`h-3 w-3 text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
+                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-300/90 mt-1.5 pt-1.5 border-t border-gray-200 dark:border-white/5">
+                        <Volume2 className={`h-3 w-3 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
                         <span>Spatial Audio: {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}</span>
                       </div>
                     )}
@@ -468,7 +466,7 @@ export default function PanayMap({
           </div>
 
           {/* Scale bar */}
-          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-t border-white/10 bg-ink-950/40">
+          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-t border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-ink-900/80 text-gray-700 dark:text-gray-300 transition-colors">
             <div className="flex items-center gap-2">
               <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden">
                 <div className="flex-1 bg-rose-500" />
@@ -476,9 +474,9 @@ export default function PanayMap({
                 <div className="flex-1 bg-ocean-400" />
                 <div className="flex-1 bg-emerald-500" />
               </div>
-              <span className="text-[11px] text-ink-400">Recovery Score (0–100)</span>
+              <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">Recovery Score (0–100)</span>
             </div>
-            <span className="text-[11px] text-ink-400 hidden sm:inline">
+            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">
               Projection model: VIIRS-DNB vs Pre-event Baseline
             </span>
           </div>
@@ -521,15 +519,14 @@ export default function PanayMap({
                     <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
                     <span>Spatial Audio Profile</span>
                   </span>
-                  <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${
-                    liveAudioStatus === 'critical'
-                      ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-                      : liveAudioStatus === 'warning'
+                  <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${liveAudioStatus === 'critical'
+                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+                    : liveAudioStatus === 'warning'
                       ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
                       : liveAudioStatus === 'recovering'
-                      ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
-                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                  }`}>
+                        ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
+                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                    }`}>
                     {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
                   </span>
                 </div>
@@ -724,6 +721,15 @@ function isMobileOrTouchDevice(): boolean {
   );
 }
 
+function getBaseTileUrl(isLightMode: boolean): string {
+  const apiKey = (import.meta.env.VITE_CARTO_API_KEY as string | undefined)?.trim();
+  const queryParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
+
+  return isLightMode
+    ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png${queryParam}`
+    : `https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png${queryParam}`;
+}
+
 function LeafletMap({
   municipalities,
   selectedId,
@@ -784,8 +790,8 @@ function LeafletMap({
     onMapHoverChangeRef.current = onMapHoverChange;
   }, [onMapHoverChange]);
 
-  // Default mobile view to locked so users can scroll past without getting trapped
-  const [isLocked, setIsLocked] = useState<boolean>(() => isMobileOrTouchDevice());
+  // Default map view to locked on load so users must explicitly click/tap to interact
+  const [isLocked, setIsLocked] = useState<boolean>(true);
 
   // Asynchronous lazy-loader for regional GeoJSON chunks with in-memory caching
   const fetchRegionChunk = async (key: string): Promise<GeoJSON.FeatureCollection | null> => {
@@ -1030,7 +1036,7 @@ function LeafletMap({
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
-    const initialLocked = isMobileOrTouchDevice();
+    const initialLocked = true;
     const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 10 });
     canvasRendererRef.current = canvasRenderer;
 
@@ -1051,12 +1057,10 @@ function LeafletMap({
     defaultBoundsRef.current = PANAY_BOUNDS;
 
     // Initialize CartoDB base tile layer based on active theme
-    const initialTileUrl = isLightRef.current
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const initialTileUrl = getBaseTileUrl(isLightRef.current);
     const initialTileLayer = L.tileLayer(initialTileUrl, {
       subdomains: 'abcd',
-      maxZoom: 19,
+      maxZoom: 20,
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     });
@@ -1140,13 +1144,11 @@ function LeafletMap({
       tileLayerRef.current = null;
     }
 
-    const tileUrl = isLight
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const tileUrl = getBaseTileUrl(isLight);
 
     const newTileLayer = L.tileLayer(tileUrl, {
       subdomains: 'abcd',
-      maxZoom: 19,
+      maxZoom: 20,
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
     });

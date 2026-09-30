@@ -114,25 +114,25 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
                 icon={<Activity className="h-4 w-4" />}
                 label="Avg Recovery"
                 value={`${avgRecovery}%`}
-                accent="text-ocean-300"
+                accent="text-ocean-500 dark:text-ocean-300"
               />
               <StatCard
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="Restored"
                 value={`${restoredCount}/${municipalities.length}`}
-                accent="text-emerald-300"
+                accent="text-emerald-500 dark:text-emerald-300"
               />
               <StatCard
                 icon={<AlertTriangle className="h-4 w-4" />}
                 label="Critical"
                 value={criticalCount.toString()}
-                accent="text-rose-300"
+                accent="text-rose-500 dark:text-rose-300"
               />
               <StatCard
                 icon={<Users className="h-4 w-4" />}
                 label="Affected Pop"
                 value={formatAffectedPopulation(affectedPopulation)}
-                accent="text-amber-300"
+                accent="text-amber-500 dark:text-amber-300"
               />
             </div>
           </div>
@@ -146,12 +146,12 @@ function StatCard({
   icon, label, value, accent,
 }: { icon: React.ReactNode; label: string; value: string; accent: string }) {
   return (
-    <div className="glass rounded-xl p-4 card-hover">
+    <div className="rounded-xl p-4 card-hover border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 text-gray-900 dark:text-white backdrop-blur-md transition-colors">
       <div className={`flex items-center gap-1.5 mb-2 ${accent}`}>
         {icon}
-        <span className="text-[11px] font-medium text-ink-400 uppercase tracking-wider">{label}</span>
+        <span className="text-[11px] font-medium text-gray-500 dark:text-ink-400 uppercase tracking-wider">{label}</span>
       </div>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
     </div>
   );
 }
