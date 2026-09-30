@@ -112,8 +112,10 @@ function App() {
   const [activeEventId, setActiveEventId] = useState(PRIMARY_EVENT_ID)
   const [eventsError, setEventsError] = useState('')
   const [recoveryDate, setRecoveryDate] = useState(null)
+  const [latestObservationDate, setLatestObservationDate] = useState(null)
   const [recoveryRecords, setRecoveryRecords] = useState([])
   const [isMapLoading, setIsMapLoading] = useState(true)
+  const [recoveryDateRange, setRecoveryDateRange] = useState(null)
 
   // GDACS live feeds & simulation state
   const [gdacsAlerts, setGdacsAlerts] = useState([])
@@ -195,7 +197,6 @@ function App() {
           window_days: 14,
         }),
       })
-
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
         throw new Error(errData.detail || `Failed to import event: ${res.status}`)
@@ -271,6 +272,14 @@ function App() {
       affectedPopulation: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
     }
   }, [baseActiveEvent, activeAffectedPopulation])
+
+  const hasRecoveryDateRange = recoveryDateRange?.eventId === activeEvent?.id
+  const recoveryStartDate = activeEvent?.date
+    ? hasRecoveryDateRange ? recoveryDateRange.startDate : activeEvent.date
+    : ''
+  const recoveryEndDate = activeEvent?.date
+    ? hasRecoveryDateRange ? recoveryDateRange.endDate : latestObservationDate ?? addDays(activeEvent.date, 30)
+    : ''
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
@@ -428,19 +437,54 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!activeEvent?.date) return
+    if (!activeEventId || !recoveryEndDate) return
 
-    // Query from 3 days before event onset to 30 days after to capture pre-event baseline and drop
-    const startDate = addDays(activeEvent.date, -3)
-    const endDate = addDays(activeEvent.date, 30)
-    fetch(`/api/v1/recovery-scores?start_date=${startDate}&end_date=${endDate}`)
+    const controller = new AbortController()
+    const params = new URLSearchParams({ observation_date: recoveryEndDate })
+    fetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) return null
+        return response.json()
+      })
+      .then((payload) => {
+        if (payload?.data && payload.data.length > 0) {
+          const records = payload.data.map((item) => ({
+            ...item,
+            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+            date: item.observation_date,
+          }))
+          setMunicipalities((current) => {
+            const mapped = applyRecoveryScores(current, records)
+            setRecoveryDate(payload.data[0]?.observation_date ?? null)
+            return mapped
+          })
+        }
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          // Fall back gracefully if spatial data is not available for this event
+        }
+      })
+    return () => controller.abort()
+  }, [activeEventId, recoveryEndDate])
+
+  useEffect(() => {
+    if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ start_date: recoveryStartDate, end_date: recoveryEndDate })
+    fetch(`/api/v1/recovery-scores?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
         return response.json()
       })
       .then((payload) => setRecoveryRecords(payload.data))
-      .catch((error) => setEventsError(error.message))
-  }, [activeEvent?.date])
+      .catch((error) => {
+        if (error.name !== 'AbortError') setEventsError(error.message)
+      })
+
+    return () => controller.abort()
+  }, [activeEvent?.date, recoveryEndDate, recoveryStartDate])
 
   return (
     <div id="top">
@@ -522,6 +566,12 @@ function App() {
             records={recoveryRecords}
             eventDate={activeEvent?.date}
             onSelect={selectMunicipality}
+            startDate={recoveryStartDate}
+            endDate={recoveryEndDate}
+            onDateRangeChange={(startDate, endDate) => {
+              if (!activeEvent) return
+              setRecoveryDateRange({ eventId: activeEvent.id, startDate, endDate })
+            }}
           />
         </section>
         <section className="dashboard-section">

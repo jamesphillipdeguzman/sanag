@@ -25,17 +25,17 @@ def get_fallback_weather_forecast(
     Matches Open-Meteo v1 forecast JSON response format.
     """
     try:
-        safe_days = max(1, min(16, int(days)))
+        safe_days = max(1, min(16, days))
     except (ValueError, TypeError):
         safe_days = 5
 
     try:
-        safe_lat = round(float(latitude), 4)
+        safe_lat = round(latitude, 4)
     except (ValueError, TypeError):
         safe_lat = DEFAULT_LAT
 
     try:
-        safe_lon = round(float(longitude), 4)
+        safe_lon = round(longitude, 4)
     except (ValueError, TypeError):
         safe_lon = DEFAULT_LON
 
@@ -67,11 +67,11 @@ def get_fallback_weather_forecast(
         day_date = (today + timedelta(days=i)).isoformat()
         pattern = base_pattern[i % len(base_pattern)]
         times.append(day_date)
-        weather_codes.append(pattern["code"])
+        weather_codes.append(int(pattern["code"]))
         temp_maxs.append(pattern["t_max"])
         temp_mins.append(pattern["t_min"])
         precip_sums.append(pattern["rain"])
-        precip_probs.append(pattern["pop"])
+        precip_probs.append(int(pattern["pop"]))
         wind_speeds.append(pattern["wind"])
 
     return {
@@ -144,8 +144,8 @@ def get_fallback_historical_weather(
         wind_speeds.append(round(14.0 + (i % 4) * 2.2, 1))
 
     return {
-        "latitude": round(float(latitude), 4),
-        "longitude": round(float(longitude), 4),
+        "latitude": round(latitude, 4),
+        "longitude": round(longitude, 4),
         "generationtime_ms": 0.15,
         "utc_offset_seconds": 28800,
         "timezone": "Asia/Manila",
@@ -176,12 +176,12 @@ async def fetch_historical_weather(
     end_date: str = "2024-01-05"
 ) -> Dict[str, Any]:
     try:
-        safe_lat = float(latitude)
+        safe_lat = latitude
     except (ValueError, TypeError):
         safe_lat = DEFAULT_LAT
 
     try:
-        safe_lon = float(longitude)
+        safe_lon = longitude
     except (ValueError, TypeError):
         safe_lon = DEFAULT_LON
 
@@ -218,17 +218,17 @@ async def fetch_weather_forecast(
     days: int = 5,
 ) -> Dict[str, Any]:
     try:
-        safe_days = max(1, min(16, int(days)))
+        safe_days = max(1, min(16, days))
     except (ValueError, TypeError):
         safe_days = 5
 
     try:
-        safe_lat = float(latitude)
+        safe_lat = latitude
     except (ValueError, TypeError):
         safe_lat = DEFAULT_LAT
 
     try:
-        safe_lon = float(longitude)
+        safe_lon = longitude
     except (ValueError, TypeError):
         safe_lon = DEFAULT_LON
 
