@@ -714,7 +714,9 @@ function App() {
         <section className="dashboard-section">
           {activeEvent && <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />}
         </section>
-        <WeatherForecast />
+        <section id="weather" className="dashboard-section">
+          <WeatherForecast />
+        </section>
       </main>
       <Footer />
     </div>
