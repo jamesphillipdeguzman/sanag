@@ -67,16 +67,16 @@ Island-wide Average Recovery Score: ${avgScore}%
 Municipalities >= 90% Restored: ${restored.length}
 Municipalities in Critical/Warning State (<60%): ${critical.length}
 Top Critical Outage LGUs: ${critical
-      .slice(0, 5)
-      .map(
-        (m) =>
-          `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
-      )
-      .join('; ')}
+        .slice(0, 5)
+        .map(
+          (m) =>
+            `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
+        )
+        .join('; ')}
 Top Benchmark Restored LGUs: ${restored
-      .slice(0, 3)
-      .map((m) => `${m.name} (${m.province}): ${m.recoveryScore}% score`)
-      .join('; ')}
+        .slice(0, 3)
+        .map((m) => `${m.name} (${m.province}): ${m.recoveryScore}% score`)
+        .join('; ')}
 `.trim();
 
     try {
@@ -123,7 +123,7 @@ Top Benchmark Restored LGUs: ${restored
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-white">AI Situational Briefing</h3>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ocean-500/10 text-ocean-300 border border-ocean-500/25">
-                {isLoading ? 'Synthesizing...' : briefingData?.source === 'gemini' ? 'Gemini 2.5 Flash' : 'Satellite Telemetry'}
+                {isLoading ? 'Synthesizing...' : briefingData?.source === 'gemini' ? 'Gemini 3.8 Flash' : 'Satellite Telemetry'}
               </span>
             </div>
             <p className="text-xs text-ink-400 mt-0.5">
@@ -140,11 +140,10 @@ Top Benchmark Restored LGUs: ${restored
               <button
                 type="button"
                 onClick={() => setActiveTab('structured')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
-                  activeTab === 'structured'
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'structured'
                     ? 'bg-ocean-500/20 text-ocean-200 shadow-sm border border-ocean-500/30'
                     : 'text-ink-400 hover:text-white'
-                }`}
+                  }`}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Structured View</span>
@@ -153,11 +152,10 @@ Top Benchmark Restored LGUs: ${restored
               <button
                 type="button"
                 onClick={() => setActiveTab('markdown')}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
-                  activeTab === 'markdown'
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'markdown'
                     ? 'bg-ocean-500/20 text-ocean-200 shadow-sm border border-ocean-500/30'
                     : 'text-ink-400 hover:text-white'
-                }`}
+                  }`}
               >
                 <FileText className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Full Markdown</span>
@@ -262,9 +260,9 @@ Top Benchmark Restored LGUs: ${restored
                     {(briefingData?.criticalAlerts && briefingData.criticalAlerts.length > 0
                       ? briefingData.criticalAlerts
                       : [
-                          `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
-                          `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
-                        ]
+                        `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
+                        `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
+                      ]
                     ).map((alert, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-400 mt-1.5 shrink-0" />
@@ -296,9 +294,9 @@ Top Benchmark Restored LGUs: ${restored
                     {(briefingData?.benchmarks && briefingData.benchmarks.length > 0
                       ? briefingData.benchmarks
                       : [
-                          `Major urban corridors (Iloilo City, Kalibo, Roxas City) have attained >= 90% restoration, stabilizing key healthcare and commercial grids.`,
-                          `Island-wide recovery velocity reached ${avgScore}% baseline radiance across 93 LGUs.`,
-                        ]
+                        `Major urban corridors (Iloilo City, Kalibo, Roxas City) have attained >= 90% restoration, stabilizing key healthcare and commercial grids.`,
+                        `Island-wide recovery velocity reached ${avgScore}% baseline radiance across 93 LGUs.`,
+                      ]
                     ).map((benchmark, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
@@ -330,10 +328,10 @@ Top Benchmark Restored LGUs: ${restored
                     {(briefingData?.recommendations && briefingData.recommendations.length > 0
                       ? briefingData.recommendations
                       : [
-                          'Deploy mobile generators to unpowered municipal water pumping and district hospital stations.',
-                          'Coordinate Task Force Kapatid lineman crews from ILECO I & II to reinforce ANTECO distribution lines.',
-                          'Utilize daily VIIRS nightlight radiance passes to verify feeder re-energization reports.',
-                        ]
+                        'Deploy mobile generators to unpowered municipal water pumping and district hospital stations.',
+                        'Coordinate Task Force Kapatid lineman crews from ILECO I & II to reinforce ANTECO distribution lines.',
+                        'Utilize daily VIIRS nightlight radiance passes to verify feeder re-energization reports.',
+                      ]
                     ).map((rec, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-ocean-400 mt-1.5 shrink-0" />

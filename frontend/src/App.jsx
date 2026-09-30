@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import AiBriefingCard from './components/AiBriefingCard.tsx'
 import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
@@ -6,7 +6,7 @@ import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
-import { createMunicipalities } from './data/mockData.ts'
+import { createMunicipalities, events as mockEvents } from './data/mockData.ts'
 import './App.css'
 
 function applyRecoveryScores(municipalities, records) {
@@ -50,12 +50,17 @@ function applyRecoveryScores(municipalities, records) {
 }
 
 function mapApiEvent(event) {
-  const category = event.category.toLowerCase()
+  const category = (event.category || '').toLowerCase()
   const type = category.includes('flood')
     ? 'flood'
     : category.includes('typhoon')
       ? 'typhoon'
       : 'blackout'
+
+  const mockMatch = mockEvents.find((e) => e.id === String(event.id) || e.name === event.name)
+  const affectedPopulation = Number(
+    event.affected_population ?? event.affectedPopulation ?? mockMatch?.affectedPopulation ?? 0
+  )
 
   return {
     id: String(event.id),
@@ -64,7 +69,7 @@ function mapApiEvent(event) {
     endDate: event.date,
     severity: type === 'blackout' ? 'Severe' : type === 'typhoon' ? 'High' : 'Moderate',
     type,
-    affectedPopulation: 0,
+    affectedPopulation,
     description: event.description ?? 'No description available.',
     category: event.category,
   }
@@ -91,8 +96,49 @@ function App() {
   const [eventsError, setEventsError] = useState('')
   const [recoveryDate, setRecoveryDate] = useState(null)
   const [recoveryRecords, setRecoveryRecords] = useState([])
-  const activeEvent = events.find((event) => event.id === activeEventId) ?? events[0]
+
+  const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
+
+  // Calculate dynamic affected population for active event based on current municipality recovery statuses
+  const activeAffectedPopulation = useMemo(() => {
+    if (!municipalities || municipalities.length === 0) {
+      return baseActiveEvent?.affectedPopulation || 0
+    }
+    // Sum population of municipalities flagged as affected or under critical thresholds (<60% or critical/warning)
+    const affectedLGUs = municipalities.filter(
+      (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
+    )
+    if (affectedLGUs.length > 0) {
+      return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0)
+    }
+    const unrestored = municipalities.filter((m) => m.status !== 'restored')
+    if (unrestored.length > 0) {
+      return unrestored.reduce((sum, m) => sum + (m.population || 0), 0)
+    }
+    return baseActiveEvent?.affectedPopulation || 0
+  }, [municipalities, baseActiveEvent?.affectedPopulation])
+
+  const activeEvent = useMemo(() => {
+    if (!baseActiveEvent) return null
+    return {
+      ...baseActiveEvent,
+      affectedPopulation: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
+    }
+  }, [baseActiveEvent, activeAffectedPopulation])
+
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
+
+  // Dynamically keep events list updated with current affected population calculation
+  useEffect(() => {
+    if (!activeEventId || activeAffectedPopulation === 0) return
+    setEvents((prevEvents) =>
+      prevEvents.map((evt) =>
+        evt.id === activeEventId && evt.affectedPopulation !== activeAffectedPopulation
+          ? { ...evt, affectedPopulation: activeAffectedPopulation }
+          : evt
+      )
+    )
+  }, [activeEventId, activeAffectedPopulation])
 
   useEffect(() => {
     fetch('/panay_municipalities.geojson')
@@ -167,6 +213,15 @@ function App() {
             setRecoveryDate(payload.data[0]?.observation_date ?? null)
             return mapped
           })
+          if (payload?.event?.affected_population) {
+            setEvents((prev) =>
+              prev.map((e) =>
+                e.id === activeEventId
+                  ? { ...e, affectedPopulation: payload.event.affected_population }
+                  : e
+              )
+            )
+          }
         }
       })
       .catch(() => {

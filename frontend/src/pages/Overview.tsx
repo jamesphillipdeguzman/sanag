@@ -1,6 +1,7 @@
-import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Wind, Zap } from 'lucide-react';
+import { useMemo } from 'react';
+import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Users, Wind, Zap } from 'lucide-react';
 import type { Municipality, DisasterEvent } from '@/types';
-import { getSeverityColor } from '@/data/mockData';
+import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 import PanayMap from '@/components/PanayMap';
 
 interface OverviewProps {
@@ -27,6 +28,21 @@ export default function Overview({
     : 0;
   const restoredCount = municipalities.filter((m) => m.status === 'restored').length;
   const criticalCount = municipalities.filter((m) => m.status === 'critical').length;
+
+  // Dynamically compute the affected population for the selected event based on current LGU statuses
+  const affectedPopulation = useMemo(() => {
+    const affectedLGUs = municipalities.filter(
+      (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
+    );
+    if (affectedLGUs.length > 0) {
+      return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0);
+    }
+    const unrestored = municipalities.filter((m) => m.status !== 'restored');
+    if (unrestored.length > 0) {
+      return unrestored.reduce((sum, m) => sum + (m.population || 0), 0);
+    }
+    return activeEvent.affectedPopulation || 0;
+  }, [municipalities, activeEvent.affectedPopulation]);
 
   const getEventIcon = (event: DisasterEvent) => {
     const type = event.type?.toLowerCase() || '';
@@ -72,7 +88,7 @@ export default function Overview({
           </div>
 
           {/* Header right: Summary Metrics Cluster */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3 shrink-0">
             <StatCard
               icon={<Activity className="h-4 w-4" />}
               label="Avg Recovery"
@@ -93,6 +109,13 @@ export default function Overview({
               value={criticalCount.toString()}
               accent="text-rose-300"
               badge="Outages < 30%"
+            />
+            <StatCard
+              icon={<Users className="h-4 w-4" />}
+              label="Affected Pop"
+              value={formatAffectedPopulation(affectedPopulation)}
+              accent="text-amber-300"
+              badge="Impacted LGUs"
             />
           </div>
         </div>
@@ -154,6 +177,9 @@ export default function Overview({
                       <Calendar className="h-3 w-3 text-ink-400" />
                       {event.date}
                     </span>
+                    <span className="text-[11px] text-amber-300/90 font-medium">
+                      {formatAffectedPopulation(event.affectedPopulation)}
+                    </span>
                     <span
                       className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       style={{
@@ -199,14 +225,14 @@ function StatCard({
   badge: string;
 }) {
   return (
-    <div className="glass rounded-xl px-3.5 py-2.5 sm:px-4 sm:py-3 card-hover border border-white/10 flex flex-col justify-between min-w-[100px] sm:min-w-[120px]">
+    <div className="glass rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-white/10 flex flex-col justify-between min-w-[85px] sm:min-w-[105px]">
       <div className={`flex items-center gap-1.5 mb-1 ${accent}`}>
         {icon}
         <span className="text-[10px] sm:text-[11px] font-semibold text-ink-400 uppercase tracking-wider truncate">
           {label}
         </span>
       </div>
-      <p className="text-xl sm:text-2xl font-black text-white tracking-tight">{value}</p>
+      <p className="text-base sm:text-lg lg:text-xl xl:text-2xl font-black text-white tracking-tight truncate">{value}</p>
       <span className="text-[10px] text-ink-400 mt-0.5 truncate">{badge}</span>
     </div>
   );

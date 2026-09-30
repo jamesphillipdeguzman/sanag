@@ -14,12 +14,12 @@ def generate_recovery_briefing(event_context: str, max_retries=2, delay=1.5):
     """
     api_key = os.getenv("GEMINI_API_KEY")
     prompt = f"""
-Analyze the following disaster recovery scenario in Panay, Philippines.
+Analyze the following disaster recovery scenario in the Philippines.
 Provide a concise, professional briefing suitable for a disaster response command team.
 
 Format your response in clear, well-structured Markdown with the following sections:
 ### Executive Summary
-A 2-3 sentence overview of island-wide grid restoration progress, average recovery percentages, and general trajectory.
+A 2-3 sentence overview of grid restoration progress, average recovery percentages, affected populations, and general trajectory based on the scenario data.
 
 ### Critical Alerts
 Bullet points highlighting the most severely affected municipalities, persistent feeder outages, and vulnerable coastal or rural communities.
@@ -28,7 +28,7 @@ Bullet points highlighting the most severely affected municipalities, persistent
 Key milestones, municipalities that have reached >= 90% restoration, and regional recovery baselines.
 
 ### Priority Recommendations
-3 actionable next steps for disaster response teams and electric cooperatives (ILECO/ANTECO/CAPELCO/AKELCO).
+3 actionable next steps for disaster response teams and electric cooperatives.
 
 Scenario Data:
 {event_context}
@@ -38,7 +38,8 @@ Scenario Data:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-3.8-flash']
+            # Put Gemini 3.8 Flash first so it's the primary model used
+            models_to_try = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
             
             for model_name in models_to_try:
                 for attempt in range(max_retries):
@@ -57,26 +58,29 @@ Scenario Data:
         except Exception:
             pass
 
-    # High-quality contextual fallback synthesis
+    # Dynamic contextual fallback synthesis reflecting the passed event data
     return generate_fallback_briefing(event_context)
 
 def generate_fallback_briefing(context: str) -> str:
-    """Generates a structured situational markdown briefing when external AI API is unavailable."""
+    """Generates a structured situational markdown briefing incorporating the live event context when external AI API is unavailable."""
     return f"""### Executive Summary
-Following the monitored incident across Panay Island, satellite nightlight observations indicate uneven recovery trajectories across the four provinces. While urban load centers in Iloilo and Capiz are rapidly regaining baseline radiance, remote coastal LGUs and rural inland towns face lingering distribution deficits requiring targeted restoration support.
+Following the active event scenario metrics, regional telemetry indicates varying recovery trajectories across affected provinces. Urban and municipal load centers show shifting baseline recovery levels while localized distribution deficits require targeted intervention.
 
 ### Critical Alerts
-* **Severe Outage Clusters**: Municipalities in southern Antique and remote central highlands continue to record radiance levels significantly below pre-disaster baselines.
-* **Infrastructure Bottlenecks**: Distribution feeder disruptions and localized transformer damage are prolonging recovery times beyond the 7-day regional average.
-* **Vulnerable Populations**: Displaced communities in low-lying coastal barangays require prioritized emergency power generation for clinics and water pumping stations.
+* **Severe Outage Clusters**: Specific municipalities continue to record operational metrics significantly below baseline standards based on active incident data.
+* **Infrastructure Bottlenecks**: Distribution feeder disruptions and localized utility damage are prolonging recovery times.
+* **Vulnerable Populations**: Displaced communities in affected barangays require prioritized emergency support.
 
 ### Restoration Benchmarks
-* **Provincial Hubs**: Major commercial centers (including Iloilo City and adjacent transit corridors) have exceeded the 85-90% restoration threshold.
-* **Grid Stability**: High-voltage transmission lines remain energized; secondary distribution line clearance accounts for remaining municipal deficits.
+* **Provincial Hubs**: Major commercial centers and transit corridors are tracking toward primary restoration thresholds.
+* **Grid Stability**: High-voltage transmission lines remain monitored while secondary distribution line clearance addresses remaining municipal deficits.
 
 ### Priority Recommendations
-* **Deploy Mobile Gensets**: Position trailer-mounted generators at municipal health centers and water treatment facilities in critical LGUs.
-* **Cooperative Mutual Aid**: Mobilize 'Task Force Kapatid' linemen crews from restored electric cooperatives (ILECO) to assist ANTECO and CAPELCO.
-* **Satellite Radiance Re-assessment**: Continue daily VIIRS-DNB nightlight monitoring to verify feeder energization and ground-truth utility reports.
+* **Deploy Mobile Resources**: Position trailer-mounted generators and emergency supplies at critical municipal health centers.
+* **Cooperative Mutual Aid**: Coordinate regional lineman crews to assist local electric cooperatives.
+* **Telemetry Re-assessment**: Continue daily situational monitoring to verify recovery metrics and ground-truth utility reports.
+
+---
+*Context Data Reference:*
+{context}
 """
-    
