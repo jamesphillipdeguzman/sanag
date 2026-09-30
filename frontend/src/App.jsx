@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import AIBriefing from './components/AIBriefing.tsx'
+import AiBriefingCard from './components/AiBriefingCard.tsx'
 import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
 import MunicipalityTable from './components/MunicipalityTable.tsx'
@@ -221,7 +221,7 @@ function App() {
           <EventTimeline events={events} activeEventId={activeEventId} onSelect={setActiveEventId} />
         </section>
         <section className="dashboard-section">
-          {activeEvent && <AIBriefing event={activeEvent} municipalities={municipalities} />}
+          {activeEvent && <AiBriefingCard event={activeEvent} municipalities={municipalities} />}
         </section>
       </main>
       <Footer />
