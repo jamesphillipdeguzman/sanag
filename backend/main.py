@@ -391,14 +391,24 @@ async def get_historical_weather_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/api/generate-briefing")
-def api_generate_briefing(event_context: str):
+class BriefingRequest(BaseModel):
+    event_context: Optional[str] = None
+
+@app.post("/api/generate-briefing", tags=["AI Briefing"])
+@app.post("/api/v1/generate-briefing", tags=["AI Briefing"])
+def api_generate_briefing(
+    request: Optional[BriefingRequest] = None,
+    event_context: Optional[str] = None,
+):
     """
-    Endpoint to trigger an automated disaster recovery briefing using Gemini 2.5 Flash.
+    Endpoint to trigger an automated disaster recovery briefing using Gemini.
+    Accepts input via JSON body {"event_context": "..."} or query parameter ?event_context=...
     """
     try:
-        briefing = generate_recovery_briefing(event_context)
+        context = (request.event_context if request and request.event_context else None) or event_context or ""
+        briefing = generate_recovery_briefing(context)
         return {"status": "success", "briefing": briefing}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
     
