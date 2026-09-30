@@ -722,7 +722,7 @@ function isMobileOrTouchDevice(): boolean {
 }
 
 function getBaseTileUrl(isLightMode: boolean): string {
-  const apiKey = (import.meta.env.VITE_CARTO_API_KEY as string | undefined)?.trim();
+  const apiKey = (import.meta.env.VITE_MY_API_KEY as string | undefined)?.trim();
   const queryParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
 
   return isLightMode
