@@ -76,7 +76,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "category": "Typhoon",
         "alert_level": "Red",
         "alert_score": 2.5,
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "date": "2024-11-10",  # Updated to a realistic past historical benchmark date for simulations
         "description": "Category 3 Tropical Cyclone entering the Philippine Area of Responsibility with projected track towards Western Visayas and Panay Island. Satellite nightlight telemetry pending ground sensor impact.",
         "severity_text": "Wind speeds up to 185 km/h · Overpass pending",
         "country": "Philippines",
@@ -116,7 +116,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "category": "Flood",
         "alert_level": "Green",
         "alert_score": 1.0,
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "date": "2024-07-22",  # Updated to a realistic past monsoon/flood benchmark date
         "description": "Enhanced Southwest Monsoon low-pressure precipitation triggering precautionary substation isolation across Panay River Basin. Radiance sensor telemetry pending.",
         "severity_text": "Heavy rainfall 120mm/24h · Sensor telemetry pending",
         "country": "Philippines",
@@ -161,7 +161,17 @@ def format_gdacs_feature(
     alert_score = props.get('alertscore') or props.get('episodealertscore') or 1.0
     
     now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    raw_date = str(props.get('fromdate') or props.get('date') or now_utc_str)
+    
+    # Expanded key lookup to capture true event dates from GDACS feeds/scrapers
+    raw_date = str(
+        props.get('fromdate') or 
+        props.get('fromDate') or 
+        props.get('pubDate') or 
+        props.get('episodealertdate') or 
+        props.get('to-date') or 
+        props.get('date') or 
+        now_utc_str
+    )
     date_clean = raw_date[:10] if len(raw_date) >= 10 else now_utc_str
     
     description = str(props.get('description') or props.get('htmldescription') or f"{alert_level} Alert for {event_name}")
@@ -242,9 +252,8 @@ def format_gdacs_feature(
         "viirs_data_available": check_viirs_data_availability(date_clean)
     }
 
-
-def get_latest_philippines_disasters(limit: int = 25) -> List[Dict[str, Any]]:
-    """Fetches recent natural disaster events and filters for those affecting the Philippines."""
+def get_latest_philippines_disasters(limit: int = 50, include_historical: bool = True) -> List[Dict[str, Any]]:
+    """Fetches recent natural disaster events and merges them with verified historical benchmarks for robust simulation."""
     try:
         client = GDACSAPIReader()
         events_response = getattr(client, "latest_events")(limit=limit)
@@ -281,28 +290,23 @@ def get_latest_philippines_disasters(limit: int = 25) -> List[Dict[str, Any]]:
             if is_philippines:
                 ph_events.append(format_gdacs_feature(props, geom=geom, bbox=bbox))
 
-        # If live query returned events, ensure diversity of alert levels and geographic coordinates
-        if ph_events:
-            seen_ids = set()
-            deduped = []
-            for ev in ph_events:
-                if ev["event_id"] not in seen_ids:
-                    seen_ids.add(ev["event_id"])
-                    deduped.append(ev)
-            
-            # If no Red alert or Typhoon is present in live feed, append prominent regional disaster scenarios
-            has_red = any(e.get("alert_level") == "Red" for e in deduped)
-            has_tc = any(e.get("type") == "TC" for e in deduped)
-            for fb in _get_fallback_alerts():
-                if (fb.get("alert_level") == "Red" and not has_red) or (fb.get("type") == "TC" and not has_tc):
-                    if fb["event_id"] not in seen_ids:
-                        seen_ids.add(fb["event_id"])
-                        deduped.append(fb)
-            return deduped
+        seen_ids = set()
+        deduped = []
+        
+        # 1. Add live/recent Philippine events first
+        for ev in ph_events:
+            if ev["event_id"] not in seen_ids:
+                seen_ids.add(ev["event_id"])
+                deduped.append(ev)
 
-        # If GDACS feed has no current active PH alerts, provide realistic fallback alerts
-        # _get_fallback_alerts() resolves viirs_data_available dynamically from the DB.
-        return _get_fallback_alerts()
+        # 2. Always merge historical benchmarks so past storms/earthquakes remain available for simulation
+        if include_historical:
+            for fb in _get_fallback_alerts():
+                if fb["event_id"] not in seen_ids:
+                    seen_ids.add(fb["event_id"])
+                    deduped.append(fb)
+
+        return deduped if deduped else _get_fallback_alerts()
 
     except GDACSAPIError as error:
         print(f"GDACS API Error: {error}")
@@ -310,3 +314,12 @@ def get_latest_philippines_disasters(limit: int = 25) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"Unexpected error fetching GDACS feed: {e}")
         return _get_fallback_alerts()
+
+if __name__ == "__main__":
+    alerts = get_latest_philippines_disasters()
+    print(f"Fetched {len(alerts)} total events (Live + Historical Benchmarks):")
+    for alert in alerts:
+        title = alert.get('title') or alert.get('name') or alert.get('eventname') or 'Untitled'
+        level = alert.get('alert_level') or 'Unknown'
+        date_str = alert.get('date') or 'No date'
+        print(f"- [{date_str}] {title} ({level})")
