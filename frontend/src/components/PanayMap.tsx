@@ -802,7 +802,11 @@ function LeafletMap({
 
     if (newToRegister.length > 0) {
       const generated = createMunicipalities(newToRegister);
-      generated.forEach((m: Municipality) => municipalitiesByIdRef.current.set(m.id, m));
+      generated.forEach((m: Municipality) => {
+        if (!municipalitiesByIdRef.current.has(m.id)) {
+          municipalitiesByIdRef.current.set(m.id, m);
+        }
+      });
       onChunkLoaded?.(generated);
     }
 
@@ -1051,6 +1055,36 @@ function LeafletMap({
       }
     });
     municipalitiesByIdRef.current = map;
+
+    // Direct GeoJSON layer-level restyling ensures canvas renderer re-paints all polygons immediately
+    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
+      (geoJsonLayerRef.current as any).setStyle((feature: any) => {
+        const props = feature?.properties || {};
+        const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          map.get(id) ||
+          (pcode ? map.get(pcode) : null) ||
+          (name ? map.get(name.toLowerCase().trim()) : null) ||
+          (normName ? map.get(normName) : null);
+
+        const score = municipality?.recoveryScore ?? 50;
+        const color = getRecoveryColor(score);
+        const isSelected = id === selectedId || (municipality && municipality.id === selectedId);
+        return {
+          renderer: canvasRendererRef.current || undefined,
+          color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+          weight: isSelected ? 2.5 : 1.2,
+          fillColor: color,
+          fillOpacity: isSelected ? 0.95 : 0.65,
+          lineJoin: 'round',
+          lineCap: 'round',
+        };
+      });
+    }
 
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       const props = (layer as any)?.feature?.properties || {};

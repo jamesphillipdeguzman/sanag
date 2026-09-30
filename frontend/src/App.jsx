@@ -129,6 +129,19 @@ function mapApiEvent(event) {
   }
 }
 
+function formatIsoDate(dateString) {
+  if (!dateString) return ''
+  const clean = String(dateString).trim()
+  if (clean.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    return clean.slice(0, 10)
+  }
+  const parsed = new Date(clean)
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10)
+  }
+  return clean
+}
+
 function addDays(dateString, days) {
   const date = new Date(`${dateString}T00:00:00Z`)
   date.setUTCDate(date.getUTCDate() + days)
@@ -312,29 +325,29 @@ function App() {
 
   const hasRecoveryDateRange = recoveryDateRange?.eventId === activeEvent?.id
   const recoveryStartDate = activeEvent?.date
-    ? hasRecoveryDateRange ? recoveryDateRange.startDate : activeEvent.date
+    ? hasRecoveryDateRange ? formatIsoDate(recoveryDateRange.startDate) : formatIsoDate(activeEvent.date)
     : ''
   const isObservationDateValidForEvent = latestObservationDate && activeEvent?.date &&
     latestObservationDate >= activeEvent.date &&
     latestObservationDate <= addDays(activeEvent.date, 60)
   const recoveryEndDate = activeEvent?.date
     ? hasRecoveryDateRange
-      ? recoveryDateRange.endDate
+      ? formatIsoDate(recoveryDateRange.endDate)
       : (activeEvent.endDate && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
-          ? activeEvent.endDate.slice(0, 10)
-          : (isObservationDateValidForEvent ? latestObservationDate : addDays(activeEvent.date, 31)))
+          ? formatIsoDate(activeEvent.endDate)
+          : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 31))))
     : ''
 
   const handleSelectEvent = useCallback((eventId) => {
     setActiveEventId(eventId)
     const targetEvent = events.find((e) => String(e.id) === String(eventId))
     if (targetEvent) {
-      const sDate = targetEvent.date ? targetEvent.date.slice(0, 10) : ''
+      const sDate = formatIsoDate(targetEvent.date)
       let eDate = ''
       if (targetEvent.endDate && targetEvent.endDate.length >= 10 && !isNaN(new Date(targetEvent.endDate).getTime())) {
-        eDate = targetEvent.endDate.slice(0, 10)
+        eDate = formatIsoDate(targetEvent.endDate)
       } else if (sDate) {
-        eDate = addDays(sDate, 31)
+        eDate = formatIsoDate(addDays(sDate, 31))
       }
       if (sDate && eDate) {
         setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
@@ -596,7 +609,7 @@ function App() {
           municipalities={municipalities}
           activeEvent={activeEvent}
           events={events}
-          onSelectEvent={setActiveEventId}
+          onSelectEvent={handleSelectEvent}
           onDismissEvent={handleDismissEvent}
           selectedId={selectedId}
           onSelectMunicipality={selectMunicipality}
@@ -628,7 +641,7 @@ function App() {
               </div>
               <button
                 type="button"
-                onClick={() => setActiveEventId(PRIMARY_EVENT_ID)}
+                onClick={() => handleSelectEvent(PRIMARY_EVENT_ID)}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-ocean-500/40 bg-ocean-500/10 hover:bg-ocean-500/20 text-sm font-semibold text-ocean-200 transition-all cursor-pointer"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1018.364 9" /></svg>
@@ -654,7 +667,11 @@ function App() {
             endDate={recoveryEndDate}
             onDateRangeChange={(startDate, endDate) => {
               if (!activeEvent) return
-              setRecoveryDateRange({ eventId: activeEvent.id, startDate, endDate })
+              const cleanStart = formatIsoDate(startDate)
+              const cleanEnd = formatIsoDate(endDate)
+              if (cleanStart && cleanEnd) {
+                setRecoveryDateRange({ eventId: activeEvent.id, startDate: cleanStart, endDate: cleanEnd })
+              }
             }}
           />
         </section>
@@ -662,7 +679,7 @@ function App() {
           <MunicipalityTable municipalities={municipalities} selectedId={selectedId} onSelect={selectMunicipality} />
         </section>
         <section id="events" className="dashboard-section">
-          <EventTimeline events={events} activeEventId={activeEventId} onSelect={setActiveEventId} onDismiss={handleDismissEvent} />
+          <EventTimeline events={events} activeEventId={activeEventId} onSelect={handleSelectEvent} onDismiss={handleDismissEvent} />
         </section>
         <section className="dashboard-section">
           {activeEvent && <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />}
