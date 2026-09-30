@@ -5,3 +5,6 @@ pydantic
 earthengine-api
 google-genai
 python-dotenv
+gdacs-api
+types-xmltodict
+types-requests

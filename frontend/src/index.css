@@ -191,6 +191,36 @@ body {
   animation: shimmer 1.8s infinite ease-in-out;
 }
 
+/* GDACS Telemetry Marquee Animation */
+@keyframes gdacs-marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.gdacs-marquee-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  will-change: transform;
+  animation: gdacs-marquee 45s linear infinite;
+}
+
+.gdacs-marquee-track:hover,
+.gdacs-marquee-track:focus-within {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gdacs-marquee-track {
+    animation: none;
+    overflow-x: auto;
+  }
+}
+
 @media (max-width: 640px) {
   .dashboard-section { width: min(100% - 24px, 1200px); padding: 12px 0; }
 }
@@ -239,4 +269,104 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* GDACS Live Hazard Leaflet Markers & Popups */
+.custom-gdacs-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.gdacs-marker-container {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gdacs-marker-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  opacity: 0.45;
+  animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.gdacs-marker-core {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  border: 2px solid;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.custom-gdacs-marker:hover .gdacs-marker-core {
+  transform: scale(1.2);
+}
+
+.gdacs-marker-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.gdacs-marker-container.is-active .gdacs-marker-core {
+  transform: scale(1.25);
+  box-shadow: 0 0 20px #38bdf8;
+}
+
+.gdacs-marker-halo {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1.5px dashed;
+  opacity: 0.8;
+  animation: spin 10s linear infinite;
+}
+
+/* GDACS Leaflet Dark-Mode Popup */
+.leaflet-popup.gdacs-leaflet-popup .leaflet-popup-content-wrapper {
+  background: rgba(8, 13, 22, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7), 0 0 25px rgba(56, 189, 248, 0.15);
+  padding: 0;
+  overflow: hidden;
+}
+
+.leaflet-popup.gdacs-leaflet-popup .leaflet-popup-content {
+  margin: 0;
+  line-height: inherit;
+}
+
+.leaflet-popup.gdacs-leaflet-popup .leaflet-popup-tip-container {
+  overflow: visible;
+}
+
+.leaflet-popup.gdacs-leaflet-popup .leaflet-popup-tip {
+  background: rgba(8, 13, 22, 0.94);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
+.leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button {
+  color: #94a3b8;
+  padding: 8px 8px 0 0;
+  font-size: 16px;
+}
+
+.leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button:hover {
+  color: #ffffff;
 }

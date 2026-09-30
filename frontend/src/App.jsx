@@ -61,25 +61,31 @@ function mapApiEvent(event) {
   const category = (event.category || '').toLowerCase()
   const type = category.includes('flood')
     ? 'flood'
-    : category.includes('typhoon')
+    : category.includes('typhoon') || category.includes('cyclone')
       ? 'typhoon'
-      : 'blackout'
+      : category.includes('earthquake')
+        ? 'earthquake'
+        : 'blackout'
 
   const mockMatch = mockEvents.find((e) => e.id === String(event.id) || e.name === event.name)
   const affectedPopulation = Number(
     event.affected_population ?? event.affectedPopulation ?? mockMatch?.affectedPopulation ?? 0
   )
 
+  const alertLevel = event.alert_level || (event.severity === 'Severe' ? 'Red' : event.severity === 'High' ? 'Orange' : 'Green')
+  const severity = event.severity || (alertLevel === 'Red' ? 'Severe' : alertLevel === 'Orange' ? 'High' : 'Moderate')
+
   return {
     id: String(event.id),
     name: event.name,
     date: event.date,
     endDate: event.date,
-    severity: type === 'blackout' ? 'Severe' : type === 'typhoon' ? 'High' : 'Moderate',
+    severity,
     type,
     affectedPopulation,
     description: event.description ?? 'No description available.',
     category: event.category,
+    alert_level: alertLevel,
     critical_municipalities: event.critical_municipalities ?? [],
   }
 }
@@ -107,7 +113,95 @@ function App() {
   const [recoveryRecords, setRecoveryRecords] = useState([])
   const [isMapLoading, setIsMapLoading] = useState(true)
 
+  // GDACS live feeds & simulation state
+  const [gdacsAlerts, setGdacsAlerts] = useState([])
+  const [isGdacsLoading, setIsGdacsLoading] = useState(false)
+  const [importingId, setImportingId] = useState(null)
+  const [toastMessage, setToastMessage] = useState(null)
+
   const geojsonFeaturesRef = useRef(null)
+
+  const fetchGdacsAlerts = useCallback(async () => {
+    setIsGdacsLoading(true)
+    try {
+      const res = await fetch('/api/v1/gdacs/alerts')
+      if (!res.ok) throw new Error(`GDACS request failed: ${res.status}`)
+      const payload = await res.json()
+      if (payload.alerts) {
+        setGdacsAlerts(payload.alerts)
+      }
+    } catch (err) {
+      console.error('Failed to load GDACS live feed:', err)
+    } finally {
+      setIsGdacsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchGdacsAlerts()
+  }, [fetchGdacsAlerts])
+
+  const importedEventIds = useMemo(() => {
+    return new Set(events.map((e) => String(e.id)))
+  }, [events])
+
+  const handleImportGdacs = useCallback(async (alert) => {
+    const alertId = String(alert.event_id)
+    setImportingId(alertId)
+    try {
+      const res = await fetch('/api/v1/events/import-gdacs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_id: alert.event_id,
+          name: alert.name,
+          type: alert.type,
+          category: alert.category,
+          alert_level: alert.alert_level,
+          date: alert.date,
+          description: alert.description,
+          severity: alert.severity_text,
+          window_days: 14,
+        }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || `Failed to import event: ${res.status}`)
+      }
+
+      const result = await res.json()
+      if (result.event) {
+        const mapped = mapApiEvent(result.event)
+
+        // Prepend newly imported event directly into active events state
+        setEvents((prev) => {
+          const withoutCurrent = prev.filter((e) => e.id !== mapped.id)
+          return [mapped, ...withoutCurrent]
+        })
+
+        // Mark as imported in local GDACS feed state
+        setGdacsAlerts((prev) =>
+          prev.map((a) =>
+            String(a.event_id) === alertId || a.id === mapped.id ? { ...a, is_imported: true } : a
+          )
+        )
+
+        // Seamlessly select newly imported event so map, radiance and timeline update immediately
+        setActiveEventId(mapped.id)
+
+        // Toast feedback
+        setToastMessage(`✓ Event "${mapped.name}" imported & simulated! Calibrated 93 Panay LGU curves.`)
+        setTimeout(() => setToastMessage(null), 6000)
+      }
+    } catch (err) {
+      console.error('GDACS import error:', err)
+      setEventsError(`GDACS Import Error: ${err.message}`)
+      setTimeout(() => setEventsError(''), 7000)
+    } finally {
+      setImportingId(null)
+    }
+  }, [])
 
   const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
 
@@ -274,6 +368,27 @@ function App() {
   return (
     <div id="top">
       <Navbar />
+
+      {/* Floating Feedback Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 right-4 sm:right-8 z-50 max-w-md animate-fade-in-up">
+          <div className="flex items-center gap-3 p-4 rounded-xl border border-emerald-500/40 bg-slate-950/95 backdrop-blur-xl shadow-[0_0_30px_rgba(16,185,129,0.3)] text-white text-xs sm:text-sm">
+            <span className="relative flex h-2.5 w-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            </span>
+            <span className="flex-1 font-medium">{toastMessage}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-ink-400 hover:text-white text-xs ml-2 cursor-pointer font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeEvent && (
         <Overview
           municipalities={municipalities}
@@ -284,6 +399,12 @@ function App() {
           onSelectMunicipality={selectMunicipality}
           recoveryDate={recoveryDate}
           isMapLoading={isMapLoading}
+          gdacsAlerts={gdacsAlerts}
+          onSimulateGdacs={handleImportGdacs}
+          isGdacsLoading={isGdacsLoading}
+          onRefreshGdacs={fetchGdacsAlerts}
+          importingGdacsId={importingId}
+          importedEventIds={importedEventIds}
         />
       )}
       {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}

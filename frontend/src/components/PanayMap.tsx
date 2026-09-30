@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Municipality } from '@/types';
+import type { Municipality, GdacsAlert } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor } from '@/data/mockData';
-import { Lock, Loader2, MapPin, Radio, RotateCcw, Unlock, X } from 'lucide-react';
+import { Lock, Loader2, MapPin, Radio, RotateCcw, X } from 'lucide-react';
 
 interface PanayMapProps {
   municipalities: Municipality[];
@@ -11,6 +11,9 @@ interface PanayMapProps {
   onSelect: (id: string) => void;
   recoveryDate?: string | null;
   isLoading?: boolean;
+  gdacsAlerts?: GdacsAlert[];
+  activeEventId?: string | null;
+  onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
 }
 
 const statusLabels: Record<string, string> = {
@@ -26,7 +29,6 @@ function MapLoadingSkeleton() {
       className="leaflet-map relative flex flex-col items-center justify-center p-6 text-center overflow-hidden border border-white/5 bg-ink-950/70 select-none"
       aria-label="Loading Panay Island nightlight telemetry"
     >
-      {/* High-tech pulsing radar background elements */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden opacity-60">
         <div className="absolute w-[440px] h-[440px] rounded-full border border-ocean-500/10 animate-ping" style={{ animationDuration: '4s' }} />
         <div className="absolute w-[320px] h-[320px] rounded-full border border-ocean-500/15" />
@@ -35,9 +37,7 @@ function MapLoadingSkeleton() {
         <div className="absolute w-2 h-2 rounded-full bg-ocean-400 shadow-[0_0_12px_#70b0ff]" />
       </div>
 
-      {/* Modern High-Tech Content */}
       <div className="relative z-10 flex flex-col items-center max-w-sm">
-        {/* Pulse beacon icon */}
         <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-ocean-500/10 border border-ocean-500/30 mb-3.5 shadow-[0_0_25px_rgba(89,159,253,0.18)]">
           <span className="absolute -top-1 -right-1 flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -46,7 +46,6 @@ function MapLoadingSkeleton() {
           <Radio className="h-6 w-6 text-ocean-400 animate-pulse" />
         </div>
 
-        {/* Live status badge */}
         <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/15 px-3 py-1 mb-2.5">
           <Loader2 className="h-3 w-3 text-ocean-300 animate-spin" />
           <span className="text-[11px] font-semibold text-ocean-200 uppercase tracking-wider">
@@ -61,12 +60,10 @@ function MapLoadingSkeleton() {
           Retrieving VIIRS radiance baselines and computing spatial restoration indexes across 93 LGUs...
         </p>
 
-        {/* Shimmer progress line */}
         <div className="w-52 h-1.5 bg-ink-800/80 rounded-full mt-4 overflow-hidden relative border border-white/5">
           <div className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-ocean-400 to-emerald-400 rounded-full animate-shimmer" />
         </div>
 
-        {/* Regional indicator chips */}
         <div className="flex items-center gap-1.5 mt-3.5 text-[10px] text-ink-400 font-medium">
           <span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">Iloilo</span>
           <span className="text-ink-600">·</span>
@@ -87,11 +84,19 @@ export default function PanayMap({
   onSelect,
   recoveryDate,
   isLoading = false,
+  gdacsAlerts = [],
+  activeEventId,
+  onSimulateGdacs,
 }: PanayMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
 
   const hovered = municipalities.find((m) => m.id === hoveredId);
   const selected = municipalities.find((m) => m.id === selectedId);
+
+  const alertsWithCoords = (gdacsAlerts || []).filter(
+    (a) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
+  );
 
   return (
     <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
@@ -107,7 +112,23 @@ export default function PanayMap({
                 {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
               </p>
             </div>
-            <div className="flex items-center gap-2.5 sm:gap-3">
+            
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+              {alertsWithCoords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowGdacsMarkers(!showGdacsMarkers)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                    showGdacsMarkers
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
+                      : 'bg-white/5 text-ink-400 border-white/10 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title="Toggle live GDACS hazard epicenter markers on map"
+                >
+                  <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-400 animate-pulse' : 'text-ink-400'}`} />
+                  <span>Live Hazards ({alertsWithCoords.length})</span>
+                </button>
+              )}
               <LegendDot color="#10b981" label="Restored" />
               <LegendDot color="#599ffd" label="Recovering" />
               <LegendDot color="#fbbf24" label="Limited" />
@@ -126,6 +147,10 @@ export default function PanayMap({
                   selectedId={selectedId}
                   onSelect={onSelect}
                   onHover={setHoveredId}
+                  gdacsAlerts={gdacsAlerts}
+                  showGdacsMarkers={showGdacsMarkers}
+                  activeEventId={activeEventId}
+                  onSimulateGdacs={onSimulateGdacs}
                 />
 
                 {/* Hover tooltip */}
@@ -278,25 +303,17 @@ export default function PanayMap({
                 Municipality Telemetry
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-500/10 text-ocean-300 border border-ocean-500/20">
-                Interactive Inspector
+                Panay Grid
               </span>
             </div>
 
-            <div className="my-auto py-6 flex flex-col items-center justify-center text-center">
-              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-ocean-500/10 mb-3 border border-ocean-500/20">
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-ocean-500"></span>
-                </span>
-                <MapPin className="h-7 w-7 text-ocean-400" />
+            <div className="flex flex-col items-center justify-center text-center py-8">
+              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 mb-3 shadow-inner">
+                <MapPin className="h-6 w-6 text-ocean-400 animate-bounce" />
               </div>
-              <h3 className="text-base font-bold text-white mb-1.5">
-                {isLoading ? 'Calibrating Telemetry...' : 'Select a Municipality'}
-              </h3>
-              <p className="text-xs sm:text-sm text-ink-300 max-w-xs leading-relaxed">
-                {isLoading
-                  ? 'Spatial radiance layers are resolving. Municipality metrics will be accessible once synchronization completes.'
-                  : 'Click any municipality boundary on the map to inspect satellite radiance, outage severity, and restoration trajectory.'}
+              <h4 className="text-sm font-bold text-white mb-1">Select an LGU Boundary</h4>
+              <p className="text-xs text-ink-400 max-w-xs leading-relaxed">
+                Click any municipality polygon or live hazard epicenter on the map to pin its satellite radiance indicators.
               </p>
 
               {/* Quick sample town buttons */}
@@ -348,15 +365,24 @@ function LeafletMap({
   selectedId,
   onSelect,
   onHover,
+  gdacsAlerts = [],
+  showGdacsMarkers = true,
+  activeEventId,
+  onSimulateGdacs,
 }: {
   municipalities: Municipality[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
+  gdacsAlerts?: GdacsAlert[];
+  showGdacsMarkers?: boolean;
+  activeEventId?: string | null;
+  onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
 }) {
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<Record<string, L.Path>>({});
+  const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
 
   // Default mobile view to locked so users can scroll past without getting trapped
@@ -417,6 +443,11 @@ function LeafletMap({
       boxZoom: !initialLocked,
     });
     mapRef.current = map;
+
+    // Dedicated layer group for GDACS live hazard pins and impact zones
+    const gdacsGroup = L.layerGroup().addTo(map);
+    gdacsGroupRef.current = gdacsGroup;
+
     let disposed = false;
 
     fetch('/panay_municipalities.geojson')
@@ -476,15 +507,133 @@ function LeafletMap({
       map.remove();
       mapRef.current = null;
       layersRef.current = {};
+      gdacsGroupRef.current = null;
     };
   }, [municipalities, onHover, onSelect]);
 
+  // Update GeoJSON polygon styles on selection change
   useEffect(() => {
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       const municipality = municipalities.find((item) => item.id === id);
       if (municipality) updateLayerStyle(layer, municipality, id === selectedId);
     });
   }, [municipalities, selectedId]);
+
+  // Render distinct color-coded GDACS hazard markers and interactive popups
+  useEffect(() => {
+    const group = gdacsGroupRef.current;
+    if (!group) return;
+    group.clearLayers();
+
+    if (!showGdacsMarkers || !gdacsAlerts || gdacsAlerts.length === 0) return;
+
+    gdacsAlerts.forEach((alert) => {
+      const lat = alert.latitude ?? alert.coordinates?.[0];
+      const lng = alert.longitude ?? alert.coordinates?.[1];
+      if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return;
+
+      const alertLvl = (alert.alert_level || 'Green').toLowerCase();
+      const color = alertLvl === 'red' ? '#f43f5e' : alertLvl === 'orange' ? '#f59e0b' : '#10b981';
+      const isActive =
+        activeEventId === alert.id ||
+        activeEventId === `gdacs-${alert.event_id}` ||
+        activeEventId === String(alert.event_id);
+
+      const iconHtml = `
+        <div class="gdacs-marker-container ${isActive ? 'is-active' : ''}">
+          <div class="gdacs-marker-pulse" style="background-color: ${color};"></div>
+          <div class="gdacs-marker-core" style="background: radial-gradient(circle, ${color}, #080d16); border-color: ${color};">
+            <div class="gdacs-marker-dot" style="background-color: ${color};"></div>
+          </div>
+          ${isActive ? `<div class="gdacs-marker-halo" style="border-color: ${color};"></div>` : ''}
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: iconHtml,
+        className: 'custom-gdacs-marker',
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -18],
+      });
+
+      const marker = L.marker([lat, lng], {
+        icon: customIcon,
+        zIndexOffset: isActive ? 1200 : 800,
+        title: `${alert.name} (${alert.alert_level} Alert)`,
+      });
+
+      // Concentric radar circle around hazard epicenter
+      const circleRadius = alert.type === 'TC' ? 38000 : alert.type === 'EQ' ? 22000 : 15000;
+      const circle = L.circle([lat, lng], {
+        radius: circleRadius,
+        color: color,
+        weight: 1.5,
+        opacity: 0.5,
+        fillColor: color,
+        fillOpacity: 0.07,
+        dashArray: '4, 6',
+      });
+      group.addLayer(circle);
+
+      // Build Interactive Leaflet Popup with direct DOM click listeners
+      const popupContainer = document.createElement('div');
+      popupContainer.className = 'gdacs-popup-content p-3.5 text-ink-100 max-w-[285px] font-sans';
+      popupContainer.innerHTML = `
+        <div class="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-white/10">
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider" 
+                style="background-color: ${color}22; color: ${color}; border: 1px solid ${color}45;">
+            ${alert.alert_level || 'Green'} Alert
+          </span>
+          <span class="text-[10px] text-ink-400 font-mono">${alert.type || 'HAZARD'}</span>
+        </div>
+        <h4 class="text-xs font-bold text-white mb-1 leading-snug">${alert.name}</h4>
+        <p class="text-[11px] text-ink-300 mb-2.5 leading-relaxed line-clamp-2">${alert.description || ''}</p>
+        <div class="bg-black/50 rounded-lg p-2 mb-2.5 border border-white/5 space-y-1 text-[10px]">
+          <div class="flex items-center justify-between text-ink-300">
+            <span class="text-ink-400">Coordinates:</span>
+            <span class="font-mono text-white font-medium">${lat.toFixed(4)}°, ${lng.toFixed(4)}°</span>
+          </div>
+          <div class="flex items-center justify-between text-ink-300">
+            <span class="text-ink-400">Date:</span>
+            <span class="text-white">${alert.date}</span>
+          </div>
+          ${alert.severity_text ? `
+          <div class="flex items-center justify-between text-amber-300 font-medium pt-0.5 border-t border-white/5">
+            <span class="text-ink-400">Severity:</span>
+            <span class="truncate ml-1 font-semibold">${alert.severity_text}</span>
+          </div>` : ''}
+        </div>
+        <div class="action-btn-placeholder"></div>
+      `;
+
+      const btnPlaceholder = popupContainer.querySelector('.action-btn-placeholder');
+      if (btnPlaceholder && onSimulateGdacs) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        if (isActive) {
+          btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center justify-center gap-1.5 cursor-default';
+          btn.innerHTML = '<span>✓ Active Simulation</span>';
+        } else {
+          btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 shadow-md shadow-ocean-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95';
+          btn.innerHTML = '<span>Simulate Event</span>';
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            marker.closePopup();
+            onSimulateGdacs(alert);
+          };
+        }
+        btnPlaceholder.appendChild(btn);
+      }
+
+      marker.bindPopup(popupContainer, {
+        className: 'gdacs-leaflet-popup',
+        maxWidth: 290,
+      });
+
+      group.addLayer(marker);
+    });
+  }, [gdacsAlerts, showGdacsMarkers, activeEventId, onSimulateGdacs]);
 
   return (
     <div className="relative w-full overflow-hidden rounded-xl">

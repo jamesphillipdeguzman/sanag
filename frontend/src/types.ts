@@ -14,7 +14,7 @@ export interface Municipality {
   area: number;
 }
 
-export type DisasterType = 'blackout' | 'typhoon' | 'flood';
+export type DisasterType = 'blackout' | 'typhoon' | 'flood' | 'earthquake' | 'disaster';
 
 export interface DisasterEvent {
   id: string;
@@ -26,6 +26,7 @@ export interface DisasterEvent {
   affectedPopulation: number;
   description: string;
   category?: string;
+  alert_level?: string;
   critical_municipalities?: Array<{
     name: string;
     pcode: string;
@@ -33,4 +34,26 @@ export interface DisasterEvent {
     r_t: number;
     status: string;
   }>;
+}
+
+export interface GdacsAlert {
+  event_id: string | number;
+  id?: string;
+  name: string;
+  type: string;
+  category?: string;
+  alert_level: 'Red' | 'Orange' | 'Green' | string;
+  alert_score?: number;
+  date: string;
+  fromdate?: string;
+  description: string;
+  severity_text?: string;
+  country?: string;
+  url?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  coordinates?: [number, number] | null;
+  bbox?: number[] | null;
+  geometry?: any;
+  is_imported?: boolean;
 }
