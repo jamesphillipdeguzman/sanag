@@ -40,26 +40,37 @@ export default function Overview({
   importingGdacsId = null,
   importedEventIds = new Set(),
 }: OverviewProps) {
-  const avgRecovery = municipalities.length > 0
-    ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
-    : 0;
-  const restoredCount = municipalities.filter((m) => m.status === 'restored').length;
-  const criticalCount = municipalities.filter((m) => m.status === 'critical').length;
+  // Focus overview headline metrics on Panay Island by default
+  const panayMunicipalities = useMemo(() => {
+    const list = municipalities.filter(
+      (m) =>
+        ['Iloilo', 'Capiz', 'Aklan', 'Antique', 'Panay'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH06')) ||
+        (!m.province && !m.region)
+    );
+    return list.length > 0 ? list : municipalities;
+  }, [municipalities]);
 
-  // Dynamically compute the affected population for the selected event based on current LGU statuses
+  const avgRecovery = panayMunicipalities.length > 0
+    ? Math.round(panayMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / panayMunicipalities.length)
+    : 0;
+  const restoredCount = panayMunicipalities.filter((m) => m.status === 'restored').length;
+  const criticalCount = panayMunicipalities.filter((m) => m.status === 'critical').length;
+
+  // Dynamically compute the affected population for the selected event based on current Panay LGU statuses
   const affectedPopulation = useMemo(() => {
-    const affectedLGUs = municipalities.filter(
+    const affectedLGUs = panayMunicipalities.filter(
       (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
     );
     if (affectedLGUs.length > 0) {
       return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0);
     }
-    const unrestored = municipalities.filter((m) => m.status !== 'restored');
+    const unrestored = panayMunicipalities.filter((m) => m.status !== 'restored');
     if (unrestored.length > 0) {
       return unrestored.reduce((sum, m) => sum + (m.population || 0), 0);
     }
     return activeEvent.affectedPopulation || 0;
-  }, [municipalities, activeEvent.affectedPopulation]);
+  }, [panayMunicipalities, activeEvent.affectedPopulation]);
 
   const getEventIcon = (event: DisasterEvent) => {
     const type = event.type?.toLowerCase() || '';

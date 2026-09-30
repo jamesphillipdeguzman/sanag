@@ -4,8 +4,15 @@ import json
 import glob
 import sqlite3
 from typing import Dict, Any, List, Optional
+import sys
+
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from loader import (
     load_panay_municipalities_geojson, 
+    load_philippines_boundaries_geojson,
     get_municipality_lookup, 
     parse_feature_identity_and_radiance
 )
@@ -20,15 +27,41 @@ def ensure_database_schema(conn: sqlite3.Connection):
     """
     cursor = conn.cursor()
 
-    # 1. Ensure municipalities table exists
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS municipalities (
-            code TEXT PRIMARY KEY,
-            province_code TEXT,
-            name TEXT UNIQUE,
-            geometry TEXT
-        )
-    """)
+    # 1. Ensure municipalities table exists with nationwide schema
+    cursor.execute("PRAGMA table_info(municipalities)")
+    mun_cols = {col[1]: col for col in cursor.fetchall()}
+    if not mun_cols:
+        cursor.execute("""
+            CREATE TABLE municipalities (
+                code TEXT PRIMARY KEY,
+                province_code TEXT,
+                province_name TEXT,
+                region_code TEXT,
+                region_name TEXT,
+                name TEXT,
+                psgc_code TEXT,
+                geometry TEXT
+            )
+        """)
+    else:
+        # Check if legacy schema had UNIQUE on name
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='municipalities'")
+        table_sql = cursor.fetchone()[0] or ""
+        if "name TEXT UNIQUE" in table_sql or "UNIQUE(name)" in table_sql:
+            print("Migrating municipalities table: removing UNIQUE constraint on name for nationwide duplicate handling...")
+            cursor.execute("CREATE TABLE municipalities_new (code TEXT PRIMARY KEY, province_code TEXT, province_name TEXT, region_code TEXT, region_name TEXT, name TEXT, psgc_code TEXT, geometry TEXT)")
+            cursor.execute("INSERT OR IGNORE INTO municipalities_new (code, province_code, province_name, region_code, region_name, name, psgc_code, geometry) SELECT code, province_code, province_name, region_code, region_name, name, psgc_code, geometry FROM municipalities")
+            cursor.execute("DROP TABLE municipalities")
+            cursor.execute("ALTER TABLE municipalities_new RENAME TO municipalities")
+        else:
+            for new_col in ["province_name", "region_code", "region_name", "psgc_code"]:
+                if new_col not in mun_cols:
+                    print(f"Migrating municipalities: adding {new_col} column...")
+                    cursor.execute(f"ALTER TABLE municipalities ADD COLUMN {new_col} TEXT")
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mun_pcode ON municipalities (province_code)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mun_reg ON municipalities (region_code)")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_mun_name_prov ON municipalities (name, province_name)")
 
     # 2. Ensure radiance_observations exists with municipality_pcode
     cursor.execute("""
@@ -52,6 +85,10 @@ def ensure_database_schema(conn: sqlite3.Connection):
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_obs_mun_date 
         ON radiance_observations (municipality_name, observation_date)
+    """)
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_obs_pcode_date 
+        ON radiance_observations (municipality_pcode, observation_date)
     """)
 
     # 3. Ensure baselines table exists with municipality_pcode and allows null baseline values
@@ -143,25 +180,47 @@ def ensure_database_schema(conn: sqlite3.Connection):
 
 def sync_municipalities_from_geojson(conn: sqlite3.Connection, lookup: Dict[str, Any]):
     """
-    Ensures all 93 Panay municipalities are registered in the municipalities table.
+    Ensures all Philippine municipalities and provincial jurisdictions are registered in the municipalities table.
     """
     cursor = conn.cursor()
     by_pcode = lookup.get("by_pcode", {})
     records = []
+    seen = set()
     for pcode, meta in by_pcode.items():
+        clean_code = meta["pcode"]
+        if clean_code in seen:
+            continue
+        seen.add(clean_code)
         records.append((
-            meta["pcode"],
-            meta["province_code"],
+            clean_code,
+            meta.get("province_code") or "",
+            meta.get("province") or "",
+            meta.get("region_code") or "",
+            meta.get("region") or "",
             meta["name"],
+            meta.get("psgc") or "",
             None
         ))
 
     cursor.executemany("""
-        INSERT OR IGNORE INTO municipalities (code, province_code, name, geometry)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO municipalities (code, province_code, province_name, region_code, region_name, name, psgc_code, geometry)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(code) DO UPDATE SET
+            province_code = excluded.province_code,
+            province_name = excluded.province_name,
+            region_code = excluded.region_code,
+            region_name = excluded.region_name,
+            name = excluded.name,
+            psgc_code = excluded.psgc_code
     """, records)
+
+    # Clean up stale codes not present in the new GeoJSON dataset
+    if seen:
+        placeholders = ','.join(['?'] * len(seen))
+        cursor.execute(f"DELETE FROM municipalities WHERE code NOT IN ({placeholders})", tuple(seen))
+
     conn.commit()
-    print(f"Synced {len(records)} municipalities into reference table.")
+    print(f"Synced {len(records)} municipalities/jurisdictions into reference table.")
 
 def ingest_daily_observations(conn: sqlite3.Connection, lookup: Dict[str, Any]) -> int:
     """

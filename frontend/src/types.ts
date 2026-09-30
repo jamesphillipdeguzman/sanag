@@ -4,6 +4,9 @@ export interface Municipality {
   id: string;
   name: string;
   province: string;
+  region?: string;
+  pcode?: string;
+  psgc?: string;
   recoveryScore: number;
   status: RecoveryStatus;
   population: number;
@@ -12,6 +15,7 @@ export interface Municipality {
   currentRadiance: number;
   estimatedDaysToRecover: number;
   area: number;
+  recoveryDate?: string | null;
 }
 
 export type DisasterType = 'blackout' | 'typhoon' | 'flood' | 'earthquake' | 'disaster';

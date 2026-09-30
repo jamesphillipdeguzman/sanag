@@ -52,10 +52,14 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.
 class MunicipalityItem(BaseModel):
     name: str
     pcode: str
+    province: Optional[str] = None
+    region: Optional[str] = None
 
 class MunicipalityResponse(BaseModel):
     municipalities: List[str]
     items: Optional[List[MunicipalityItem]] = None
+    total_count: Optional[int] = None
+    scope: Optional[str] = None
 
 class EventModel(BaseModel):
     id: str
@@ -104,13 +108,13 @@ def get_municipality_population_lookup() -> Dict[str, int]:
     if _MUNICIPALITY_POP_CACHE is not None:
         return _MUNICIPALITY_POP_CACHE
     try:
-        from loader import load_panay_municipalities_geojson
-        fc = load_panay_municipalities_geojson()
+        from loader import load_philippines_boundaries_geojson
+        fc = load_philippines_boundaries_geojson()
         pop_map = {}
         for f in fc.get("features", []):
             props = f.get("properties", {})
-            pcode = props.get("ADM3_PCODE")
-            name = props.get("ADM3_EN")
+            pcode = props.get("ADM3_PCODE") or props.get("psgc_id") or props.get("psgc_code")
+            name = props.get("ADM3_EN") or props.get("psgc_name") or props.get("name")
             area = float(props.get("AREA_SQKM", 50))
             pop = round(area * 860)
             if pcode:
@@ -273,26 +277,107 @@ def read_root():
 
 
 @app.get("/api/v1/municipalities", response_model=MunicipalityResponse, tags=["Municipalities"])
-def get_municipalities():
+def get_municipalities(
+    scope: Optional[str] = Query("panay", description="Scope: 'panay' (default, 93 LGUs), 'nationwide', or region code"),
+    region: Optional[str] = Query(None, description="Optional region code/name filter"),
+    province: Optional[str] = Query(None, description="Optional province code/name filter")
+):
     """
-    Returns a clean list of all 93 monitored Panay municipalities
-    with their ADM3_PCODE for geospatial binding.
+    Returns monitored municipalities with their ADM3_PCODE/PSGC for geospatial binding.
+    Defaults to Panay Island (93 municipalities) to preserve default focused behavior,
+    while supporting nationwide inspection when scope='nationwide' or region/province is queried.
     """
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute("SELECT name, code FROM municipalities ORDER BY name ASC")
+
+        where_clauses = []
+        params = []
+
+        if province:
+            where_clauses.append("(LOWER(province_name) = ? OR LOWER(province_code) = ?)")
+            params.extend([province.lower().strip(), province.lower().strip()])
+        elif region:
+            where_clauses.append("(LOWER(region_name) LIKE ? OR LOWER(region_code) = ?)")
+            params.extend([f"%{region.lower().strip()}%", region.lower().strip()])
+        elif scope and scope.lower().strip() in ["panay", "panay_island"]:
+            # Panay Island 4 provinces
+            where_clauses.append("province_name IN ('Aklan', 'Antique', 'Capiz', 'Iloilo')")
+
+        sql = "SELECT name, code, province_name, region_name FROM municipalities"
+        if where_clauses:
+            sql += " WHERE " + " AND ".join(where_clauses)
+        sql += " ORDER BY name ASC"
+
+        cursor.execute(sql, params)
         rows = cursor.fetchall()
         conn.close()
 
-        items = [{"name": row["name"], "pcode": row["code"]} for row in rows]
+        items = [
+            {
+                "name": row["name"], 
+                "pcode": row["code"],
+                "province": row["province_name"] if "province_name" in row.keys() else None,
+                "region": row["region_name"] if "region_name" in row.keys() else None
+            } 
+            for row in rows
+        ]
         return {
             "municipalities": [row["name"] for row in rows],
-            "items": items
+            "items": items,
+            "total_count": len(rows),
+            "scope": scope or "panay"
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/v1/regions", tags=["Municipalities"])
+def get_regions():
+    """
+    Returns nationwide regional centers and boundaries metadata,
+    defaulting to Panay Island focus.
+    """
+    try:
+        try:
+            from generate_nationwide_boundaries import PHILIPPINE_REGIONS
+        except ImportError:
+            from backend.generate_nationwide_boundaries import PHILIPPINE_REGIONS
+        regions_list = []
+        for reg in PHILIPPINE_REGIONS:
+            regions_list.append({
+                "name": reg["region_name"],
+                "code": reg["region_code"],
+                "center": reg["center"],
+                "zoom": reg["zoom"],
+                "provinces": [p["name"] for p in reg["provinces"]],
+                "is_default": "Western Visayas" in reg["region_name"]
+            })
+        return {
+            "status": "success",
+            "default_region": "Region VI (Western Visayas)",
+            "default_center": [11.0, 122.5],
+            "default_zoom": 8,
+            "regions": regions_list
+        }
+    except Exception as e:
+        return {
+            "status": "fallback",
+            "default_region": "Region VI (Western Visayas)",
+            "default_center": [11.0, 122.5],
+            "default_zoom": 8,
+            "regions": [
+                {
+                    "name": "Region VI (Western Visayas)",
+                    "code": "PH06",
+                    "center": [11.0, 122.5],
+                    "zoom": 8,
+                    "provinces": ["Aklan", "Antique", "Capiz", "Iloilo", "Guimaras", "Negros Occidental"],
+                    "is_default": True
+                }
+            ]
+        }
 
 
 @app.get("/api/v1/events", response_model=EventsResponse, tags=["Events"])
@@ -804,6 +889,8 @@ class BriefingRequest(BaseModel):
 
 @app.post("/api/generate-briefing", tags=["AI Briefing"])
 @app.post("/api/v1/generate-briefing", tags=["AI Briefing"])
+@app.post("/api/executive-summary", tags=["AI Briefing"])
+@app.post("/api/v1/executive-summary", tags=["AI Briefing"])
 def api_generate_briefing(
     request: Optional[BriefingRequest] = None,
     event_context: Optional[str] = None,

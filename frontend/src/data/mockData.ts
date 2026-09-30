@@ -1,29 +1,4 @@
-type RecoveryStatus = 'restored' | 'recovering' | 'warning' | 'critical';
-
-type DisasterEvent = {
-  id: string;
-  name: string;
-  date: string;
-  endDate: string;
-  severity: 'Severe' | 'High' | 'Moderate';
-  type: string;
-  affectedPopulation: number;
-  description: string;
-};
-
-type Municipality = {
-  id: string;
-  name: string;
-  province: string;
-  recoveryScore: number;
-  status: RecoveryStatus;
-  population: number;
-  daysSinceEvent: number;
-  baselineRadiance: number;
-  currentRadiance: number;
-  estimatedDaysToRecover: number;
-  area: number;
-};
+import type { DisasterEvent, Municipality, RecoveryStatus } from '../types';
 
 export const PRIMARY_EVENT_ID = 'panay-blackout-2024';
 
@@ -63,7 +38,7 @@ export function getRecoveryColor(score: number): string {
 }
 
 export function getRecoveryStatusColor(status: RecoveryStatus): string {
-  return getRecoveryColor(status === 'restored' ? 85 : status === 'recovering' ? 65 : status === 'warning' ? 45 : 20);
+  return getRecoveryColor(status === 'restored' ? 95 : status === 'recovering' ? 70 : status === 'warning' ? 50 : 20);
 }
 
 export function getSeverityColor(severity: DisasterEvent['severity']): string {
@@ -85,19 +60,28 @@ export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[
   return features.map((feature, index) => {
     const properties = feature.properties ?? {};
     const recoveryScore = 38 + ((index * 17) % 59);
-    const status: RecoveryStatus = recoveryScore >= 80 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical';
+    const status: RecoveryStatus = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical';
     const area = Number(properties.AREA_SQKM ?? 50);
+    const id = String(properties.ADM3_PCODE ?? properties.psgc_code ?? properties.ADM2_PCODE ?? index);
+    const name = String(properties.ADM3_EN ?? properties.ADM2_EN ?? properties.ADM1_EN ?? 'Unnamed municipality');
+    const province = String(properties.ADM2_EN ?? properties.province ?? 'Panay');
+    const region = properties.ADM1_EN ?? properties.region_name ?? (['Iloilo', 'Capiz', 'Aklan', 'Antique'].includes(province) ? 'Region VI (Western Visayas)' : undefined);
+    const pop = properties.population ? Number(properties.population) : Math.round(area * 860);
+
     return {
-      id: String(properties.ADM3_PCODE ?? index),
-      name: String(properties.ADM3_EN ?? 'Unnamed municipality'),
-      province: String(properties.ADM2_EN ?? 'Panay'),
+      id,
+      name,
+      province,
+      region,
+      pcode: properties.ADM3_PCODE ? String(properties.ADM3_PCODE) : undefined,
+      psgc: properties.psgc_code ? String(properties.psgc_code) : undefined,
       recoveryScore,
       status,
-      population: Math.round(area * 860),
+      population: pop,
       daysSinceEvent: 14,
       baselineRadiance: 8 + (index % 7),
       currentRadiance: 4 + (recoveryScore / 100) * 8,
-      estimatedDaysToRecover: recoveryScore >= 80 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
+      estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
       area,
     };
   });
