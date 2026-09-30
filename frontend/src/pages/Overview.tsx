@@ -152,6 +152,7 @@ export default function Overview({
             activeEventId={activeEvent.id}
             importedEventIds={importedEventIds}
             onSelectEvent={onSelectEvent}
+            events={events}
           />
         </div>
 

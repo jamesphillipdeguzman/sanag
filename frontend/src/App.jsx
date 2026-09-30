@@ -42,7 +42,7 @@ function applyRecoveryScores(municipalities, records) {
     }
 
     const recoveryScore = Math.max(0, Math.min(100, Math.round(score.r_t * 100)))
-    const status = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 30 ? 'warning' : 'critical'
+    const status = recoveryScore >= 80 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical'
 
     return {
       ...municipality,
@@ -51,7 +51,7 @@ function applyRecoveryScores(municipalities, records) {
       baselineRadiance: score.baseline_radiance ?? municipality.baselineRadiance,
       currentRadiance: score.daily_radiance ?? municipality.currentRadiance,
       daysSinceEvent: Math.max(0, Math.round((Date.now() - new Date(score.date).getTime()) / 86400000)),
-      estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
+      estimatedDaysToRecover: recoveryScore >= 80 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
       recoveryDate: score.date,
     }
   })
@@ -147,14 +147,37 @@ function App() {
   }, [events])
 
   const handleImportGdacs = useCallback(async (alert) => {
+    if (!alert) return
+
+    const rawAlertId = alert.event_id != null ? String(alert.event_id) : ''
+    const alertId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : '')
+    const normAlertName = (alert.name || '').toLowerCase().trim()
+
+    // Guard: Check if event already exists in the active events list
+    const existingEvent = events.find((e) => {
+      const eId = String(e.id)
+      const eNameNorm = (e.name || '').toLowerCase().trim()
+      return (
+        (alertId && (eId === alertId || `gdacs-${eId}` === alertId)) ||
+        (rawAlertId && (eId === rawAlertId || eId === `gdacs-${rawAlertId}`)) ||
+        (normAlertName && eNameNorm === normAlertName)
+      )
+    })
+
+    if (existingEvent) {
+      // Event already exists: select/highlight existing tile instead of pushing a duplicate
+      setActiveEventId(existingEvent.id)
+      return
+    }
+
     if (alert.viirs_data_available === false) {
       setEventsError('Simulation Unavailable: Confirmed NASA VIIRS radiance data is pending for this live hazard. Please wait until satellite ground telemetry is confirmed.')
       setTimeout(() => setEventsError(''), 6000)
       return
     }
 
-    const alertId = String(alert.event_id)
-    setImportingId(alertId)
+    const importKey = rawAlertId || alertId
+    setImportingId(importKey)
     try {
       const res = await fetch('/api/v1/events/import-gdacs', {
         method: 'POST',
@@ -181,16 +204,25 @@ function App() {
       if (result.event) {
         const mapped = mapApiEvent(result.event)
 
-        // Prepend newly imported event directly into active events state
+        // Prepend newly imported event directly into active events state, deduplicating thoroughly
         setEvents((prev) => {
-          const withoutCurrent = prev.filter((e) => e.id !== mapped.id)
+          const withoutCurrent = prev.filter((e) => {
+            const eId = String(e.id)
+            const eName = (e.name || '').toLowerCase().trim()
+            return (
+              eId !== mapped.id &&
+              eId !== rawAlertId &&
+              eId !== `gdacs-${rawAlertId}` &&
+              eName !== (mapped.name || '').toLowerCase().trim()
+            )
+          })
           return [mapped, ...withoutCurrent]
         })
 
         // Mark as imported in local GDACS feed state
         setGdacsAlerts((prev) =>
           prev.map((a) =>
-            String(a.event_id) === alertId || a.id === mapped.id ? { ...a, is_imported: true } : a
+            String(a.event_id) === rawAlertId || a.id === mapped.id || a.id === alertId ? { ...a, is_imported: true } : a
           )
         )
 
@@ -208,7 +240,7 @@ function App() {
     } finally {
       setImportingId(null)
     }
-  }, [])
+  }, [events])
 
   const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
 

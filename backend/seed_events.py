@@ -10,34 +10,34 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.
 # Disaster impact profiles and baseline parameters
 CATEGORY_IMPACT_CONFIG = {
     "Power Disruption": {
-        "base_ratio": 0.28,
+        "base_ratio": 0.44,
         "base_k": 0.22,
-        "urban_factor": 0.44,
+        "urban_factor": 0.38,
         "description": "Grid-wide trip with rapid substation and priority feeder recovery",
     },
     "Typhoon": {
-        "base_ratio": 0.32,
+        "base_ratio": 0.42,
         "base_k": 0.18,
-        "urban_factor": 0.35,
+        "urban_factor": 0.32,
         "description": "Severe wind and pole damage; slower physical distribution line rebuild",
     },
     "Flood": {
         "base_ratio": 0.52,
         "base_k": 0.26,
-        "urban_factor": 0.25,
+        "urban_factor": 0.28,
         "description": "Lowland inundation and precautionary cutoff; fast recovery as waters recede",
     },
     "Earthquake": {
-        "base_ratio": 0.25,
+        "base_ratio": 0.42,
         "base_k": 0.20,
         "urban_factor": 0.35,
         "description": "Structural substation damage requiring component replacement",
     },
 }
 DEFAULT_IMPACT_CONFIG = {
-    "base_ratio": 0.35,
+    "base_ratio": 0.44,
     "base_k": 0.22,
-    "urban_factor": 0.35,
+    "urban_factor": 0.32,
     "description": "Standard disaster impact profile",
 }
 
@@ -48,9 +48,9 @@ DEFAULT_IMPACT_CONFIG = {
 # PH06006: Antique (Mountainous west coast, radial line extremities, slower line patrol)
 PROVINCE_FACTORS = {
     "PH06030": {"mod": 0.10, "k_mod": 0.04},
-    "PH06004": {"mod": 0.05, "k_mod": 0.02},
-    "PH06019": {"mod": -0.02, "k_mod": -0.01},
-    "PH06006": {"mod": -0.08, "k_mod": -0.04},
+    "PH06004": {"mod": 0.06, "k_mod": 0.02},
+    "PH06019": {"mod": -0.04, "k_mod": -0.01},
+    "PH06006": {"mod": -0.14, "k_mod": -0.04},
 }
 
 # Keywords indicating major urban centers, commercial hubs, or priority facilities
@@ -234,10 +234,10 @@ def compute_recovery_radiance(
     # 1. Determine Urban / Infrastructure Index U in [0.0, 1.0]
     is_hub = any(kw in mun_name.lower() for kw in URBAN_HUB_KEYWORDS)
     base_factor = min(1.0, max(0.0, (baseline - 0.35) / (2.0 - 0.35)))
-    urban_score = min(1.0, max(0.0, 0.50 * base_factor + (0.50 if is_hub else 0.0)))
+    urban_score = min(1.0, max(0.0, 0.40 * base_factor + (0.50 if is_hub else 0.05)))
 
     # 2. Deterministic noise per municipality
-    noise = get_mun_variance(event_id, pcode, mun_name) * 0.20
+    noise = get_mun_variance(event_id, pcode, mun_name) * 0.16
 
     # 3. Provincial geographic modifier
     prov_cfg = PROVINCE_FACTORS.get(province_code, {"mod": 0.0, "k_mod": 0.0})
@@ -253,7 +253,7 @@ def compute_recovery_radiance(
     if category == "Power Disruption":
         if "malay" in mun_name.lower():
             # Malay / Boracay Island: heavy private resort generators & microgrid resilience
-            day0_ratio = 0.85 + (noise * 0.20)
+            day0_ratio = 0.88 + (noise * 0.10)
         else:
             day0_ratio = base_ratio + (urban_score * urban_factor) + prov_mod + noise
         rec_k = base_k + (urban_score * 0.12) + (prov_mod * 0.30)
@@ -261,18 +261,18 @@ def compute_recovery_radiance(
     elif category == "Typhoon":
         if event_id == "haiyan":
             # Haiyan: Northern Panay eyewall trajectory (Capiz & Northern Aklan severely impacted)
-            haiyan_prov_mod = {"PH06019": -0.15, "PH06004": -0.10, "PH06030": 0.08, "PH06006": 0.12}.get(province_code, 0.0)
-            day0_ratio = 0.30 + (urban_score * urban_factor) + haiyan_prov_mod + noise
+            haiyan_prov_mod = {"PH06019": -0.20, "PH06004": -0.14, "PH06030": 0.12, "PH06006": 0.18}.get(province_code, 0.0)
+            day0_ratio = base_ratio + (urban_score * urban_factor) + haiyan_prov_mod + noise
             rec_k = base_k + (urban_score * 0.10) + (haiyan_prov_mod * 0.20)
         else:
             # Odette: Southern Panay track (Southern Iloilo and Antique impacted)
-            odette_prov_mod = {"PH06030": -0.08, "PH06006": -0.10, "PH06019": 0.12, "PH06004": 0.15}.get(province_code, 0.0)
-            day0_ratio = 0.35 + (urban_score * urban_factor) + odette_prov_mod + noise
+            odette_prov_mod = {"PH06030": -0.12, "PH06006": -0.18, "PH06019": 0.08, "PH06004": 0.22}.get(province_code, 0.0)
+            day0_ratio = base_ratio + (urban_score * urban_factor) + odette_prov_mod + noise
             rec_k = base_k + (urban_score * 0.10) + (odette_prov_mod * 0.20)
 
     elif category == "Flood":
         # Lowland river basins (Capiz plains and coastal Iloilo) flooded; mountains shielded
-        flood_prov_mod = {"PH06019": -0.12, "PH06030": -0.04, "PH06004": 0.08, "PH06006": 0.14}.get(province_code, 0.0)
+        flood_prov_mod = {"PH06019": -0.16, "PH06030": -0.04, "PH06004": 0.10, "PH06006": 0.14}.get(province_code, 0.0)
         day0_ratio = base_ratio + (urban_score * urban_factor) + flood_prov_mod + noise
         rec_k = base_k + (urban_score * 0.10) + (flood_prov_mod * 0.20)
 
@@ -477,13 +477,13 @@ def seed_single_event(
     cat_cfg = CATEGORY_IMPACT_CONFIG.get(category, DEFAULT_IMPACT_CONFIG)
 
     if alert == "red":
-        base_impact = min(0.25, cat_cfg["base_ratio"] * 0.70)
+        base_impact = 0.40
         base_k = max(0.14, cat_cfg["base_k"] * 0.80)
     elif alert == "orange":
-        base_impact = min(0.42, cat_cfg["base_ratio"] * 0.95)
+        base_impact = 0.55
         base_k = max(0.18, cat_cfg["base_k"] * 0.95)
     else:  # Green or informational alert
-        base_impact = min(0.65, max(0.50, cat_cfg["base_ratio"] * 1.35))
+        base_impact = 0.72
         base_k = min(0.32, cat_cfg["base_k"] * 1.25)
 
     if target_mun_code and target_mun_code != "PANAY_ALL":
@@ -525,11 +525,11 @@ def seed_single_event(
                 r_val = simulated_radiance / baseline if baseline > 0 else 0.0
                 score = round(r_val * 100)
                 day0_scores.append(score)
-                if score >= 90:
+                if score >= 80:
                     day0_states["restored"] += 1
                 elif score >= 60:
                     day0_states["recovering"] += 1
-                elif score >= 30:
+                elif score >= 40:
                     day0_states["warning"] += 1
                 else:
                     day0_states["critical"] += 1
