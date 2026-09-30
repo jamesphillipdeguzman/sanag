@@ -215,7 +215,7 @@ def compute_recovery_radiance(
     impact_ratio: Optional[float] = None,
     k: Optional[float] = None,
     day_index: int = 0,
-    total_days: int = 14,
+    total_days: int = 31,
     event_id: str = "panay-blackout-2024",
     category: str = "Power Disruption",
     mun_name: str = "",
@@ -308,7 +308,7 @@ def compute_recovery_radiance(
     return round(baseline * current_ratio, 4)
 
 
-def seed_observations_for_all_events(overwrite: bool = True, window_days: int = 14):
+def seed_observations_for_all_events(overwrite: bool = True, window_days: int = 31):
     """
     Seeds radiance_observations for all events using actual database baselines
     and realistic asymptotic recovery curves with provincial and urban/rural diversity.
@@ -449,7 +449,7 @@ def seed_single_event(
     alert_level: str = "Green",
     target_mun_code: str = "PANAY_ALL",
     overwrite: bool = True,
-    window_days: int = 14
+    window_days: int = 31
 ) -> Dict[str, Any]:
     """
     Dynamically seeds radiance_observations for a single disaster event (such as an imported GDACS alert)

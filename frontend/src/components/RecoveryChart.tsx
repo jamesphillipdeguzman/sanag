@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import type { Municipality } from '@/types';
-import { CalendarDays, TrendingUp, TrendingDown, Building2, AlertTriangle, X } from 'lucide-react';
+import type { Municipality, DisasterEvent } from '@/types';
+import { CalendarDays, TrendingUp, TrendingDown, Building2, AlertTriangle, X, ChevronDown, Layers } from 'lucide-react';
+import { events as defaultMockEvents } from '@/data/mockData';
 
 export type ViewMode = 'hubs' | 'critical';
 
@@ -8,6 +9,9 @@ interface RecoveryChartProps {
   municipalities: Municipality[];
   selectedId: string | null;
   records: RecoveryRecord[];
+  events?: DisasterEvent[];
+  activeEventId?: string | null;
+  onEventChange?: (eventId: string) => void;
   eventDate?: string;
   startDate?: string;
   endDate?: string;
@@ -25,6 +29,9 @@ export default function RecoveryChart({
   municipalities,
   selectedId,
   records,
+  events: propEvents,
+  activeEventId,
+  onEventChange,
   eventDate,
   startDate = '',
   endDate = '',
@@ -32,6 +39,51 @@ export default function RecoveryChart({
   onSelect,
 }: RecoveryChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('hubs');
+
+  // Comprehensive events list ensuring default fixtures (1990 Earthquake, Typhoon Tino, etc.) are available
+  const allEvents = useMemo(() => {
+    const list = propEvents && propEvents.length > 0 ? propEvents : defaultMockEvents;
+    const existingIds = new Set(list.map((e) => String(e.id)));
+    const missingDefaults = defaultMockEvents.filter((d) => !existingIds.has(String(d.id)));
+    return [...list, ...missingDefaults];
+  }, [propEvents]);
+
+  // Determine active event ID matching selected event, start date, or eventDate
+  const currentEventId = useMemo(() => {
+    if (activeEventId && allEvents.some((e) => String(e.id) === String(activeEventId))) {
+      return String(activeEventId);
+    }
+    const matchByDate = allEvents.find((e) => e.date === startDate || e.date === eventDate);
+    if (matchByDate) return String(matchByDate.id);
+    return allEvents[0]?.id ? String(allEvents[0].id) : '';
+  }, [activeEventId, allEvents, eventDate, startDate]);
+
+  // Handle disaster event dropdown selection with automatic start & end date binding
+  const handleEventSelect = (selectedId: string) => {
+    if (!selectedId) return;
+    if (onEventChange) {
+      onEventChange(selectedId);
+    }
+    const chosen = allEvents.find((e) => String(e.id) === String(selectedId));
+    if (chosen && onDateRangeChange) {
+      const sDate = chosen.date
+        ? chosen.date.length >= 10 && !isNaN(new Date(chosen.date).getTime())
+          ? chosen.date.slice(0, 10)
+          : chosen.date
+        : '';
+      let eDate = '';
+      if (chosen.endDate && chosen.endDate.length >= 10 && !isNaN(new Date(chosen.endDate).getTime())) {
+        eDate = chosen.endDate.slice(0, 10);
+      } else if (sDate) {
+        const d = new Date(`${sDate}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + 31);
+        eDate = d.toISOString().slice(0, 10);
+      }
+      if (sDate && eDate) {
+        onDateRangeChange(sDate, eDate);
+      }
+    }
+  };
 
   // Pre-index valid records by municipality PCODE for the active event window
   const recordsByPcode = useMemo(() => {
@@ -105,14 +157,43 @@ export default function RecoveryChart({
   const innerW = W - margin.left - margin.right;
   const innerH = H - margin.top - margin.bottom;
 
-  // Collect all unique observation dates across series to build a unified timeline
-  const allDates = useMemo(() => {
-    const dateSet = new Set<string>();
-    series.forEach((s) => s.data.forEach((d) => dateSet.add(d.date)));
-    return Array.from(dateSet).sort();
-  }, [series]);
+  // Build a complete day-by-day spine covering the full selected date window.
+  // This ensures the X-axis always spans [startDate, endDate] even when observations
+  // are sparse or only cover a subset of the selected range.
+  const fullTimeline = useMemo(() => {
+    const buildRange = (from: string, to: string): string[] => {
+      const dates: string[] = [];
+      const cur = new Date(`${from}T00:00:00Z`);
+      const end = new Date(`${to}T00:00:00Z`);
+      while (cur <= end) {
+        dates.push(cur.toISOString().slice(0, 10));
+        cur.setUTCDate(cur.getUTCDate() + 1);
+      }
+      return dates;
+    };
 
-  const pointCount = allDates.length;
+    // Collect all unique observation dates to determine actual data bounds
+    const obsDates = new Set<string>();
+    series.forEach((s) => s.data.forEach((d) => obsDates.add(d.date)));
+    const sortedObs = Array.from(obsDates).sort();
+
+    const rangeStart = startDate || sortedObs[0];
+    const rangeEnd = endDate || sortedObs[sortedObs.length - 1];
+
+    if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) {
+      // Fall back to just the observation dates if range is undefined
+      return sortedObs;
+    }
+    return buildRange(rangeStart, rangeEnd);
+  }, [endDate, series, startDate]);
+
+  const pointCount = fullTimeline.length;
+  // Map a date string to its exact pixel X position within the full timeline
+  const dateToX = (dateStr: string): number => {
+    const idx = fullTimeline.indexOf(dateStr);
+    if (idx < 0) return margin.left; // date not in range — shouldn't occur normally
+    return margin.left + (pointCount > 1 ? (idx / (pointCount - 1)) * innerW : innerW / 2);
+  };
   const xScale = (i: number) => margin.left + (pointCount > 1 ? (i / (pointCount - 1)) * innerW : innerW / 2);
   const yScale = (score: number) => margin.top + innerH - (score / 100) * innerH;
 
@@ -124,15 +205,15 @@ export default function RecoveryChart({
     });
 
   const dateRange =
-    allDates.length > 1
-      ? `${formatDate(allDates[0])} - ${formatDate(allDates[allDates.length - 1])}`
-      : allDates[0]
-        ? formatDate(allDates[0])
+    fullTimeline.length > 1
+      ? `${formatDate(fullTimeline[0])} - ${formatDate(fullTimeline[fullTimeline.length - 1])}`
+      : fullTimeline[0]
+        ? formatDate(fullTimeline[0])
         : eventDate
           ? formatDate(eventDate)
           : 'No valid observations';
 
-  const eventMarkerIndex = allDates.findIndex((d) => d >= (eventDate ?? ''));
+  const eventMarkerIndex = fullTimeline.findIndex((d) => d >= (eventDate ?? ''));
   const markerX = eventMarkerIndex >= 0 ? xScale(eventMarkerIndex) : xScale(0);
 
   // Dynamic palette reflecting whether tracking provincial hubs or critical vulnerability targets
@@ -227,42 +308,69 @@ export default function RecoveryChart({
       )}
 
       <div className="p-5">
-        {/* Date Range Selector */}
-        {onDateRangeChange && (
-          <div className="mb-4 flex flex-wrap items-end gap-3 pb-4 border-b border-white/5">
-            <div>
-              <label htmlFor="recovery-start-date" className="mb-1 block text-xs font-medium text-ink-400">Start date</label>
-              <div className="relative">
-                <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-                <input
-                  id="recovery-start-date"
-                  name="start"
-                  type="date"
-                  value={startDate}
-                  max={endDate || undefined}
-                  onChange={(event) => onDateRangeChange(event.target.value, endDate)}
-                  className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                />
-              </div>
-            </div>
-            <span className="pb-2 text-sm text-ink-400">to</span>
-            <div>
-              <label htmlFor="recovery-end-date" className="mb-1 block text-xs font-medium text-ink-400">End date</label>
-              <div className="relative">
-                <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-                <input
-                  id="recovery-end-date"
-                  name="end"
-                  type="date"
-                  value={endDate}
-                  min={startDate || undefined}
-                  onChange={(event) => onDateRangeChange(startDate, event.target.value)}
-                  className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                />
-              </div>
+        {/* Event & Date Range Filter Toolbar */}
+        <div className="mb-4 flex flex-wrap items-end gap-3 pb-4 border-b border-white/5">
+          {/* Select Event Dropdown */}
+          <div className="min-w-[260px] flex-1 sm:flex-initial">
+            <label htmlFor="recovery-event-select" className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink-300">
+              <Layers className="h-3.5 w-3.5 text-ocean-400" />
+              <span>Select Event</span>
+            </label>
+            <div className="relative">
+              <select
+                id="recovery-event-select"
+                name="event"
+                value={currentEventId}
+                onChange={(event) => handleEventSelect(event.target.value)}
+                className="w-full rounded-md border border-white/10 bg-ink-950 py-2 pl-3 pr-8 text-sm font-medium text-white shadow-sm transition-colors [color-scheme:dark] hover:border-white/20 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
+              >
+                {allEvents.map((evt) => (
+                  <option key={evt.id} value={evt.id} className="bg-ink-950 text-white py-1">
+                    {evt.name} ({evt.date ? evt.date.slice(0, 10) : 'N/A'})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
             </div>
           </div>
-        )}
+
+          {/* Date Range Pickers */}
+          {onDateRangeChange && (
+            <div className="flex items-end gap-2.5 flex-wrap">
+              <div>
+                <label htmlFor="recovery-start-date" className="mb-1 block text-xs font-medium text-ink-400">Start date</label>
+                <div className="relative">
+                  <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                  <input
+                    id="recovery-start-date"
+                    name="start"
+                    type="date"
+                    value={startDate}
+                    max={endDate || undefined}
+                    onChange={(event) => onDateRangeChange(event.target.value, endDate)}
+                    className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
+                  />
+                </div>
+              </div>
+              <span className="pb-2 text-sm text-ink-400">to</span>
+              <div>
+                <label htmlFor="recovery-end-date" className="mb-1 block text-xs font-medium text-ink-400">End date</label>
+                <div className="relative">
+                  <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                  <input
+                    id="recovery-end-date"
+                    name="end"
+                    type="date"
+                    value={endDate}
+                    min={startDate || undefined}
+                    onChange={(event) => onDateRangeChange(startDate, event.target.value)}
+                    className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Dynamic Legend and Timeline Window Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -365,11 +473,11 @@ export default function RecoveryChart({
                 Recovery Score (%)
               </text>
 
-              {/* X axis labels */}
-              {allDates.map((dateStr, index) => {
+              {/* X axis labels — sampled from the full timeline for readability */}
+              {fullTimeline.map((dateStr, index) => {
                 if (
-                  allDates.length > 7 &&
-                  ![0, Math.floor((allDates.length - 1) / 2), allDates.length - 1].includes(index)
+                  fullTimeline.length > 7 &&
+                  ![0, Math.floor((fullTimeline.length - 1) / 2), fullTimeline.length - 1].includes(index)
                 ) {
                   return null;
                 }
@@ -410,17 +518,18 @@ export default function RecoveryChart({
               {/* Recovery curves */}
               {series.map((s, i) => {
                 const color = lineColors[i % lineColors.length];
+                // Map each observed data point to its exact X position within the full timeline
                 const isSingle = s.data.length === 1;
                 const firstPt = s.data[0];
                 const lastPt = s.data[s.data.length - 1];
-                const firstX = xScale(allDates.indexOf(firstPt.date));
-                const lastX = xScale(allDates.indexOf(lastPt.date));
+                const firstX = dateToX(firstPt.date);
+                const lastX = dateToX(lastPt.date);
 
                 const pathData = isSingle
                   ? `M ${firstX - 15} ${yScale(firstPt.recoveryScore)} L ${firstX + 15} ${yScale(firstPt.recoveryScore)}`
                   : s.data
                       .map((pt, j) => {
-                        const x = xScale(allDates.indexOf(pt.date));
+                        const x = dateToX(pt.date);
                         const y = yScale(pt.recoveryScore);
                         return `${j === 0 ? 'M' : 'L'} ${x} ${y}`;
                       })
@@ -428,7 +537,7 @@ export default function RecoveryChart({
 
                 const areaPath = !isSingle
                   ? `M ${firstX} ${yScale(firstPt.recoveryScore)} ` +
-                    s.data.map((pt) => `L ${xScale(allDates.indexOf(pt.date))} ${yScale(pt.recoveryScore)}`).join(' ') +
+                    s.data.map((pt) => `L ${dateToX(pt.date)} ${yScale(pt.recoveryScore)}`).join(' ') +
                     ` L ${lastX} ${margin.top + innerH} L ${firstX} ${margin.top + innerH} Z`
                   : '';
 
