@@ -790,8 +790,35 @@ function LeafletMap({
     onMapHoverChangeRef.current = onMapHoverChange;
   }, [onMapHoverChange]);
 
-  // Default map view to locked on load so users must explicitly click/tap to interact
-  const [isLocked, setIsLocked] = useState<boolean>(true);
+  // Track lock state imperatively so toggling NEVER causes a LeafletMap re-render.
+  // All side-effects (Leaflet handlers + container classList) are applied directly
+  // via applyMapLock(), avoiding any React render cycle for the tile layer.
+  const isLockedRef = useRef<boolean>(true);
+
+  // Imperatively enable/disable Leaflet interaction handlers and update the
+  // container CSS class. Does NOT call setState, so the tile layer is safe.
+  const applyMapLock = (locked: boolean) => {
+    isLockedRef.current = locked;
+    const map = mapRef.current;
+    if (map) {
+      if (locked) {
+        map.dragging?.disable();
+        map.touchZoom?.disable();
+        map.doubleClickZoom?.disable();
+        map.boxZoom?.disable();
+      } else {
+        map.dragging?.enable();
+        map.touchZoom?.enable();
+        map.doubleClickZoom?.enable();
+        map.boxZoom?.enable();
+      }
+    }
+    const el = mapElement.current;
+    if (el) {
+      el.classList.toggle('is-locked', locked);
+      el.classList.toggle('is-unlocked', !locked);
+    }
+  };
 
   // Asynchronous lazy-loader for regional GeoJSON chunks with in-memory caching
   const fetchRegionChunk = async (key: string): Promise<GeoJSON.FeatureCollection | null> => {
@@ -1001,36 +1028,9 @@ function LeafletMap({
     });
   };
 
-  const handleUnlock = () => {
-    setIsLocked(false);
-  };
-
-  const handleLock = () => {
-    setIsLocked(true);
-    resetToPanayBounds(true);
-  };
-
   const handleReset = () => {
     resetToPanayBounds(true);
   };
-
-  // Sync Leaflet drag, touch, and zoom handlers with lock state
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (isLocked) {
-      map.dragging?.disable();
-      map.touchZoom?.disable();
-      map.doubleClickZoom?.disable();
-      map.boxZoom?.disable();
-    } else {
-      map.dragging?.enable();
-      map.touchZoom?.enable();
-      map.doubleClickZoom?.enable();
-      map.boxZoom?.enable();
-    }
-  }, [isLocked]);
 
   // Initialize Map with Canvas renderer and Panay Island default fast-load
   useEffect(() => {
@@ -1429,56 +1429,89 @@ function LeafletMap({
       onMouseEnter={() => onMapHoverChange?.(true)}
       onMouseLeave={() => onMapHoverChange?.(false)}
     >
+      {/* Static initial class; applyMapLock() mutates classList directly without re-rendering LeafletMap */}
       <div
         ref={mapElement}
-        className={`leaflet-map ${isLocked ? 'is-locked' : 'is-unlocked'}`}
+        className="leaflet-map is-locked"
         aria-label="Philippine municipality recovery map"
       />
 
-      {/* Sleek UI overlay controls */}
-      <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
-        {isLocked ? (
+      {/* Overlay buttons live in their own component so their state changes
+          never propagate back up into LeafletMap and never touch the tile layer. */}
+      <MapLockOverlay
+        onUnlock={() => applyMapLock(false)}
+        onLock={() => { applyMapLock(true); resetToPanayBounds(true); }}
+        onReset={handleReset}
+      />
+    </div>
+  );
+}
+
+// ─── MapLockOverlay ──────────────────────────────────────────────────────────
+// Isolated button component whose re-renders are fully decoupled from LeafletMap.
+// It owns the visual toggle state; all Leaflet side-effects are handled by the
+// callbacks passed from LeafletMap via applyMapLock().
+interface MapLockOverlayProps {
+  onUnlock: () => void;
+  onLock: () => void;
+  onReset: () => void;
+}
+function MapLockOverlay({ onUnlock, onLock, onReset }: MapLockOverlayProps) {
+  const [isLocked, setIsLocked] = useState<boolean>(true);
+
+  const handleUnlock = () => {
+    setIsLocked(false);
+    onUnlock();
+  };
+
+  const handleLock = () => {
+    setIsLocked(true);
+    onLock();
+  };
+
+  return (
+    <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+      {isLocked ? (
+        <button
+          type="button"
+          onClick={handleUnlock}
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ocean-300 hover:text-white border border-ocean-500/35 hover:border-ocean-400/60 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 group focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+          aria-label="Unlock map to interact, pan, and zoom"
+          title="Unlock map to pan and zoom"
+        >
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-ocean-500"></span>
+          </span>
+          <Lock className="w-3.5 h-3.5 text-ocean-400 group-hover:text-ocean-300 transition-colors" />
+          <span>Tap to Interact</span>
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleUnlock}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ocean-300 hover:text-white border border-ocean-500/35 hover:border-ocean-400/60 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 group focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label="Unlock map to interact, pan, and zoom"
-            title="Unlock map to pan and zoom"
+            onClick={onReset}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ink-300 hover:text-white border border-white/10 hover:border-white/25 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+            aria-label="Reset map view to Panay Island"
+            title="Re-center on Panay Island (Default)"
           >
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-ocean-500"></span>
-            </span>
-            <Lock className="w-3.5 h-3.5 text-ocean-400 group-hover:text-ocean-300 transition-colors" />
-            <span>Tap to Interact</span>
+            <RotateCcw className="w-3.5 h-3.5 text-ink-400" />
+            <span className="hidden sm:inline">Reset Panay</span>
+            <span className="sm:hidden">Reset</span>
           </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleReset}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-ink-950/90 hover:bg-ink-900 text-ink-300 hover:text-white border border-white/10 hover:border-white/25 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-              aria-label="Reset map view to Panay Island"
-              title="Re-center on Panay Island (Default)"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-ink-400" />
-              <span className="hidden sm:inline">Reset Panay</span>
-              <span className="sm:hidden">Reset</span>
-            </button>
 
-            <button
-              type="button"
-              onClick={handleLock}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-500/20 hover:bg-ocean-500/30 text-ocean-200 hover:text-white border border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-              aria-label="Lock map viewport and re-center on Panay Island"
-              title="Lock map and re-center on Panay Island"
-            >
-              <Lock className="w-3.5 h-3.5 text-ocean-300" />
-              <span>Lock Map</span>
-            </button>
-          </div>
-        )}
-      </div>
+          <button
+            type="button"
+            onClick={handleLock}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-500/20 hover:bg-ocean-500/30 text-ocean-200 hover:text-white border border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+            aria-label="Lock map viewport and re-center on Panay Island"
+            title="Lock map and re-center on Panay Island"
+          >
+            <Lock className="w-3.5 h-3.5 text-ocean-300" />
+            <span>Lock Map</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
