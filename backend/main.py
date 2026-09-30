@@ -64,6 +64,7 @@ class EventModel(BaseModel):
     category: str
     image_url: Optional[str] = None
     affected_population: Optional[int] = None
+    critical_municipalities: Optional[List[Dict[str, Any]]] = None
 
 class EventsResponse(BaseModel):
     events: List[EventModel]
@@ -178,6 +179,71 @@ def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: str) -
         print(f"Error computing affected population for date {event_date}: {e}")
         return 0
 
+def compute_event_critical_municipalities(cursor: sqlite3.Cursor, event_date: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Returns the top severely affected municipalities (ranked by lowest R(t) recovery ratio)
+    for an event date, ensuring a robust list of multiple critical LGUs (e.g. top 4-5) is returned
+    rather than a truncated single-item list.
+    """
+    try:
+        query = """
+            SELECT 
+                o.municipality_name,
+                COALESCE(o.municipality_pcode, m.code) AS pcode,
+                o.daily_radiance,
+                COALESCE(
+                    (SELECT b1.baseline_radiance FROM baselines b1 
+                     WHERE (b1.municipality_name = o.municipality_name OR b1.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
+                       AND b1.baseline_radiance IS NOT NULL 
+                       AND (b1.month_date = substr(o.observation_date, 1, 7) OR b1.month_date = substr(o.observation_date, 1, 7) || '-01')
+                     LIMIT 1),
+                    (SELECT b2.baseline_radiance FROM baselines b2 
+                     WHERE (b2.municipality_name = o.municipality_name OR b2.municipality_pcode = COALESCE(o.municipality_pcode, m.code))
+                       AND b2.baseline_radiance IS NOT NULL 
+                       AND (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) <= o.observation_date
+                     ORDER BY (CASE WHEN length(b2.month_date) = 7 THEN b2.month_date || '-01' ELSE b2.month_date END) DESC LIMIT 1),
+                    0.75
+                ) AS baseline_radiance
+            FROM radiance_observations o
+            LEFT JOIN municipalities m ON (o.municipality_name = m.name OR o.municipality_pcode = m.code)
+            WHERE o.observation_date = ?
+        """
+        cursor.execute(query, (event_date,))
+        rows = cursor.fetchall()
+
+        if not rows and event_date:
+            cursor.execute("""
+                SELECT observation_date, ABS(JULIANDAY(observation_date) - JULIANDAY(?)) AS diff
+                FROM radiance_observations
+                ORDER BY diff ASC LIMIT 1
+            """, (event_date,))
+            nearest = cursor.fetchone()
+            if nearest and nearest["diff"] is not None and nearest["diff"] <= 3:
+                cursor.execute(query, (nearest["observation_date"],))
+                rows = cursor.fetchall()
+
+        results = []
+        for r in rows:
+            rad = r["daily_radiance"]
+            base = r["baseline_radiance"]
+            if rad is None or base is None or base <= 0:
+                continue
+            r_t = round(rad / base, 4)
+            score = max(0, min(100, round(r_t * 100)))
+            results.append({
+                "name": r["municipality_name"],
+                "pcode": r["pcode"] or "UNKNOWN",
+                "recovery_score": score,
+                "r_t": r_t,
+                "status": "critical" if score < 40 else "warning" if score < 60 else "recovering" if score < 90 else "restored"
+            })
+
+        results.sort(key=lambda x: (x["r_t"], x["recovery_score"]))
+        return results[:limit]
+    except Exception as e:
+        print(f"Error computing critical municipalities for date {event_date}: {e}")
+        return []
+
 
 # --- Endpoints ---
 
@@ -247,6 +313,7 @@ def get_events():
                 event["id"] = str(event["id"])
             # Compute total affected population dynamically from satellite observations
             event["affected_population"] = compute_event_affected_population(cursor, event["date"])
+            event["critical_municipalities"] = compute_event_critical_municipalities(cursor, event["date"], limit=5)
             events.append(event)
 
         conn.close()
@@ -373,6 +440,7 @@ def get_event_radiance(
             rows = cursor.fetchall()
 
     event_dict["affected_population"] = compute_event_affected_population(cursor, target_date)
+    event_dict["critical_municipalities"] = compute_event_critical_municipalities(cursor, target_date, limit=5)
     conn.close()
     
     spatial_time_data = []

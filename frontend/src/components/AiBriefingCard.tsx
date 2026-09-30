@@ -55,6 +55,24 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     [sorted, totalCount]
   );
 
+  // Priority LGUs: Populate a robust list of multiple critical municipalities (top 4-5 severely affected LGUs)
+  // Ensures the priority areas widget and context string always reflect multiple LGUs rather than being truncated.
+  const priorityLGUs = useMemo(() => {
+    if (critical.length >= 5) {
+      return critical.slice(0, 5);
+    }
+    const combined = [...critical];
+    const seen = new Set(critical.map((m) => m.id));
+    for (const m of sorted) {
+      if (!seen.has(m.id)) {
+        combined.push(m);
+        seen.add(m.id);
+        if (combined.length >= 5) break;
+      }
+    }
+    return combined;
+  }, [critical, sorted]);
+
   const fetchBriefing = async () => {
     setIsLoading(true);
     setErrorMsg(null);
@@ -66,7 +84,7 @@ Total Municipalities Monitored: ${municipalities.length}
 Island-wide Average Recovery Score: ${avgScore}%
 Municipalities >= 90% Restored: ${restored.length}
 Municipalities in Critical/Warning State (<60%): ${critical.length}
-Top Critical Outage LGUs: ${critical
+Top Critical Outage LGUs: ${priorityLGUs
         .slice(0, 5)
         .map(
           (m) =>
@@ -367,7 +385,7 @@ Top Benchmark Restored LGUs: ${restored
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {critical.slice(0, 4).map((m, i) => (
+                {priorityLGUs.slice(0, 4).map((m, i) => (
                   <div
                     key={m.id}
                     className="flex flex-col justify-between rounded-xl bg-ink-950/50 border border-white/10 p-3.5 hover:border-ocean-500/30 transition-all shadow-md"

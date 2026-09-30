@@ -26,4 +26,11 @@ export interface DisasterEvent {
   affectedPopulation: number;
   description: string;
   category?: string;
+  critical_municipalities?: Array<{
+    name: string;
+    pcode: string;
+    recovery_score: number;
+    r_t: number;
+    status: string;
+  }>;
 }
