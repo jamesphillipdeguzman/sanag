@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Users, Wind, Zap } from 'lucide-react';
+import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Users, Wind, X, Zap } from 'lucide-react';
 import type { Municipality, DisasterEvent, GdacsAlert } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 import PanayMap from '@/components/PanayMap';
@@ -10,6 +10,7 @@ interface OverviewProps {
   activeEvent: DisasterEvent;
   events: DisasterEvent[];
   onSelectEvent: (id: string) => void;
+  onDismissEvent?: () => void;
   selectedId: string | null;
   onSelectMunicipality: (id: string) => void;
   recoveryDate?: string | null;
@@ -27,6 +28,7 @@ export default function Overview({
   activeEvent,
   events,
   onSelectEvent,
+  onDismissEvent,
   selectedId,
   onSelectMunicipality,
   recoveryDate,
@@ -164,9 +166,22 @@ export default function Overview({
                 {events.length} Incidents Tracked
               </span>
             </div>
-            <span className="text-xs text-ink-400 hidden sm:inline">
-              Select an incident to recompute spatial radiance & recovery curves
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-ink-400 hidden sm:inline">
+                Select an incident to recompute spatial radiance &amp; recovery curves
+              </span>
+              {onDismissEvent && (
+                <button
+                  type="button"
+                  onClick={onDismissEvent}
+                  title="Dismiss current active event"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-rose-500/10 hover:border-rose-500/30 text-ink-400 hover:text-rose-300 text-xs font-medium transition-all cursor-pointer shrink-0"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Dismiss Event</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Cards Grid */}

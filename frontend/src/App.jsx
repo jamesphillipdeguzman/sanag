@@ -241,6 +241,11 @@ function App() {
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
+  const handleDismissEvent = useCallback(() => {
+    setActiveEventId(null)
+    setSelectedId(null)
+  }, [])
+
   // Dynamically keep events list updated with current affected population calculation
   useEffect(() => {
     if (!activeEventId || activeAffectedPopulation === 0) return
@@ -396,12 +401,13 @@ function App() {
         </div>
       )}
 
-      {activeEvent && (
+      {activeEvent ? (
         <Overview
           municipalities={municipalities}
           activeEvent={activeEvent}
           events={events}
           onSelectEvent={setActiveEventId}
+          onDismissEvent={handleDismissEvent}
           selectedId={selectedId}
           onSelectMunicipality={selectMunicipality}
           recoveryDate={recoveryDate}
@@ -413,6 +419,33 @@ function App() {
           importingGdacsId={importingId}
           importedEventIds={importedEventIds}
         />
+      ) : (
+        /* Empty state shown when no event is active */
+        <section className="relative pt-20 lg:pt-24 pb-8 overflow-hidden">
+          <div className="absolute inset-0 bg-ink-950 pointer-events-none" />
+          <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
+          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-ink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white mb-1">No Active Incident Selected</h2>
+                <p className="text-sm text-ink-400 max-w-sm">Select an incident from the timeline below to load satellite radiance, recovery curves, and the situational briefing.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveEventId(PRIMARY_EVENT_ID)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-ocean-500/40 bg-ocean-500/10 hover:bg-ocean-500/20 text-sm font-semibold text-ocean-200 transition-all cursor-pointer"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1018.364 9" /></svg>
+                Restore Default Event
+              </button>
+            </div>
+          </div>
+        </section>
       )}
       {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}
       <main className="dashboard-main">
@@ -429,7 +462,7 @@ function App() {
           <MunicipalityTable municipalities={municipalities} selectedId={selectedId} onSelect={selectMunicipality} />
         </section>
         <section id="events" className="dashboard-section">
-          <EventTimeline events={events} activeEventId={activeEventId} onSelect={setActiveEventId} />
+          <EventTimeline events={events} activeEventId={activeEventId} onSelect={setActiveEventId} onDismiss={handleDismissEvent} />
         </section>
         <section className="dashboard-section">
           {activeEvent && <AiBriefingCard event={activeEvent} municipalities={municipalities} />}
