@@ -361,16 +361,44 @@ function App() {
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
+  // Calculate uniform resilience ranks across all municipalities (1-based index from lowest score to highest)
+  const municipalitiesWithRank = useMemo(() => {
+    if (!municipalities || municipalities.length === 0) return []
+    const sorted = [...municipalities].sort(
+      (a, b) => (a.recoveryScore ?? 50) - (b.recoveryScore ?? 50) || (a.name || '').localeCompare(b.name || '')
+    )
+    const rankMap = new Map()
+    sorted.forEach((m, idx) => {
+      rankMap.set(m.id, idx + 1)
+      if (m.pcode) rankMap.set(m.pcode, idx + 1)
+    })
+
+    return municipalities.map((m) => {
+      const rank = rankMap.get(m.id) || (m.pcode ? rankMap.get(m.pcode) : null) || 1
+      return {
+        ...m,
+        resilienceRank: rank,
+        rank,
+      }
+    })
+  }, [municipalities])
+
+  const selectedGlobalRank = useMemo(() => {
+    if (!selectedId || !municipalitiesWithRank.length) return null
+    const found = municipalitiesWithRank.find((m) => m.id === selectedId || m.pcode === selectedId)
+    return found?.resilienceRank ?? null
+  }, [municipalitiesWithRank, selectedId])
+
   // Panay Island LGUs for Panay-focused executive summary & benchmarks by default
   const panayMunicipalities = useMemo(() => {
-    const list = municipalities.filter(
+    const list = municipalitiesWithRank.filter(
       (m) =>
         ['Iloilo', 'Capiz', 'Aklan', 'Antique', 'Panay'].includes(m.province) ||
         (m.pcode && m.pcode.startsWith('PH06')) ||
         (!m.province && !m.region)
     )
-    return list.length > 0 ? list : municipalities
-  }, [municipalities])
+    return list.length > 0 ? list : municipalitiesWithRank
+  }, [municipalitiesWithRank])
 
   const handleDismissEvent = useCallback(() => {
     setActiveEventId(null)
@@ -606,12 +634,13 @@ function App() {
 
       {activeEvent ? (
         <Overview
-          municipalities={municipalities}
+          municipalities={municipalitiesWithRank}
           activeEvent={activeEvent}
           events={events}
           onSelectEvent={handleSelectEvent}
           onDismissEvent={handleDismissEvent}
           selectedId={selectedId}
+          globalRank={selectedGlobalRank}
           onSelectMunicipality={selectMunicipality}
           recoveryDate={recoveryDate}
           isMapLoading={isMapLoading}
@@ -655,8 +684,9 @@ function App() {
       <main className="dashboard-main">
         <section id="recovery" className="dashboard-section">
           <RecoveryChart
-            municipalities={municipalities}
+            municipalities={municipalitiesWithRank}
             selectedId={selectedId}
+            globalRank={selectedGlobalRank}
             records={recoveryRecords}
             events={events}
             activeEventId={activeEventId}
@@ -676,7 +706,7 @@ function App() {
           />
         </section>
         <section className="dashboard-section">
-          <MunicipalityTable municipalities={municipalities} selectedId={selectedId} onSelect={selectMunicipality} />
+          <MunicipalityTable municipalities={municipalitiesWithRank} selectedId={selectedId} onSelect={selectMunicipality} />
         </section>
         <section id="events" className="dashboard-section">
           <EventTimeline events={events} activeEventId={activeEventId} onSelect={handleSelectEvent} onDismiss={handleDismissEvent} />

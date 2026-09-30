@@ -58,10 +58,11 @@ export class AudioSpatialIndicator {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private bandpassFilter: BiquadFilterNode | null = null;
-  private isEnabled: boolean = false;
+  private isEnabled: boolean = false;       // User explicit toggle ON/OFF
+  private isHovered: boolean = false;       // Active pointer hovering on map component
   private currentStatus: EmergencyAudioStatus = 'restored';
   private timerId: number | null = null;
-  private subscribers: Set<(active: boolean, status: EmergencyAudioStatus) => void> = new Set();
+  private subscribers: Set<(active: boolean, status: EmergencyAudioStatus, isHovered: boolean, isPlaying: boolean) => void> = new Set();
 
   private initContext(): boolean {
     if (this.ctx && this.ctx.state !== 'closed') {
@@ -145,7 +146,8 @@ export class AudioSpatialIndicator {
   }
 
   /**
-   * Internal scheduler loop matching the active disaster recovery status
+   * Internal scheduler loop matching the active disaster recovery status.
+   * Only chirps if user explicitly enabled audio AND pointer is currently hovering the map.
    */
   private scheduleNext() {
     if (this.timerId !== null) {
@@ -153,7 +155,7 @@ export class AudioSpatialIndicator {
       this.timerId = null;
     }
 
-    if (!this.isEnabled) return;
+    if (!this.isEnabled || !this.isHovered) return;
 
     const profile = PROFILES[this.currentStatus] || PROFILES.restored;
 
@@ -174,29 +176,27 @@ export class AudioSpatialIndicator {
   }
 
   /**
-   * Starts or resumes the audio-spatial indicator
+   * Internal engine starter when both enabled AND hovered
    */
-  public start(initialStatus?: EmergencyAudioStatus) {
-    if (initialStatus) {
-      this.currentStatus = initialStatus;
+  private startEngine() {
+    if (!this.isEnabled || !this.isHovered) {
+      this.stopEngine();
+      return;
     }
 
     if (!this.initContext()) return;
 
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
 
-    this.isEnabled = true;
     this.scheduleNext();
-    this.notifySubscribers();
   }
 
   /**
-   * Stops/mutes the audio-spatial indicator completely
+   * Internal engine stopper (suspends context and clears timers immediately)
    */
-  public stop() {
-    this.isEnabled = false;
+  private stopEngine() {
     if (this.timerId !== null) {
       window.clearTimeout(this.timerId);
       this.timerId = null;
@@ -205,21 +205,67 @@ export class AudioSpatialIndicator {
     if (this.ctx && this.ctx.state === 'running') {
       this.ctx.suspend().catch(() => {});
     }
+  }
 
+  /**
+   * Enables the audio feature explicitly
+   */
+  public start(initialStatus?: EmergencyAudioStatus) {
+    if (initialStatus) {
+      this.currentStatus = initialStatus;
+    }
+
+    this.isEnabled = true;
+    if (this.isHovered) {
+      this.startEngine();
+    }
     this.notifySubscribers();
   }
 
   /**
-   * Toggles the audio indicator on/off
+   * Stops/mutes the audio-spatial indicator completely
+   */
+  public stop() {
+    this.isEnabled = false;
+    this.stopEngine();
+    this.notifySubscribers();
+  }
+
+  /**
+   * Toggles the audio indicator on/off explicitly
    */
   public toggle(status?: EmergencyAudioStatus): boolean {
-    if (this.isEnabled) {
-      this.stop();
-      return false;
-    } else {
-      this.start(status);
-      return true;
+    if (status) {
+      this.currentStatus = status;
     }
+
+    this.isEnabled = !this.isEnabled;
+
+    if (this.isEnabled && this.isHovered) {
+      this.startEngine();
+    } else {
+      this.stopEngine();
+    }
+
+    this.notifySubscribers();
+    return this.isEnabled;
+  }
+
+  /**
+   * Updates map hover focus.
+   * Audio ONLY plays when isEnabled === true AND isHovered === true.
+   */
+  public setHovered(hovered: boolean) {
+    if (this.isHovered === hovered) return;
+    this.isHovered = hovered;
+
+    if (this.isEnabled && this.isHovered) {
+      this.startEngine();
+    } else {
+      this.stopEngine();
+    }
+
+    this.notifySubscribers();
   }
 
   /**
@@ -229,15 +275,27 @@ export class AudioSpatialIndicator {
     if (this.currentStatus === status) return;
     this.currentStatus = status;
 
-    if (this.isEnabled) {
+    if (this.isEnabled && this.isHovered) {
       // Immediate resync to new status profile
       this.scheduleNext();
-      this.notifySubscribers();
     }
+    this.notifySubscribers();
   }
 
   public getIsActive(): boolean {
     return this.isEnabled;
+  }
+
+  public getIsEnabled(): boolean {
+    return this.isEnabled;
+  }
+
+  public getIsHovered(): boolean {
+    return this.isHovered;
+  }
+
+  public getIsPlaying(): boolean {
+    return this.isEnabled && this.isHovered && this.currentStatus !== 'restored';
   }
 
   public getStatus(): EmergencyAudioStatus {
@@ -245,21 +303,28 @@ export class AudioSpatialIndicator {
   }
 
   public getStatusLabel(): string {
+    if (!this.isEnabled) {
+      return 'Off';
+    }
+    if (!this.isHovered) {
+      return 'Standby (Hover Map)';
+    }
     return PROFILES[this.currentStatus]?.label ?? 'Muted';
   }
 
-  public subscribe(callback: (active: boolean, status: EmergencyAudioStatus) => void): () => void {
+  public subscribe(callback: (active: boolean, status: EmergencyAudioStatus, isHovered: boolean, isPlaying: boolean) => void): () => void {
     this.subscribers.add(callback);
-    callback(this.isEnabled, this.currentStatus);
+    callback(this.isEnabled, this.currentStatus, this.isHovered, this.getIsPlaying());
     return () => {
       this.subscribers.delete(callback);
     };
   }
 
   private notifySubscribers() {
+    const isPlaying = this.getIsPlaying();
     this.subscribers.forEach((cb) => {
       try {
-        cb(this.isEnabled, this.currentStatus);
+        cb(this.isEnabled, this.currentStatus, this.isHovered, isPlaying);
       } catch (err) {
         console.error('AudioSpatialIndicator subscriber error:', err);
       }
@@ -275,25 +340,33 @@ export const audioSpatialIndicator = new AudioSpatialIndicator();
  */
 export function useAudioSpatialIndicator(activeStatus?: EmergencyAudioStatus) {
   const [isActive, setIsActive] = useState<boolean>(() => audioSpatialIndicator.getIsActive());
+  const [isHovered, setIsHovered] = useState<boolean>(() => audioSpatialIndicator.getIsHovered());
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => audioSpatialIndicator.getIsPlaying());
   const [status, setStatus] = useState<EmergencyAudioStatus>(() => audioSpatialIndicator.getStatus());
 
   useEffect(() => {
-    const unsubscribe = audioSpatialIndicator.subscribe((active, currentStatus) => {
+    const unsubscribe = audioSpatialIndicator.subscribe((active, currentStatus, hovered, playing) => {
       setIsActive(active);
       setStatus(currentStatus);
+      setIsHovered(hovered);
+      setIsPlaying(playing);
     });
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    if (activeStatus && isActive) {
+    if (activeStatus) {
       audioSpatialIndicator.setStatus(activeStatus);
     }
-  }, [activeStatus, isActive]);
+  }, [activeStatus]);
 
   const toggle = useCallback((forcedStatus?: EmergencyAudioStatus) => {
     return audioSpatialIndicator.toggle(forcedStatus || activeStatus);
   }, [activeStatus]);
+
+  const setHovered = useCallback((hovered: boolean) => {
+    audioSpatialIndicator.setHovered(hovered);
+  }, []);
 
   const setAudioStatus = useCallback((newStatus: EmergencyAudioStatus) => {
     audioSpatialIndicator.setStatus(newStatus);
@@ -301,8 +374,12 @@ export function useAudioSpatialIndicator(activeStatus?: EmergencyAudioStatus) {
 
   return {
     isActive,
+    isEnabled: isActive,
+    isHovered,
+    isPlaying,
     status,
     toggle,
+    setHovered,
     setAudioStatus,
     statusLabel: audioSpatialIndicator.getStatusLabel(),
   };
