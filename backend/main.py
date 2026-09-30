@@ -674,7 +674,8 @@ def get_recovery_scores(
 @app.get("/api/v1/events/{event_id}/radiance", tags=["Events & Spatial Data"])
 def get_event_radiance(
     event_id: str,
-    municipality: Optional[str] = Query(None, description="Optional municipality name or ADM3_PCODE filter")
+    municipality: Optional[str] = Query(None, description="Optional municipality name or ADM3_PCODE filter"),
+    observation_date: Optional[str] = Query(None, description="Observation date in YYYY-MM-DD format; defaults to the event date")
 ):
     """
     Connects historical event records to spatial/time radiance data across Panay municipalities.
@@ -710,7 +711,7 @@ def get_event_radiance(
     event_dict = dict(event)
     if event_dict.get("id") is not None:
         event_dict["id"] = str(event_dict["id"])
-    raw_date = event_dict.get("date")
+    raw_date = observation_date or event_dict.get("date")
     target_date: Optional[str] = str(raw_date) if raw_date is not None else None
     
     query = """

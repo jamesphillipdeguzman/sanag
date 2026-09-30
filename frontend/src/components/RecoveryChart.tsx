@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Municipality } from '@/types';
-import { TrendingUp, TrendingDown, Building2, AlertTriangle, X } from 'lucide-react';
+import { CalendarDays, TrendingUp, TrendingDown, Building2, AlertTriangle, X } from 'lucide-react';
 
 export type ViewMode = 'hubs' | 'critical';
 
@@ -9,6 +9,9 @@ interface RecoveryChartProps {
   selectedId: string | null;
   records: RecoveryRecord[];
   eventDate?: string;
+  startDate?: string;
+  endDate?: string;
+  onDateRangeChange?: (startDate: string, endDate: string) => void;
   onSelect?: (id: string | null) => void;
 }
 
@@ -23,6 +26,9 @@ export default function RecoveryChart({
   selectedId,
   records,
   eventDate,
+  startDate = '',
+  endDate = '',
+  onDateRangeChange,
   onSelect,
 }: RecoveryChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('hubs');
@@ -31,20 +37,15 @@ export default function RecoveryChart({
   const recordsByPcode = useMemo(() => {
     const map = new Map<string, RecoveryRecord[]>();
     const validRecords = records.filter((record) => record.r_t !== null && record.r_t !== undefined);
-    const windowStart = eventDate ? new Date(`${eventDate}T00:00:00Z`) : null;
-    if (windowStart) windowStart.setUTCDate(windowStart.getUTCDate() - 3); // Include pre-event baseline/onset observations
-    const windowEnd = eventDate ? new Date(`${eventDate}T00:00:00Z`) : null;
-    if (windowEnd) windowEnd.setUTCDate(windowEnd.getUTCDate() + 30);
 
     for (const record of validRecords) {
-      const recordDate = new Date(`${record.date}T00:00:00Z`);
-      if (windowStart && windowEnd && (recordDate < windowStart || recordDate > windowEnd)) continue;
+      if ((startDate && record.date < startDate) || (endDate && record.date > endDate)) continue;
       const municipalityRecords = map.get(record.pcode) ?? [];
       municipalityRecords.push(record);
       map.set(record.pcode, municipalityRecords);
     }
     return map;
-  }, [eventDate, records]);
+  }, [endDate, records, startDate]);
 
   // Determine which municipalities to display based on viewMode or selectedId
   const featured = useMemo(() => {
@@ -226,6 +227,43 @@ export default function RecoveryChart({
       )}
 
       <div className="p-5">
+        {/* Date Range Selector */}
+        {onDateRangeChange && (
+          <div className="mb-4 flex flex-wrap items-end gap-3 pb-4 border-b border-white/5">
+            <div>
+              <label htmlFor="recovery-start-date" className="mb-1 block text-xs font-medium text-ink-400">Start date</label>
+              <div className="relative">
+                <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                <input
+                  id="recovery-start-date"
+                  name="start"
+                  type="date"
+                  value={startDate}
+                  max={endDate || undefined}
+                  onChange={(event) => onDateRangeChange(event.target.value, endDate)}
+                  className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+              </div>
+            </div>
+            <span className="pb-2 text-sm text-ink-400">to</span>
+            <div>
+              <label htmlFor="recovery-end-date" className="mb-1 block text-xs font-medium text-ink-400">End date</label>
+              <div className="relative">
+                <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                <input
+                  id="recovery-end-date"
+                  name="end"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(event) => onDateRangeChange(startDate, event.target.value)}
+                  className="rounded-md border border-white/10 bg-ink-950 py-2 pl-9 pr-3 text-sm text-white shadow-sm [color-scheme:dark] focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Dynamic Legend and Timeline Window Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
@@ -282,7 +320,7 @@ export default function RecoveryChart({
 
         {series.length === 0 ? (
           <div className="rounded-xl border border-white/5 bg-ink-950/50 px-4 py-8 text-center text-sm text-ink-400">
-            No valid VIIRS recovery observations are available during this event window.
+            No valid VIIRS recovery observations are available during this date range.
           </div>
         ) : (
           /* Chart */
