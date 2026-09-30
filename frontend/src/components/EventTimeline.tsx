@@ -37,7 +37,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
           {/* Horizontal line */}
           <div className="absolute top-5 left-0 right-0 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/15 to-transparent" />
 
-          <div className="flex gap-3 overflow-x-auto scrollbar-thin pb-2">
+          <div className="flex gap-3 overflow-x-auto scrollbar-thin py-2 px-1">
             {events.map((event) => {
               const isActive = event.id === activeEventId;
               const color = getSeverityColor(event.severity);

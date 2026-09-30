@@ -1352,34 +1352,34 @@ function LeafletMap({
 
       // Build Interactive Leaflet Popup with direct DOM click listeners
       const popupContainer = document.createElement('div');
-      popupContainer.className = 'gdacs-popup-content p-3.5 text-ink-100 max-w-[285px] font-sans';
+      popupContainer.className = 'gdacs-popup-content p-3.5 text-slate-700 dark:text-ink-100 max-w-[285px] font-sans';
       popupContainer.innerHTML = `
-        <div class="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-white/10">
+        <div class="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-200 dark:border-white/10">
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider" 
                 style="background-color: ${color}22; color: ${color}; border: 1px solid ${color}45;">
             ${alert.alert_level || 'Green'} Alert
           </span>
-          <span class="text-[10px] text-ink-400 font-mono">${alert.type || 'HAZARD'}</span>
+          <span class="text-[10px] text-slate-500 dark:text-ink-400 font-mono">${alert.type || 'HAZARD'}</span>
         </div>
-        <h4 class="text-xs font-bold text-white mb-1 leading-snug">${alert.name}</h4>
-        <p class="text-[11px] text-ink-300 mb-2.5 leading-relaxed line-clamp-2">${alert.description || ''}</p>
-        <div class="bg-black/50 rounded-lg p-2 mb-2.5 border border-white/5 space-y-1 text-[10px]">
-          <div class="flex items-center justify-between text-ink-300">
-            <span class="text-ink-400">Coordinates:</span>
-            <span class="font-mono text-white font-medium">${lat.toFixed(4)}°, ${lng.toFixed(4)}°</span>
+        <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1 leading-snug">${alert.name}</h4>
+        <p class="text-[11px] text-slate-600 dark:text-ink-300 mb-2.5 leading-relaxed line-clamp-2">${alert.description || ''}</p>
+        <div class="bg-slate-100/80 dark:bg-black/50 rounded-lg p-2 mb-2.5 border border-slate-200/80 dark:border-white/5 space-y-1 text-[10px]">
+          <div class="flex items-center justify-between text-slate-600 dark:text-ink-300">
+            <span class="text-slate-500 dark:text-ink-400">Coordinates:</span>
+            <span class="font-mono text-slate-900 dark:text-white font-medium">${lat.toFixed(4)}°, ${lng.toFixed(4)}°</span>
           </div>
-          <div class="flex items-center justify-between text-ink-300">
-            <span class="text-ink-400">Date:</span>
-            <span class="text-white">${alert.date}</span>
+          <div class="flex items-center justify-between text-slate-600 dark:text-ink-300">
+            <span class="text-slate-500 dark:text-ink-400">Date:</span>
+            <span class="text-slate-900 dark:text-white font-medium">${alert.date}</span>
           </div>
           ${alert.severity_text ? `
-          <div class="flex items-center justify-between text-amber-300 font-medium pt-0.5 border-t border-white/5">
-            <span class="text-ink-400">Severity:</span>
+          <div class="flex items-center justify-between text-amber-700 dark:text-amber-300 font-medium pt-0.5 border-t border-slate-200 dark:border-white/5">
+            <span class="text-slate-500 dark:text-ink-400">Severity:</span>
             <span class="truncate ml-1 font-semibold">${alert.severity_text}</span>
           </div>` : ''}
-          <div class="flex items-center justify-between text-[11px] pt-1 border-t border-white/10">
-            <span class="text-ink-400">VIIRS Radiance:</span>
-            <span class="${alert.viirs_data_available !== false ? 'text-emerald-300 font-medium' : 'text-amber-300 font-medium'} flex items-center gap-1">
+          <div class="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200 dark:border-white/10">
+            <span class="text-slate-500 dark:text-ink-400">VIIRS Radiance:</span>
+            <span class="${alert.viirs_data_available !== false ? 'text-emerald-700 dark:text-emerald-300 font-medium' : 'text-amber-700 dark:text-amber-300 font-medium'} flex items-center gap-1">
               ${alert.viirs_data_available !== false ? '✓ Ready to Simulate' : '⏳ VIIRS Data Pending'}
             </span>
           </div>

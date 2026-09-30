@@ -354,6 +354,19 @@ function App() {
     }
   }, [events])
 
+  const handleCreateCustomEvent = useCallback((newEvent) => {
+    setEvents((prev) => {
+      const filtered = prev.filter((e) => String(e.id) !== String(newEvent.id))
+      return [newEvent, ...filtered]
+    })
+    setActiveEventId(newEvent.id)
+    const sDate = formatIsoDate(newEvent.date)
+    const eDate = formatIsoDate(newEvent.endDate)
+    if (sDate && eDate) {
+      setRecoveryDateRange({ eventId: newEvent.id, startDate: sDate, endDate: eDate })
+    }
+  }, [])
+
   useEffect(() => {
     setLatestObservationDate(null)
   }, [activeEventId])
@@ -691,6 +704,7 @@ function App() {
               events={events}
               activeEventId={activeEventId}
               onEventChange={handleSelectEvent}
+              onCreateEvent={handleCreateCustomEvent}
               eventDate={activeEvent?.date}
               onSelect={selectMunicipality}
               startDate={recoveryStartDate}
