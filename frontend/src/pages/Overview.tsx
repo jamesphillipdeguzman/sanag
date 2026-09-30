@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { Activity, AlertTriangle, Calendar, CheckCircle2, CloudRain, Droplets, TrendingUp, Users, Wind, Zap } from 'lucide-react';
-import type { Municipality, DisasterEvent } from '@/types';
+import type { Municipality, DisasterEvent, GdacsAlert } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
 import PanayMap from '@/components/PanayMap';
+import GdacsAlertBanner from '@/components/GdacsAlertBanner';
 
 interface OverviewProps {
   municipalities: Municipality[];
@@ -13,6 +14,12 @@ interface OverviewProps {
   onSelectMunicipality: (id: string) => void;
   recoveryDate?: string | null;
   isMapLoading?: boolean;
+  gdacsAlerts?: GdacsAlert[];
+  onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
+  isGdacsLoading?: boolean;
+  onRefreshGdacs?: () => void;
+  importingGdacsId?: string | null;
+  importedEventIds?: Set<string>;
 }
 
 export default function Overview({
@@ -24,6 +31,12 @@ export default function Overview({
   onSelectMunicipality,
   recoveryDate,
   isMapLoading = false,
+  gdacsAlerts = [],
+  onSimulateGdacs,
+  isGdacsLoading = false,
+  onRefreshGdacs,
+  importingGdacsId = null,
+  importedEventIds = new Set(),
 }: OverviewProps) {
   const avgRecovery = municipalities.length > 0
     ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
@@ -49,17 +62,21 @@ export default function Overview({
   const getEventIcon = (event: DisasterEvent) => {
     const type = event.type?.toLowerCase() || '';
     const name = event.name?.toLowerCase() || '';
-    if (type.includes('flood') || name.includes('monsoon') || name.includes('flood')) {
+    const cat = event.category?.toLowerCase() || '';
+    if (type.includes('flood') || name.includes('monsoon') || name.includes('flood') || cat.includes('flood')) {
       return <Droplets className="h-4 w-4 text-ocean-400 shrink-0" />;
     }
-    if (type.includes('typhoon') || name.includes('typhoon') || name.includes('storm')) {
+    if (type.includes('typhoon') || name.includes('typhoon') || name.includes('storm') || cat.includes('typhoon') || cat.includes('cyclone')) {
       return <Wind className="h-4 w-4 text-amber-400 shrink-0" />;
+    }
+    if (type.includes('earthquake') || name.includes('earthquake') || cat.includes('earthquake')) {
+      return <Activity className="h-4 w-4 text-emerald-400 shrink-0" />;
     }
     return <Zap className="h-4 w-4 text-rose-400 shrink-0" />;
   };
 
   return (
-    <section id="overview" className="relative pt-20 lg:pt-22 pb-8 overflow-hidden">
+    <section id="overview" className="relative pt-20 lg:pt-24 pb-8 overflow-hidden">
       {/* Background aesthetics */}
       <div className="absolute inset-0 bg-ink-950 pointer-events-none" />
       <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
@@ -68,7 +85,7 @@ export default function Overview({
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ROW 1: Header + Summary Metrics (aligned for standard viewport visibility) */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-white/10 mb-4 animate-fade-in-up">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-white/10 mb-3 animate-fade-in-up">
           {/* Header left */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
@@ -120,6 +137,20 @@ export default function Overview({
               badge="Impacted LGUs"
             />
           </div>
+        </div>
+
+        {/* GDACS Situational Telemetry Marquee Banner directly beneath Header */}
+        <div className="mb-4 animate-fade-in-up" style={{ animationDelay: '0.04s' }}>
+          <GdacsAlertBanner
+            alerts={gdacsAlerts}
+            isLoading={isGdacsLoading}
+            onRefresh={onRefreshGdacs}
+            onImport={onSimulateGdacs}
+            importingId={importingGdacsId}
+            activeEventId={activeEvent.id}
+            importedEventIds={importedEventIds}
+            onSelectEvent={onSelectEvent}
+          />
         </div>
 
         {/* ROW 2: Event Selector Cards (Clean layout without overlapping) */}
@@ -207,6 +238,9 @@ export default function Overview({
             onSelect={onSelectMunicipality}
             recoveryDate={recoveryDate}
             isLoading={isMapLoading}
+            gdacsAlerts={gdacsAlerts}
+            activeEventId={activeEvent?.id}
+            onSimulateGdacs={onSimulateGdacs}
           />
         </section>
       </div>

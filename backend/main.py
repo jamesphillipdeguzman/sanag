@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import sqlite3
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from calculator import compute_recovery_index
 from weather_service import fetch_historical_weather
 from ai_briefing import generate_recovery_briefing
 from contextlib import asynccontextmanager
-from seed_events import seed_observations_for_all_events
+from seed_events import seed_observations_for_all_events, seed_single_event
+from gdacs_service import get_latest_philippines_disasters, EVENT_TYPE_MAP
 
 # --- 1. Define your lifespan startup handler ---
 @asynccontextmanager
@@ -69,6 +70,18 @@ class EventModel(BaseModel):
 class EventsResponse(BaseModel):
     events: List[EventModel]
 
+class GDACSImportRequest(BaseModel):
+    event_id: Union[str, int]
+    name: Optional[str] = None
+    type: Optional[str] = None
+    category: Optional[str] = None
+    alert_level: Optional[str] = "Green"
+    date: Optional[str] = None
+    description: Optional[str] = None
+    severity: Optional[str] = None
+    affected_population: Optional[int] = None
+    window_days: Optional[int] = 14
+
 class RecoveryScoresResponse(BaseModel):
     records_count: int
     data: List[Dict[str, Any]]
@@ -109,11 +122,13 @@ def get_municipality_population_lookup() -> Dict[str, int]:
         _MUNICIPALITY_POP_CACHE = {}
         return {}
 
-def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: str) -> int:
+def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: Optional[str]) -> int:
     """
     Sums the population totals of all municipalities flagged as affected
     or under critical thresholds (R(t) < 0.60 or < 0.90) for an event date.
     """
+    if not event_date:
+        return 0
     try:
         pop_lookup = get_municipality_population_lookup()
 
@@ -179,12 +194,14 @@ def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: str) -
         print(f"Error computing affected population for date {event_date}: {e}")
         return 0
 
-def compute_event_critical_municipalities(cursor: sqlite3.Cursor, event_date: str, limit: int = 5) -> List[Dict[str, Any]]:
+def compute_event_critical_municipalities(cursor: sqlite3.Cursor, event_date: Optional[str], limit: int = 5) -> List[Dict[str, Any]]:
     """
     Returns the top severely affected municipalities (ranked by lowest R(t) recovery ratio)
     for an event date, ensuring a robust list of multiple critical LGUs (e.g. top 4-5) is returned
     rather than a truncated single-item list.
     """
+    if not event_date:
+        return []
     try:
         query = """
             SELECT 
@@ -311,15 +328,179 @@ def get_events():
             event = dict(row)
             if event.get("id") is not None:
                 event["id"] = str(event["id"])
+            date_val = str(event["date"]) if event.get("date") is not None else None
             # Compute total affected population dynamically from satellite observations
-            event["affected_population"] = compute_event_affected_population(cursor, event["date"])
-            event["critical_municipalities"] = compute_event_critical_municipalities(cursor, event["date"], limit=5)
+            event["affected_population"] = compute_event_affected_population(cursor, date_val)
+            event["critical_municipalities"] = compute_event_critical_municipalities(cursor, date_val, limit=5)
             events.append(event)
 
         conn.close()
         return {"events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/v1/gdacs-live", tags=["GDACS Live Feeds"])
+@app.get("/api/v1/gdacs/alerts", tags=["GDACS Live Feeds"])
+@app.get("/api/v1/events/gdacs/live", tags=["GDACS Live Feeds"])
+def get_gdacs_alerts(limit: int = Query(25, ge=1, le=100)):
+    """
+    Fetches real-time GDACS natural hazard alerts filtered for the Philippines,
+    enriching each item with status on whether it is already imported into SANAG,
+    as well as spatial geographic coordinates (latitude, longitude, bbox, geometry).
+    """
+    try:
+        raw_alerts = get_latest_philippines_disasters(limit=limit)
+        
+        # Check database for existing imported GDACS event IDs
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM events")
+        existing_event_ids = {str(row["id"]) for row in cursor.fetchall()}
+        conn.close()
+
+        enriched = []
+        for alert in raw_alerts:
+            item = dict(alert)
+            ev_id = str(item.get("event_id", ""))
+            clean_id = f"gdacs-{ev_id}" if not ev_id.startswith("gdacs-") else ev_id
+            item["id"] = clean_id
+            item["is_imported"] = (clean_id in existing_event_ids or ev_id in existing_event_ids)
+            enriched.append(item)
+
+        return {
+            "status": "success",
+            "count": len(enriched),
+            "alerts": enriched,
+            "data": enriched
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch GDACS alerts: {str(e)}")
+
+
+@app.post("/api/v1/events/import-gdacs", tags=["Events & GDACS"])
+def import_gdacs_event(payload: GDACSImportRequest):
+    """
+    Imports a live GDACS event alert into the SANAG simulation timeline:
+    1. Extracts hazard metrics (alert level, hazard type, epicenter/region, date).
+    2. Upserts into the disaster events database.
+    3. Dynamically generates and seeds calibrated Day-0 to Day-13 municipal recovery
+       curves across all 93 Panay LGUs using their baseline radiance values.
+    4. Immediately computes affected population and critical LGUs.
+    """
+    try:
+        raw_id = str(payload.event_id).strip()
+        if not raw_id:
+            raise HTTPException(status_code=400, detail="A valid GDACS event_id is required.")
+        
+        clean_id = f"gdacs-{raw_id}" if not raw_id.startswith("gdacs-") else raw_id
+        
+        # Categorize hazard type
+        raw_type = (payload.type or "GEN").upper().strip()
+        category = payload.category or EVENT_TYPE_MAP.get(raw_type, "Power Disruption")
+        if "typhoon" in (payload.name or "").lower() or "cyclone" in (payload.name or "").lower():
+            category = "Typhoon"
+        elif "earthquake" in (payload.name or "").lower():
+            category = "Earthquake"
+        elif "flood" in (payload.name or "").lower():
+            category = "Flood"
+            
+        alert_lvl = (payload.alert_level or "Green").capitalize()
+        
+        # Clean date (format YYYY-MM-DD)
+        from datetime import datetime, timezone
+        raw_date = (payload.date or "").strip()
+        if len(raw_date) >= 10:
+            date_clean = raw_date[:10]
+        else:
+            date_clean = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            
+        event_name = (payload.name or f"GDACS: {category} Incident #{raw_id}").strip()
+        desc = (payload.description or f"Live GDACS alert ({alert_lvl} Alert) initialized with calibrated Panay recovery baseline.").strip()
+        
+        # Determine severity label
+        if alert_lvl == "Red":
+            severity = "Severe"
+        elif alert_lvl == "Orange":
+            severity = "High"
+        else:
+            severity = "Moderate"
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Check actual table schema
+        cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
+        if "event_title" in cols:
+            cursor.execute("""
+                INSERT INTO events (id, affected_pcode, event_title, description, event_date, event_type)
+                VALUES (?, 'PANAY_ALL', ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    event_title = excluded.event_title,
+                    description = excluded.description,
+                    event_date = excluded.event_date,
+                    event_type = excluded.event_type
+            """, (clean_id, event_name, desc, date_clean, category))
+        else:
+            cursor.execute("""
+                INSERT INTO events (id, municipality_code, name, description, date, category, image_url)
+                VALUES (?, 'PANAY_ALL', ?, ?, ?, ?, NULL)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    description = excluded.description,
+                    date = excluded.date,
+                    category = excluded.category
+            """, (clean_id, event_name, desc, date_clean, category))
+        
+        conn.commit()
+        conn.close()
+
+        # 2. Dynamically seed baseline recovery observations across all 93 Panay municipalities
+        window = payload.window_days or 14
+        seed_res = seed_single_event(
+            event_id=clean_id,
+            event_date_str=date_clean,
+            category=category,
+            alert_level=alert_lvl,
+            target_mun_code="PANAY_ALL",
+            overwrite=True,
+            window_days=window
+        )
+
+        # 3. Calculate affected population & critical LGUs from newly seeded observations
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        affected_pop = compute_event_affected_population(cursor, date_clean)
+        critical_lgus = compute_event_critical_municipalities(cursor, date_clean, limit=5)
+        conn.close()
+
+        mapped_event = {
+            "id": clean_id,
+            "municipality_code": "PANAY_ALL",
+            "name": event_name,
+            "description": desc,
+            "date": date_clean,
+            "category": category,
+            "alert_level": alert_lvl,
+            "severity": severity,
+            "affected_population": affected_pop,
+            "critical_municipalities": critical_lgus,
+            "image_url": None,
+            "seed_stats": seed_res
+        }
+
+        return {
+            "status": "success",
+            "message": f"GDACS alert '{event_name}' successfully imported and seeded into active simulation grid.",
+            "event": mapped_event
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error importing GDACS event: {str(e)}")
 
 
 @app.get("/api/v1/recovery-scores", response_model=RecoveryScoresResponse, tags=["Recovery Engine"])
@@ -387,7 +568,8 @@ def get_event_radiance(
     event_dict = dict(event)
     if event_dict.get("id") is not None:
         event_dict["id"] = str(event_dict["id"])
-    target_date = event_dict.get("date")
+    raw_date = event_dict.get("date")
+    target_date: Optional[str] = str(raw_date) if raw_date is not None else None
     
     query = """
         SELECT 
@@ -439,8 +621,12 @@ def get_event_radiance(
             cursor.execute(query, params)
             rows = cursor.fetchall()
 
-    event_dict["affected_population"] = compute_event_affected_population(cursor, target_date)
-    event_dict["critical_municipalities"] = compute_event_critical_municipalities(cursor, target_date, limit=5)
+    if target_date is not None:
+        event_dict["affected_population"] = compute_event_affected_population(cursor, target_date)
+        event_dict["critical_municipalities"] = compute_event_critical_municipalities(cursor, target_date, limit=5)
+    else:
+        event_dict["affected_population"] = 0
+        event_dict["critical_municipalities"] = []
     conn.close()
     
     spatial_time_data = []

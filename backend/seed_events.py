@@ -1,3 +1,4 @@
+from datetime import timezone
 import sqlite3
 import os
 import math
@@ -397,6 +398,131 @@ def seed_observations_for_all_events(overwrite: bool = True, window_days: int = 
     conn.commit()
     conn.close()
     print(f"\nSuccessfully seeded {records_processed} observation records with diverse, data-driven recovery curves!")
+
+
+def seed_single_event(
+    event_id: str,
+    event_date_str: str,
+    category: str = "Power Disruption",
+    alert_level: str = "Green",
+    target_mun_code: str = "PANAY_ALL",
+    overwrite: bool = True,
+    window_days: int = 14
+) -> Dict[str, Any]:
+    """
+    Dynamically seeds radiance_observations for a single disaster event (such as an imported GDACS alert)
+    across all 93 Panay municipalities, scaling the initial radiance impact and recovery trajectory
+    according to GDACS hazard type and alert level (Red / Orange / Green).
+    """
+    event_date = parse_date_safe(event_date_str)
+    event_date = datetime.now(timezone.utc)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, code, province_code FROM municipalities")
+    municipalities = cursor.fetchall()
+    if not municipalities:
+        conn.close()
+        return {"records_processed": 0, "day0_avg": 0.0, "day0_states": {}}
+
+    baselines_by_mun, regional_avg = fetch_baselines_cache(cursor)
+
+    # Determine hazard-level impact parameters based on GDACS alert level & hazard category
+    alert = (alert_level or "Green").strip().lower()
+    cat_cfg = CATEGORY_IMPACT_CONFIG.get(category, DEFAULT_IMPACT_CONFIG)
+
+    if alert == "red":
+        base_impact = min(0.25, cat_cfg["base_ratio"] * 0.70)
+        base_k = max(0.14, cat_cfg["base_k"] * 0.80)
+    elif alert == "orange":
+        base_impact = min(0.42, cat_cfg["base_ratio"] * 0.95)
+        base_k = max(0.18, cat_cfg["base_k"] * 0.95)
+    else:  # Green or informational alert
+        base_impact = min(0.65, max(0.50, cat_cfg["base_ratio"] * 1.35))
+        base_k = min(0.32, cat_cfg["base_k"] * 1.25)
+
+    if target_mun_code and target_mun_code != "PANAY_ALL":
+        target_munis = [m for m in municipalities if m["code"] == target_mun_code or m["name"] == target_mun_code]
+        if not target_munis:
+            target_munis = municipalities
+    else:
+        target_munis = municipalities
+
+    records_processed = 0
+    day0_scores: List[float] = []
+    day0_states: Dict[str, int] = {"restored": 0, "recovering": 0, "warning": 0, "critical": 0}
+
+    for mun in target_munis:
+        mun_name = mun["name"]
+        pcode = mun["code"]
+        province_code = mun["province_code"] or ""
+
+        baseline = get_matching_baseline(baselines_by_mun, regional_avg, mun_name, pcode, event_date)
+
+        for day_idx in range(window_days):
+            current_date = event_date + timedelta(days=day_idx)
+            date_str = current_date.strftime("%Y-%m-%d")
+
+            simulated_radiance = compute_recovery_radiance(
+                baseline=baseline,
+                impact_ratio=base_impact,
+                k=base_k,
+                day_index=day_idx,
+                total_days=window_days,
+                event_id=event_id,
+                category=category,
+                mun_name=mun_name,
+                pcode=pcode,
+                province_code=province_code,
+            )
+
+            if day_idx == 0:
+                r_val = simulated_radiance / baseline if baseline > 0 else 0.0
+                score = round(r_val * 100)
+                day0_scores.append(score)
+                if score >= 90:
+                    day0_states["restored"] += 1
+                elif score >= 60:
+                    day0_states["recovering"] += 1
+                elif score >= 30:
+                    day0_states["warning"] += 1
+                else:
+                    day0_states["critical"] += 1
+
+            if overwrite:
+                cursor.execute("""
+                    INSERT INTO radiance_observations (municipality_name, municipality_pcode, observation_date, daily_radiance)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(municipality_name, observation_date) DO UPDATE SET
+                        daily_radiance = excluded.daily_radiance,
+                        municipality_pcode = excluded.municipality_pcode
+                """, (mun_name, pcode, date_str, simulated_radiance))
+            else:
+                cursor.execute(
+                    "SELECT 1 FROM radiance_observations WHERE municipality_name = ? AND observation_date = ?",
+                    (mun_name, date_str)
+                )
+                if not cursor.fetchone():
+                    cursor.execute("""
+                        INSERT INTO radiance_observations (municipality_name, municipality_pcode, observation_date, daily_radiance)
+                        VALUES (?, ?, ?, ?)
+                    """, (mun_name, pcode, date_str, simulated_radiance))
+
+            records_processed += 1
+
+    conn.commit()
+    conn.close()
+
+    avg_day0 = sum(day0_scores) / len(day0_scores) if day0_scores else 0.0
+    return {
+        "event_id": event_id,
+        "date": event_date.strftime("%Y-%m-%d"),
+        "records_processed": records_processed,
+        "day0_avg": avg_day0,
+        "day0_states": day0_states
+    }
 
 
 if __name__ == "__main__":
