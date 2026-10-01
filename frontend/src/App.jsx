@@ -9,6 +9,7 @@ import EventSelectorPanel from './components/EventSelectorPanel.tsx'
 import GuideGlossary from './components/GuideGlossary.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
+import ErrorBoundary from './components/ErrorBoundary.tsx'
 import { apiFetch, setHasLocalFallbackData, safeJsonParse } from './services/apiService.ts'
 import { useServerHealth } from './context/ServerHealthContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
@@ -214,8 +215,8 @@ function App() {
   const handleSelectTab = useCallback((tab) => {
     if (!VALID_TABS.includes(tab)) return
     setActiveTab(tab)
-    if (typeof window !== 'undefined') {
-      window.location.hash = `#${tab}`
+    if (typeof window !== 'undefined' && window.location.hash !== `#${tab}`) {
+      window.history.replaceState(null, '', `#${tab}`)
     }
   }, [])
 
@@ -479,7 +480,7 @@ function App() {
     }
   }, [events, handleSelectEvent])
 
-  const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
+  const baseActiveEvent = events.find((event) => String(event.id) === String(activeEventId)) ?? events[0] ?? null
 
   // Calculate dynamic affected population for active event based on current municipality recovery statuses
   const activeAffectedPopulation = useMemo(() => {
@@ -502,9 +503,15 @@ function App() {
 
   const activeEvent = useMemo(() => {
     if (!baseActiveEvent) return null
+    const defaultCoords = [11.0, 122.5]
     return {
       ...baseActiveEvent,
       affectedPopulation: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
+      coordinates: baseActiveEvent.coordinates ?? (baseActiveEvent.latitude != null && baseActiveEvent.longitude != null ? [baseActiveEvent.latitude, baseActiveEvent.longitude] : defaultCoords),
+      impact_metrics: {
+        lgus: baseActiveEvent.critical_municipalities ?? [],
+        affected_population: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
+      },
     }
   }, [baseActiveEvent, activeAffectedPopulation])
 
@@ -565,6 +572,16 @@ function App() {
 
   useEffect(() => {
     setLatestObservationDate(null)
+  }, [activeEventId])
+
+  // Ensure switching active event cleans up any lingering body locks / overflows from drawers/modals
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = ''
+      document.body.style.touchAction = ''
+      document.documentElement.style.overflow = ''
+      document.documentElement.style.touchAction = ''
+    }
   }, [activeEventId])
 
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
@@ -1000,22 +1017,24 @@ function App() {
           className={activeTab === 'map' ? 'h-full w-full' : 'hidden'}
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-            <PanayMap
-              municipalities={municipalitiesWithRank}
-              selectedId={selectedId}
-              globalRank={selectedGlobalRank}
-              onSelect={selectMunicipality}
-              recoveryDate={recoveryDate}
-              isLoading={isMapLoading}
-              gdacsAlerts={gdacsAlerts}
-              activeEventId={activeEventId}
-              activeEvent={activeEvent}
-              onSimulateGdacs={handleImportGdacs}
-              selectedRegionKey={selectedRegionKey}
-              onRegionChange={handleRegionChange}
-              onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
-              isActiveTab={activeTab === 'map'}
-            />
+            <ErrorBoundary name="Panay Spatial Map" resetKey={activeEventId}>
+              <PanayMap
+                municipalities={municipalitiesWithRank}
+                selectedId={selectedId}
+                globalRank={selectedGlobalRank}
+                onSelect={selectMunicipality}
+                recoveryDate={recoveryDate}
+                isLoading={isMapLoading}
+                gdacsAlerts={gdacsAlerts}
+                activeEventId={activeEventId}
+                activeEvent={activeEvent}
+                onSimulateGdacs={handleImportGdacs}
+                selectedRegionKey={selectedRegionKey}
+                onRegionChange={handleRegionChange}
+                onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
+                isActiveTab={activeTab === 'map'}
+              />
+            </ErrorBoundary>
           </div>
         </div>
 
@@ -1113,28 +1132,32 @@ function App() {
                 </div>
               </div>
 
-              {activeEvent && (
+              {activeEvent ? (
                 <div className="w-full">
-                  <EventSelectorPanel
-                    events={events}
-                    activeEvent={activeEvent}
-                    onSelectEvent={handleSelectEvent}
-                    onDismissEvent={handleDismissEvent}
-                    onSimulateGdacs={handleImportGdacs}
-                    importingGdacsId={importingId}
-                    importedEventIds={importedEventIds}
-                    selectedRegionKey={selectedRegionKey}
-                  />
+                  <ErrorBoundary name="Event Selector Panel" resetKey={activeEventId}>
+                    <EventSelectorPanel
+                      events={events}
+                      activeEvent={activeEvent}
+                      onSelectEvent={handleSelectEvent}
+                      onDismissEvent={handleDismissEvent}
+                      onSimulateGdacs={handleImportGdacs}
+                      importingGdacsId={importingId}
+                      importedEventIds={importedEventIds}
+                      selectedRegionKey={selectedRegionKey}
+                    />
+                  </ErrorBoundary>
                 </div>
-              )}
+              ) : null}
 
               <div className="w-full">
-                <EventTimeline
-                  events={events}
-                  activeEventId={activeEventId}
-                  onSelect={handleSelectEvent}
-                  onDismiss={handleDismissEvent}
-                />
+                <ErrorBoundary name="Event Timeline" resetKey={activeEventId}>
+                  <EventTimeline
+                    events={events}
+                    activeEventId={activeEventId}
+                    onSelect={handleSelectEvent}
+                    onDismiss={handleDismissEvent}
+                  />
+                </ErrorBoundary>
               </div>
             </div>
           </section>

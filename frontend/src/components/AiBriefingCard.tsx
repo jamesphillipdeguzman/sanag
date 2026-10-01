@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 interface AiBriefingCardProps {
-  event: DisasterEvent;
+  event?: DisasterEvent | null;
   municipalities: Municipality[];
 }
 
@@ -110,9 +110,14 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
           .join('; ')
       : 'None. All monitored municipalities have achieved recovery scores >= 60% (100% or near-full recovery), with zero active critical deficit clusters.';
 
+    const eventName = event?.name || 'Disaster Incident';
+    const eventSeverity = event?.severity || 'Moderate';
+    const eventType = event?.type || 'Disaster';
+    const eventDate = event?.date || '';
+
     const contextString = `
-Disaster Incident: ${event.name} (${event.date})
-Incident Severity: ${event.severity} | Category: ${event.type}
+Disaster Incident: ${eventName} (${eventDate})
+Incident Severity: ${eventSeverity} | Category: ${eventType}
 Total Municipalities Monitored: ${municipalities.length}
 Island-wide Average Recovery Score: ${avgScore}%
 Municipalities >= 90% Restored: ${restored.length}
@@ -169,7 +174,7 @@ ${benchmarkHeader}: ${benchmarkString}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5">
-              Incident: <span className="text-slate-900 dark:text-white font-medium">{event.name}</span> · VIIRS Radiance Metrics ·{' '}
+              Incident: <span className="text-slate-900 dark:text-white font-medium">{event?.name || 'Active Incident'}</span> · VIIRS Radiance Metrics ·{' '}
               {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
@@ -279,7 +284,7 @@ ${benchmarkHeader}: ${benchmarkString}
                   content={
                     isAllRestoredOrNoCritical &&
                     (/\b(critical or warning states?|requiring targeted technical and logistical reinforcement|limited-power states?)\b/i.test(briefingData.summary))
-                      ? `Following the impact of ${event.name}, satellite nightlight observations confirm that all ${municipalities.length || 93} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
+                      ? `Following the impact of ${event?.name || 'the disaster event'}, satellite nightlight observations confirm that all ${municipalities.length || 93} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
                       : briefingData.summary
                   }
                 />
@@ -709,7 +714,7 @@ function MarkdownContent({ content }: { content: string }) {
 
 function parseBriefingResponse(
   payload: any,
-  event: DisasterEvent,
+  event: DisasterEvent | null | undefined,
   avgScore: number,
   critical: Municipality[],
   restored: Municipality[],
@@ -793,7 +798,8 @@ function parseBriefingResponse(
   // 2. It dynamically outputs a positive, steady-state narrative.
   if (isSteadyState) {
     const lguCount = totalMunicipalities || 93;
-    const steadyStateSummary = `Following the impact of ${event.name}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`;
+    const eventName = event?.name || 'the disaster event';
+    const steadyStateSummary = `Following the impact of ${eventName}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`;
 
     const hasDeficitPhrases =
       !summary ||
@@ -857,7 +863,7 @@ function extractStructuredObject(
   obj: any,
   source: 'gemini' | 'fallback',
   isCriticalZero = false,
-  event?: DisasterEvent,
+  event?: DisasterEvent | null,
   totalMunicipalities?: number
 ): ParsedBriefing {
   let summary = obj.summary || obj.executive_summary || obj.overview || '';
@@ -892,17 +898,18 @@ function normalizeArray(val: any): string[] {
 }
 
 function createFallbackBriefing(
-  event: DisasterEvent,
-  avgScore: number,
-  critical: Municipality[],
-  restored: Municipality[],
-  totalCount: number,
+  event?: DisasterEvent | null,
+  avgScore: number = 50,
+  critical: Municipality[] = [],
+  restored: Municipality[] = [],
+  totalCount: number = 93,
   topPerforming: Municipality[] = []
 ): ParsedBriefing {
   const hasCritical = critical.length > 0;
   const isSteadyState = !hasCritical || (restored.length > 0 && restored.length === totalCount);
   const lguCount = totalCount || 93;
   const criticalNames = critical.slice(0, 3).map((m) => `${m.name} (${m.province})`).join(', ');
+  const eventName = event?.name || 'the disaster event';
 
   const hasRestored = restored.length > 0;
   const summaryStatus = hasRestored
@@ -910,8 +917,8 @@ function createFallbackBriefing(
     : `Satellite nightlight observations indicate that 0 of ${totalCount} municipalities have crossed the >= 90% near-full recovery threshold, with leading hubs paced by ${topPerforming[0]?.name || 'commercial centers'} (${topPerforming[0]?.recoveryScore ?? 0}%).`;
 
   const summary = isSteadyState
-    ? `Following the impact of ${event.name}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
-    : `Following the impact of ${event.name}, satellite nightlight observations report an island-wide average recovery score of ${avgScore}% across ${totalCount} monitored LGUs. ${summaryStatus} However, ${critical.length} municipalities remain in limited-power states (<60%), requiring targeted technical and logistical reinforcement across rural coastal and highland corridors.`;
+    ? `Following the impact of ${eventName}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
+    : `Following the impact of ${eventName}, satellite nightlight observations report an island-wide average recovery score of ${avgScore}% across ${totalCount} monitored LGUs. ${summaryStatus} However, ${critical.length} municipalities remain in limited-power states (<60%), requiring targeted technical and logistical reinforcement across rural coastal and highland corridors.`;
 
   const criticalAlerts = hasCritical
     ? [
