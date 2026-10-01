@@ -1,5 +1,6 @@
 import React from 'react';
 import { Satellite, Globe, ExternalLink, MapPin, Compass, ArrowUpRight } from 'lucide-react';
+import { APP_VERSION } from './Navbar';
 
 export interface FooterProps {
   onSelectRegion?: (regionKey: string) => void;
@@ -207,9 +208,14 @@ export default function Footer({ onSelectRegion, selectedRegionKey }: FooterProp
         </div>
 
         <div className="mt-10 pt-6 border-t border-slate-200 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-slate-500 dark:text-ink-500">
-            CSE 499 Project · Panay Island, Philippines
-          </p>
+          <div className="flex items-center gap-2.5">
+            <p className="text-xs text-slate-500 dark:text-ink-500">
+              CSE 499 Project · Panay Island, Philippines
+            </p>
+            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/50 dark:border-slate-700/40">
+              v{APP_VERSION}
+            </span>
+          </div>
           <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-ink-500">
             <a
               href="https://sanag.onrender.com/docs"
