@@ -221,6 +221,11 @@ def generate_fallback_briefing(context: str) -> str:
     except (ValueError, TypeError):
         critical_num = 0
 
+    try:
+        total_num = int(data["total_monitored"]) if data["total_monitored"] is not None and str(data["total_monitored"]).isdigit() else 0
+    except (ValueError, TypeError):
+        total_num = 0
+
     # 1. Executive Summary Synthesis
     if data["incident_name"]:
         incident_desc = f"**{data['incident_name']}**"
@@ -243,30 +248,38 @@ def generate_fallback_briefing(context: str) -> str:
     if restored_num > 0 and critical_num > 0:
         status_sentence = f"While **{restored_num}** municipalities have achieved near-full recovery (>= 90%), **{critical_num}** jurisdictions remain in critical or warning states (<60%), requiring targeted technical and logistical reinforcement."
     elif restored_num > 0:
-        status_sentence = f"Encouragingly, **{restored_num}** municipalities have achieved benchmark restoration (>= 90%), while secondary distribution deficits persist in harder-hit sectors."
+        status_sentence = f"Encouragingly, **{restored_num}** municipalities have achieved benchmark restoration (>= 90%), with 0 jurisdictions remaining under critical outage thresholds (<60%)."
     elif critical_num > 0:
         status_sentence = f"Currently, **{critical_num}** municipalities remain under critical outage thresholds (<60%), with 0 municipalities having crossed the >= 90% near-full recovery benchmark."
     else:
-        status_sentence = "Urban and municipal load centers show advancing baseline recovery levels, though 0 municipalities have crossed the >= 90% near-full recovery benchmark yet."
+        status_sentence = "All monitored municipal jurisdictions have surpassed baseline recovery thresholds, with local distribution grids operating at full or near-full capacity."
 
     summary = f"{lead_sentence} {telemetry_sentence} {status_sentence}"
 
-    # 2. Critical Alerts Synthesis
-    if critical_num > 0 and data["top_critical"]:
-        crit_summary = _clean_lgu_summary(data["top_critical"])
-        outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities remain under critical outage status (<60% baseline radiance). Most acute deficits recorded in: {crit_summary}."
-    elif critical_num > 0:
-        outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities continue to record operational metrics significantly below baseline standards (<60% recovery)."
-    elif data["top_critical"]:
-        crit_summary = _clean_lgu_summary(data["top_critical"])
-        outage_cluster_bullet = f"* **Severe Outage Clusters**: Radiance deficits remain concentrated in: {crit_summary}."
-    else:
-        outage_cluster_bullet = "* **Severe Outage Clusters**: Specific municipalities continue to record operational metrics significantly below baseline standards based on active incident data."
+    # 2. Critical Alerts Synthesis: dynamically check for actual deficits (< 60%)
+    has_active_critical = critical_num > 0 or (
+        bool(data["top_critical"]) and not any(kw in data["top_critical"].lower() for kw in ["none", "all monitored", "no active", "0 critical", "zero"])
+    )
 
-    if data["severity"] and data["severity"].lower() in ["critical", "high", "severe", "catastrophic"]:
-        vulnerable_bullet = f"* **High-Priority Communities**: Given the **{data['severity']}** severity level, isolated coastal and rural barangays require emergency power for critical health facilities and water pumping stations."
+    if has_active_critical:
+        if critical_num > 0 and data["top_critical"]:
+            crit_summary = _clean_lgu_summary(data["top_critical"])
+            outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities remain under critical outage status (<60% baseline radiance). Most acute deficits recorded in: {crit_summary}."
+        elif critical_num > 0:
+            outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities continue to record operational metrics significantly below baseline standards (<60% recovery)."
+        else:
+            crit_summary = _clean_lgu_summary(data["top_critical"])
+            outage_cluster_bullet = f"* **Severe Outage Clusters**: Radiance deficits remain concentrated in: {crit_summary}."
+        
+        infra_bullet = "* **Infrastructure Bottlenecks**: Distribution feeder disruptions and localized utility damage are prolonging recovery times along secondary lines."
+        if data["severity"] and data["severity"].lower() in ["critical", "high", "severe", "catastrophic"]:
+            vulnerable_bullet = f"* **High-Priority Communities**: Given the **{data['severity']}** severity level, isolated coastal and rural barangays require emergency power for critical health facilities and water pumping stations."
+        else:
+            vulnerable_bullet = "* **Vulnerable Communities**: Displaced communities in affected barangays and emergency healthcare centers require prioritized power and logistics support."
     else:
-        vulnerable_bullet = "* **Vulnerable Communities**: Displaced communities in affected barangays and emergency healthcare centers require prioritized power and logistics support."
+        outage_cluster_bullet = "* **Zero Active Outages**: No active critical outage clusters detected; all monitored municipal jurisdictions operate at or above benchmark recovery levels."
+        infra_bullet = "* **Stable Grid Voltage**: Primary transmission corridors and localized distribution feeders report balanced phase loading and steady-state voltage stability with zero unserved load centers."
+        vulnerable_bullet = "* **Fully Restored Community Lines**: Essential public facilities, hospitals, schools, and municipal water pumping stations operate on steady-state utility power with all community distribution lines fully restored."
 
     # 3. Restoration Benchmarks Synthesis
     # Strict threshold check: only report >= 90% if restored_num > 0
@@ -285,22 +298,50 @@ def generate_fallback_briefing(context: str) -> str:
         else:
             benchmarks_bullet = "* **Top Performing Hubs**: Primary municipal load centers continue progressing toward baseline levels, though 0 municipalities have crossed the >= 90% restoration threshold."
 
+    if not has_active_critical:
+        stability_bullet = "* **Grid Stability**: High-voltage transmission backbones and local distribution feeders report normalized, stable energization across all municipal load centers."
+    else:
+        stability_bullet = "* **Grid Stability**: High-voltage transmission backbones remain monitored while secondary distribution line clearance addresses remaining municipal deficits."
+
+    # 4. Priority Recommendations Synthesis
+    # When all monitored municipalities achieve benchmark restoration (>= 90%) with 0 active critical deficits,
+    # recommend ongoing telemetry re-assessment, long-term grid stability monitoring, and routine utility reporting
+    all_benchmark_restored = (
+        not has_active_critical
+        and critical_num == 0
+        and (
+            (total_num > 0 and restored_num >= total_num)
+            or (total_num == 0 and restored_num > 0 and "all monitored" in context.lower() and ">= 90%" in context.lower())
+        )
+    )
+
+    if all_benchmark_restored:
+        recommendations_bullets = (
+            "* **Ongoing Telemetry Re-assessment**: Continue automated satellite radiance tracking and daily situational monitoring to verify sustained power delivery across all restored municipal jurisdictions.\n"
+            "* **Long-Term Grid Stability Monitoring**: Maintain continuous telemetry monitoring of high-voltage transmission backbones, distribution substations, and feeder balancing to ensure long-term grid stability.\n"
+            "* **Routine Utility Reporting**: Transition electric cooperatives and municipal disaster councils from emergency disaster response protocols to routine utility reporting and scheduled preventative maintenance."
+        )
+    else:
+        recommendations_bullets = (
+            "* **Deploy Mobile Resources**: Position trailer-mounted generators and emergency supplies at critical municipal health centers.\n"
+            "* **Cooperative Mutual Aid**: Coordinate regional lineman crews and Task Force Kapatid teams to assist local electric cooperatives.\n"
+            "* **Telemetry Re-assessment**: Continue daily situational monitoring to verify recovery metrics and ground-truth utility reports."
+        )
+
     return f"""### Executive Summary
 {summary}
 
 ### Critical Alerts
 {outage_cluster_bullet}
-* **Infrastructure Bottlenecks**: Distribution feeder disruptions and localized utility damage are prolonging recovery times along secondary lines.
+{infra_bullet}
 {vulnerable_bullet}
 
 ### Restoration Benchmarks
 {benchmarks_bullet}
-* **Grid Stability**: High-voltage transmission backbones remain monitored while secondary distribution line clearance addresses remaining municipal deficits.
+{stability_bullet}
 
 ### Priority Recommendations
-* **Deploy Mobile Resources**: Position trailer-mounted generators and emergency supplies at critical municipal health centers.
-* **Cooperative Mutual Aid**: Coordinate regional lineman crews and Task Force Kapatid teams to assist local electric cooperatives.
-* **Telemetry Re-assessment**: Continue daily situational monitoring to verify recovery metrics and ground-truth utility reports.
+{recommendations_bullets}
 """
 
 
@@ -319,18 +360,26 @@ Format your response in clear, well-structured Markdown with the following secti
 A 2-3 sentence overview of grid restoration progress, average recovery percentages, affected populations, and general trajectory based on the scenario data.
 
 ### Critical Alerts
-Bullet points highlighting the most severely affected municipalities, persistent feeder outages, and vulnerable coastal or rural communities.
+Bullet points highlighting the most severely affected municipalities, persistent feeder outages, and vulnerable coastal or rural communities. If Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
 
 ### Restoration Benchmarks
 Key milestones, municipalities that have reached >= 90% restoration (or if 0 municipalities have crossed >= 90%, accurately designate the section or bullet as "Top Performing Hubs" reflecting their actual sub-90% recovery scores without falsely claiming any municipality reached >= 90%), and regional recovery baselines.
 
 ### Priority Recommendations
-3 actionable next steps for disaster response teams and electric cooperatives.
+3 actionable next steps for disaster response teams and electric cooperatives. When all monitored municipalities achieve benchmark restoration (>= 90%) with 0 active critical deficits, adjust recommendations to focus on ongoing telemetry re-assessment, long-term grid stability monitoring, and routine utility reporting (instead of emergency generators, lineman mutual aid, or line repairs).
 
 CRITICAL FACTUAL CONSISTENCY RULES:
 - Strictly obey the scenario data numbers and definitions.
+- CRITICAL ALERTS RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Critical Alerts section MUST completely suppress any outage warnings, severe cluster counts, infrastructure bottleneck claims, or vulnerable community deficit texts. NEVER list fully recovered municipalities (scores >= 60% or >= 90%) as having outages, blackouts, or deficits. Instead, the Critical Alerts section MUST render clean, positive steady-state bullet points confirming:
+  1. Zero Active Outages: Confirmation that no active outage clusters remain and all monitored LGUs have surpassed baseline recovery.
+  2. Stable Grid Voltage: High-voltage transmission corridors and localized distribution feeders report balanced phase loading and steady-state voltage stability.
+  3. Fully Restored Community Lines: Full re-energization across public facilities, healthcare centers, water pumping stations, and residential distribution lines without emergency generator dependencies.
 - Only state that a municipality has reached or exceeded 90% restoration / near-full recovery if its score is actually >= 90%.
 - If Municipalities >= 90% Restored is 0, state that 0 municipalities have achieved >= 90% recovery and describe the highest-performing municipalities as "Top Performing Hubs" with their exact reported scores. Never round up sub-90% scores (such as 82% or 88%) to 90% or claim they met the 90% benchmark.
+- PRIORITY RECOMMENDATIONS / RESPONSE ACTIONS RULE: Check if ALL monitored municipalities have achieved benchmark restoration (>= 90%) (i.e. 'Municipalities >= 90% Restored' equals 'Total Municipalities Monitored' or is 100%) with 0 active critical deficits ('Municipalities in Critical/Warning State (<60%)' is 0 or 'Top Critical Outage LGUs' indicates no deficits). When all monitored municipalities have crossed >= 90% restoration with 0 active critical deficits, DO NOT advise emergency generator deployment, mobile substation dispatch, lineman mutual aid teams, or line repairs, as emergency restoration is complete. Instead, the 3 recommendations MUST explicitly advise:
+  1. Ongoing telemetry re-assessment (continued automated satellite radiance tracking and daily situational monitoring to verify sustained power delivery across all restored jurisdictions).
+  2. Long-term grid stability monitoring (maintaining continuous monitoring of high-voltage transmission backbones, distribution substations, and feeder balancing to ensure grid stability).
+  3. Routine utility reporting (transitioning electric cooperatives and municipal disaster councils from emergency disaster response protocols to routine utility reporting and scheduled preventative maintenance).
 
 Scenario Data:
 {event_context}

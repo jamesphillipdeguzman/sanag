@@ -7,7 +7,7 @@ import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
-import { apiFetch } from './services/apiService.ts'
+import { apiFetch, setHasLocalFallbackData } from './services/apiService.ts'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import {
   isPanayRegion,
@@ -185,6 +185,16 @@ function App() {
   const [toastMessage, setToastMessage] = useState(null)
 
   const geojsonFeaturesRef = useRef(null)
+
+  // Notify apiService that initial mock/fallback dataset is successfully loaded and ready
+  useEffect(() => {
+    setHasLocalFallbackData(true)
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem('sanag_backend_woke', 'true')
+      } catch {}
+    }
+  }, [])
 
   const fetchGdacsAlerts = useCallback(async () => {
     setIsGdacsLoading(true)
@@ -752,7 +762,10 @@ function App() {
       <Navbar />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
-      <ServerStatusBanner />
+      <ServerStatusBanner
+        hasActiveData={municipalities.length > 0 || events.length > 0}
+        isFallbackLoaded={true}
+      />
 
       {/* Floating Feedback Notification */}
       {toastMessage && (
