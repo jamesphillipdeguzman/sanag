@@ -112,11 +112,14 @@ function mapApiEvent(event) {
   const alertLevel = event.alert_level || (event.severity === 'Severe' ? 'Red' : event.severity === 'High' ? 'Orange' : 'Green')
   const severity = event.severity || (alertLevel === 'Red' ? 'Severe' : alertLevel === 'Orange' ? 'High' : 'Moderate')
 
+  const eventDate = event.date || ''
+  const computedEndDate = eventDate ? formatIsoDate(addDays(eventDate, 30)) : ''
+
   return {
     id: String(event.id),
     name: event.name,
-    date: event.date,
-    endDate: event.date,
+    date: eventDate,
+    endDate: computedEndDate,
     severity,
     type,
     affectedPopulation,
@@ -198,11 +201,25 @@ function App() {
     return new Set(events.map((e) => String(e.id)))
   }, [events])
 
-  const handleImportGdacs = useCallback(async (alert) => {
+  const handleSelectEvent = useCallback((eventId) => {
+    setActiveEventId(eventId)
+    const targetEvent = events.find((e) => String(e.id) === String(eventId))
+    if (targetEvent) {
+      const sDate = formatIsoDate(targetEvent.date)
+      if (sDate) {
+        // Automatically set Start date to event's recorded start date,
+        // and End date to exactly 30 days (one month) after start date
+        const eDate = formatIsoDate(addDays(sDate, 30))
+        setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
+      }
+    }
+  }, [events])
+
+  const handleImportGdacs = useCallback(async (alert, preconstructedEvent) => {
     if (!alert) return
 
     const rawAlertId = alert.event_id != null ? String(alert.event_id) : ''
-    const alertId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : '')
+    const alertId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : `gdacs-sim-${Date.now()}`)
     const normAlertName = (alert.name || '').toLowerCase().trim()
 
     // Guard: Check if event already exists in the active events list
@@ -217,21 +234,129 @@ function App() {
     })
 
     if (existingEvent) {
-      // Event already exists: select/highlight existing tile instead of pushing a duplicate
-      setActiveEventId(existingEvent.id)
+      handleSelectEvent(existingEvent.id)
       return
     }
 
-    if (alert.viirs_data_available === false) {
-      setEventsError('Simulation Unavailable: Confirmed NASA VIIRS radiance data is pending for this live hazard. Please wait until satellite ground telemetry is confirmed.')
-      setTimeout(() => setEventsError(''), 6000)
-      return
+    // 1. Extract live hazard data: title, coordinates, severity, event type, and date
+    const title = alert.name || alert.eventname || alert.title || 'Live GDACS Hazard Event'
+
+    // Extract coordinates safely
+    let lat = alert.latitude != null ? Number(alert.latitude) : null
+    let lng = alert.longitude != null ? Number(alert.longitude) : null
+    if ((lat == null || lng == null) && Array.isArray(alert.coordinates) && alert.coordinates.length >= 2) {
+      const [c0, c1] = alert.coordinates
+      if (c0 >= 100 && c1 < 50) {
+        lng = Number(c0)
+        lat = Number(c1)
+      } else {
+        lat = Number(c0)
+        lng = Number(c1)
+      }
     }
 
+    // Severity mapping ('Severe' | 'High' | 'Moderate')
+    const rawSev = (alert.severity_text || alert.alert_level || alert.severity || '').toLowerCase()
+    let severity = 'Moderate'
+    if (rawSev.includes('red') || rawSev.includes('severe') || rawSev.includes('catastrophic') || rawSev.includes('major')) {
+      severity = 'Severe'
+    } else if (rawSev.includes('orange') || rawSev.includes('high')) {
+      severity = 'High'
+    } else {
+      severity = 'Moderate'
+    }
+
+    // Event type mapping
+    const rawType = (alert.type || alert.category || title).toLowerCase()
+    let disasterType = 'disaster'
+    if (rawType.includes('tc') || rawType.includes('typhoon') || rawType.includes('cyclone') || rawType.includes('storm')) {
+      disasterType = 'typhoon'
+    } else if (rawType.includes('eq') || rawType.includes('earthquake') || rawType.includes('quake') || rawType.includes('seismic')) {
+      disasterType = 'earthquake'
+    } else if (rawType.includes('fl') || rawType.includes('flood') || rawType.includes('rain') || rawType.includes('monsoon')) {
+      disasterType = 'flood'
+    } else if (rawType.includes('blackout') || rawType.includes('grid') || rawType.includes('power')) {
+      disasterType = 'blackout'
+    } else {
+      disasterType = 'disaster'
+    }
+
+    // Date parsing
+    const rawDate = alert.date || alert.fromdate || new Date().toISOString().slice(0, 10)
+    const eventDate = formatIsoDate(rawDate) || (typeof rawDate === 'string' && rawDate.length >= 10 ? rawDate.slice(0, 10) : new Date().toISOString().slice(0, 10))
+    const sDate = new Date(`${eventDate}T00:00:00Z`)
+    const eDate = new Date(sDate.getTime() + 31 * 86400000)
+    const endDate = isNaN(eDate.getTime()) ? eventDate : eDate.toISOString().slice(0, 10)
+
+    const affectedPopulation = alert.alert_score
+      ? Math.round(Number(alert.alert_score) * 200000)
+      : severity === 'Severe' ? 750000 : severity === 'High' ? 320000 : 95000
+
+    // 2. Construct temporary event object matching the structure of the historical event catalog
+    const temporaryEvent = preconstructedEvent || {
+      id: alertId,
+      name: title,
+      date: eventDate,
+      endDate: endDate,
+      severity: severity,
+      type: disasterType,
+      affectedPopulation: affectedPopulation,
+      description: alert.description || `Real-time GDACS hazard monitoring alert (${alert.type || 'Natural Hazard'}) detected in the Philippines region.`,
+      category: alert.category || alert.type || 'Hazard',
+      alert_level: alert.alert_level || (severity === 'Severe' ? 'Red' : severity === 'High' ? 'Orange' : 'Green'),
+      viirs_data_available: true,
+      critical_municipalities: [],
+      latitude: lat,
+      longitude: lng,
+      coordinates: (lat != null && lng != null) ? [lat, lng] : null,
+      is_live_simulated: true,
+    }
+
+    // 3. Append it or set it directly as the active event state
+    setEvents((prev) => {
+      const withoutCurrent = prev.filter((e) => {
+        const eId = String(e.id)
+        const eName = (e.name || '').toLowerCase().trim()
+        return (
+          eId !== temporaryEvent.id &&
+          eId !== rawAlertId &&
+          eId !== `gdacs-${rawAlertId}` &&
+          eName !== (temporaryEvent.name || '').toLowerCase().trim()
+        )
+      })
+      return [temporaryEvent, ...withoutCurrent]
+    })
+
+    // Mark as imported in local GDACS feed state
+    setGdacsAlerts((prev) =>
+      prev.map((a) =>
+        String(a.event_id) === rawAlertId || a.id === temporaryEvent.id || a.id === alertId
+          ? { ...a, is_imported: true }
+          : a
+      )
+    )
+
+    // 4. Trigger the exact same state updates used by historical events
+    setActiveEventId(temporaryEvent.id)
+    if (temporaryEvent.date && temporaryEvent.endDate) {
+      setRecoveryDateRange({
+        eventId: temporaryEvent.id,
+        startDate: formatIsoDate(temporaryEvent.date),
+        endDate: formatIsoDate(temporaryEvent.endDate),
+      })
+    }
+    setLatestObservationDate(null)
+    setIsMapLoading(true)
+
+    // Toast feedback
+    setToastMessage(`✓ Live hazard "${temporaryEvent.name}" loaded into simulation! Calibrated recovery view updated.`)
+    setTimeout(() => setToastMessage(null), 6000)
+
+    // Optional background sync with backend /api/v1/events/import-gdacs (non-blocking)
     const importKey = rawAlertId || alertId
     setImportingId(importKey)
     try {
-      const res = await fetch('/api/v1/events/import-gdacs', {
+      fetch('/api/v1/events/import-gdacs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -242,56 +367,26 @@ function App() {
           alert_level: alert.alert_level,
           date: alert.date,
           description: alert.description,
-          severity: alert.severity_text,
+          severity: alert.severity_text || severity,
           window_days: 31,
         }),
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}))
-        throw new Error(errData.detail || `Failed to import event: ${res.status}`)
-      }
-
-      const result = await res.json()
-      if (result.event) {
-        const mapped = mapApiEvent(result.event)
-
-        // Prepend newly imported event directly into active events state, deduplicating thoroughly
-        setEvents((prev) => {
-          const withoutCurrent = prev.filter((e) => {
-            const eId = String(e.id)
-            const eName = (e.name || '').toLowerCase().trim()
-            return (
-              eId !== mapped.id &&
-              eId !== rawAlertId &&
-              eId !== `gdacs-${rawAlertId}` &&
-              eName !== (mapped.name || '').toLowerCase().trim()
+      }).then(async (res) => {
+        if (res.ok) {
+          const result = await res.json()
+          if (result.event) {
+            const mapped = mapApiEvent(result.event)
+            setEvents((prev) =>
+              prev.map((e) => (e.id === temporaryEvent.id ? { ...e, ...mapped } : e))
             )
-          })
-          return [mapped, ...withoutCurrent]
-        })
-
-        // Mark as imported in local GDACS feed state
-        setGdacsAlerts((prev) =>
-          prev.map((a) =>
-            String(a.event_id) === rawAlertId || a.id === mapped.id || a.id === alertId ? { ...a, is_imported: true } : a
-          )
-        )
-
-        // Seamlessly select newly imported event so map, radiance and timeline update immediately
-        setActiveEventId(mapped.id)
-
-        // Toast feedback
-        setToastMessage(`✓ Event "${mapped.name}" imported & simulated! Calibrated 93 Panay LGU curves.`)
-        setTimeout(() => setToastMessage(null), 6000)
-      }
-    } catch (err) {
-      console.error('GDACS import error:', err)
-      setEventsError(`GDACS Import Error: ${err.message}`)
-      setTimeout(() => setEventsError(''), 7000)
-    } finally {
+          }
+        }
+      }).catch(() => {}).finally(() => {
+        setImportingId(null)
+      })
+    } catch {
       setImportingId(null)
     }
-  }, [events])
+  }, [events, handleSelectEvent])
 
   const baseActiveEvent = events.find((event) => event.id === activeEventId) ?? events[0]
 
@@ -332,27 +427,12 @@ function App() {
   const recoveryEndDate = activeEvent?.date
     ? hasRecoveryDateRange
       ? formatIsoDate(recoveryDateRange.endDate)
-      : (activeEvent.endDate && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
+      : (activeEvent.endDate && activeEvent.endDate !== activeEvent.date && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
           ? formatIsoDate(activeEvent.endDate)
-          : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 31))))
+          : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
     : ''
 
-  const handleSelectEvent = useCallback((eventId) => {
-    setActiveEventId(eventId)
-    const targetEvent = events.find((e) => String(e.id) === String(eventId))
-    if (targetEvent) {
-      const sDate = formatIsoDate(targetEvent.date)
-      let eDate = ''
-      if (targetEvent.endDate && targetEvent.endDate.length >= 10 && !isNaN(new Date(targetEvent.endDate).getTime())) {
-        eDate = formatIsoDate(targetEvent.endDate)
-      } else if (sDate) {
-        eDate = formatIsoDate(addDays(sDate, 31))
-      }
-      if (sDate && eDate) {
-        setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
-      }
-    }
-  }, [events])
+
 
   const handleCreateCustomEvent = useCallback((newEvent) => {
     setEvents((prev) => {
@@ -401,14 +481,17 @@ function App() {
     return found?.resilienceRank ?? null
   }, [municipalitiesWithRank, selectedId])
 
-  // Panay Island LGUs for Panay-focused executive summary & benchmarks by default
+  // Panay Island LGUs for Panay-focused executive summary & benchmarks by default (strictly Iloilo, Capiz, Aklan, Antique = 93 LGUs)
   const panayMunicipalities = useMemo(() => {
-    const list = municipalitiesWithRank.filter(
-      (m) =>
-        ['Iloilo', 'Capiz', 'Aklan', 'Antique', 'Panay'].includes(m.province) ||
-        (m.pcode && m.pcode.startsWith('PH06')) ||
-        (!m.province && !m.region)
-    )
+    const list = municipalitiesWithRank.filter((m) => {
+      const prov = (m.province || '').toLowerCase().trim()
+      if (prov === 'guimaras') return false
+      if (['iloilo', 'capiz', 'aklan', 'antique'].includes(prov)) return true
+      if (m.pcode) {
+        return m.pcode.startsWith('PH06') && !m.pcode.startsWith('PH06079')
+      }
+      return !m.province && !m.region
+    })
     return list.length > 0 ? list : municipalitiesWithRank
   }, [municipalitiesWithRank])
 
@@ -449,13 +532,23 @@ function App() {
       if (geojsonFeaturesRef.current) {
         return geojsonFeaturesRef.current
       }
+      const filterPanayFeatures = (features) => {
+        if (!Array.isArray(features)) return []
+        return features.filter((f) => {
+          const adm2 = (f.properties?.ADM2_EN || f.properties?.province || '').toLowerCase().trim()
+          const pcode = f.properties?.ADM3_PCODE || f.properties?.psgc_code || ''
+          return adm2 !== 'guimaras' && !pcode.startsWith('PH06079')
+        })
+      }
+
       try {
         const res = await fetch('/regions/panay.geojson')
         if (res.ok) {
           const json = await res.json()
           if (json.features && json.features.length > 0) {
-            geojsonFeaturesRef.current = json.features
-            return json.features
+            const filtered = filterPanayFeatures(json.features)
+            geojsonFeaturesRef.current = filtered
+            return filtered
           }
         }
       } catch (err) {
@@ -464,8 +557,9 @@ function App() {
       const res = await fetch('/panay_municipalities.geojson')
       if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
       const json = await res.json()
-      geojsonFeaturesRef.current = json.features
-      return json.features
+      const filtered = filterPanayFeatures(json.features || [])
+      geojsonFeaturesRef.current = filtered
+      return filtered
     }
 
     const fetchRadiance = async () => {
