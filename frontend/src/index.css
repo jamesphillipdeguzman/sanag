@@ -143,6 +143,20 @@ html.dark .leaflet-map {
   }
 }
 
+.leaflet-map.is-maximized-height,
+.map-tab-container .leaflet-map {
+  height: clamp(520px, 70vh, 760px);
+  min-height: 520px;
+}
+
+@media (min-width: 1024px) {
+  .leaflet-map.is-maximized-height,
+  .map-tab-container .leaflet-map {
+    height: clamp(620px, 78vh, 840px);
+    min-height: 620px;
+  }
+}
+
 .leaflet-map.is-locked,
 .leaflet-map.is-locked .leaflet-container {
   touch-action: pan-y;

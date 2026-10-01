@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import AiBriefingCard from './components/AiBriefingCard.tsx'
 import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
 import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
+import PanayMap from './components/PanayMap.tsx'
+import EventSelectorPanel from './components/EventSelectorPanel.tsx'
+import GuideGlossary from './components/GuideGlossary.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
 import { apiFetch, setHasLocalFallbackData } from './services/apiService.ts'
@@ -17,6 +19,14 @@ import {
   getRegionDisplayName,
 } from './utils/eventScope.ts'
 import './App.css'
+
+const VALID_TABS = ['overview', 'map', 'recovery', 'events', 'guide']
+
+function getTabFromHash() {
+  if (typeof window === 'undefined') return 'overview'
+  const hash = window.location.hash.replace(/^#/, '').toLowerCase().trim()
+  return VALID_TABS.includes(hash) ? hash : 'overview'
+}
 
 function normalizeMunicipalityName(name) {
   if (!name) return ''
@@ -198,6 +208,44 @@ function App() {
   const [isMapLoading, setIsMapLoading] = useState(true)
   const [recoveryDateRange, setRecoveryDateRange] = useState(null)
   const [selectedRegionKey, setSelectedRegionKey] = useState('panay')
+  const [activeTab, setActiveTab] = useState(getTabFromHash)
+
+  // Synchronize tab state with URL hash
+  const handleSelectTab = useCallback((tab) => {
+    if (!VALID_TABS.includes(tab)) return
+    setActiveTab(tab)
+    if (typeof window !== 'undefined') {
+      window.location.hash = `#${tab}`
+    }
+  }, [])
+
+  // Listen to hashchange events (e.g. browser navigation, direct hash changes)
+  useEffect(() => {
+    const onHashChange = () => {
+      const tab = getTabFromHash()
+      setActiveTab(tab)
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  // Invalidate Leaflet map size whenever Map tab becomes active to prevent tile clipping
+  useEffect(() => {
+    if (activeTab === 'map') {
+      const timer1 = setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('sanag:invalidate-map-size'))
+        window.dispatchEvent(new Event('resize'))
+      }, 50)
+      const timer2 = setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('sanag:invalidate-map-size'))
+        window.dispatchEvent(new Event('resize'))
+      }, 200)
+      return () => {
+        clearTimeout(timer1)
+        clearTimeout(timer2)
+      }
+    }
+  }, [activeTab])
 
   // GDACS live feeds & simulation state
   const [gdacsAlerts, setGdacsAlerts] = useState([])
@@ -499,7 +547,8 @@ function App() {
       setActiveEventId(PRIMARY_EVENT_ID)
     }
     handleRegionChange(regionKey)
-  }, [activeEventId, handleRegionChange])
+    handleSelectTab('map')
+  }, [activeEventId, handleRegionChange, handleSelectTab])
 
   const handleCreateCustomEvent = useCallback((newEvent) => {
     setEvents((prev) => {
@@ -837,8 +886,8 @@ function App() {
   }, [])
 
   return (
-    <div id="top">
-      <Navbar />
+    <div id="top" className="min-h-screen flex flex-col bg-slate-50 dark:bg-ink-950 text-slate-900 dark:text-slate-100 transition-colors">
+      <Navbar activeTab={activeTab} onSelectTab={handleSelectTab} />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
       <ServerStatusBanner />
@@ -863,97 +912,237 @@ function App() {
         </div>
       )}
 
-      {activeEvent ? (
-        <Overview
-          municipalities={municipalitiesWithRank}
-          activeEvent={activeEvent}
-          events={events}
-          onSelectEvent={handleSelectEvent}
-          onDismissEvent={handleDismissEvent}
-          selectedId={selectedId}
-          globalRank={selectedGlobalRank}
-          onSelectMunicipality={selectMunicipality}
-          recoveryDate={recoveryDate}
-          isMapLoading={isMapLoading}
-          gdacsAlerts={gdacsAlerts}
-          onSimulateGdacs={handleImportGdacs}
-          isGdacsLoading={isGdacsLoading}
-          onRefreshGdacs={fetchGdacsAlerts}
-          importingGdacsId={importingId}
-          importedEventIds={importedEventIds}
-          onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
-          selectedRegionKey={selectedRegionKey}
-          onRegionChange={handleRegionChange}
-        />
-      ) : (
-        /* Empty state shown when no event is active */
-        <section className="relative pt-20 lg:pt-24 pb-8 overflow-hidden">
-          <div className="absolute inset-0 bg-slate-50 dark:bg-ink-950 pointer-events-none transition-colors" />
-          <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
-          <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400 dark:text-ink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-                </svg>
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">No Active Incident Selected</h2>
-                <p className="text-sm text-slate-500 dark:text-ink-400 max-w-sm">Select an incident from the timeline below to load satellite radiance, recovery curves, and the situational briefing.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleSelectEvent(PRIMARY_EVENT_ID)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-ocean-300 dark:border-ocean-500/40 bg-ocean-50 hover:bg-ocean-100 text-ocean-700 dark:bg-ocean-500/10 dark:hover:bg-ocean-500/20 text-sm font-semibold dark:text-ocean-200 transition-all cursor-pointer"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1018.364 9" /></svg>
-                Restore Default Event
-              </button>
-            </div>
+      {eventsError && (
+        <div className="pt-20 px-6">
+          <div className="mx-auto max-w-7xl p-3 rounded-xl border border-rose-500/40 bg-rose-500/10 text-rose-400 text-xs sm:text-sm text-center">
+            {eventsError}
           </div>
-        </section>
+        </div>
       )}
-      {eventsError && <p className="px-6 py-4 text-center text-rose-300">{eventsError}</p>}
-      <main className="dashboard-main">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full flex flex-col gap-6 sm:gap-8 py-6 sm:py-8">
-          <section id="recovery" className="w-full">
-            <RecoveryChart
+
+      {/* Main Tabbed View Routing Container */}
+      <main className="flex-1 pt-16">
+        {/* Tab 1: Overview (#overview) */}
+        {activeTab === 'overview' && (
+          activeEvent ? (
+            <Overview
+              municipalities={municipalitiesWithRank}
+              activeEvent={activeEvent}
+              events={events}
+              onSelectEvent={handleSelectEvent}
+              onDismissEvent={handleDismissEvent}
+              selectedId={selectedId}
+              globalRank={selectedGlobalRank}
+              onSelectMunicipality={selectMunicipality}
+              recoveryDate={recoveryDate}
+              isMapLoading={isMapLoading}
+              gdacsAlerts={gdacsAlerts}
+              onSimulateGdacs={handleImportGdacs}
+              isGdacsLoading={isGdacsLoading}
+              onRefreshGdacs={fetchGdacsAlerts}
+              importingGdacsId={importingId}
+              importedEventIds={importedEventIds}
+              onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
+              selectedRegionKey={selectedRegionKey}
+              onRegionChange={handleRegionChange}
+              onNavigateTab={handleSelectTab}
+            />
+          ) : (
+            /* Empty state shown when no event is active */
+            <section className="relative pt-12 pb-16 overflow-hidden animate-fade-in">
+              <div className="absolute inset-0 bg-slate-50 dark:bg-ink-950 pointer-events-none transition-colors" />
+              <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
+              <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400 dark:text-ink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">No Active Incident Selected</h2>
+                    <p className="text-sm text-slate-500 dark:text-ink-400 max-w-sm">Select an incident from the events catalog to load satellite radiance, recovery curves, and the situational briefing.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectEvent(PRIMARY_EVENT_ID)}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-ocean-300 dark:border-ocean-500/40 bg-ocean-50 hover:bg-ocean-100 text-ocean-700 dark:bg-ocean-500/10 dark:hover:bg-ocean-500/20 text-sm font-semibold dark:text-ocean-200 transition-all cursor-pointer shadow-sm"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1018.364 9" /></svg>
+                      Restore Default Event
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTab('events')}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-all cursor-pointer shadow-sm"
+                    >
+                      Browse Events Catalog →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )
+        )}
+
+        {/* Tab 2: Map (#map) - Maintained mounted in DOM to preserve Leaflet instance & tile cache */}
+        <div
+          id="map"
+          className={`w-full ${activeTab === 'map' ? 'block animate-fade-in' : 'hidden'}`}
+          style={activeTab !== 'map' ? { display: 'none' } : undefined}
+        >
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+            <PanayMap
               municipalities={municipalitiesWithRank}
               selectedId={selectedId}
               globalRank={selectedGlobalRank}
-              records={recoveryRecords}
-              events={events}
-              activeEventId={activeEventId}
-              onEventChange={handleSelectEvent}
-              onCreateEvent={handleCreateCustomEvent}
-              eventDate={activeEvent?.date}
               onSelect={selectMunicipality}
-              startDate={recoveryStartDate}
-              endDate={recoveryEndDate}
+              recoveryDate={recoveryDate}
+              isLoading={isMapLoading}
+              gdacsAlerts={gdacsAlerts}
+              activeEventId={activeEventId}
+              activeEvent={activeEvent}
+              onSimulateGdacs={handleImportGdacs}
               selectedRegionKey={selectedRegionKey}
-              onDateRangeChange={(startDate, endDate) => {
-                if (!activeEvent) return
-                const cleanStart = formatIsoDate(startDate)
-                const cleanEnd = formatIsoDate(endDate)
-                if (cleanStart && cleanEnd) {
-                  setRecoveryDateRange({ eventId: activeEvent.id, startDate: cleanStart, endDate: cleanEnd })
-                }
-              }}
+              onRegionChange={handleRegionChange}
+              onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
+              isActiveTab={activeTab === 'map'}
             />
-          </section>
-          <section className="w-full">
-            <MunicipalityTable municipalities={municipalitiesWithRank} selectedId={selectedId} onSelect={selectMunicipality} />
-          </section>
-          <section id="events" className="w-full">
-            <EventTimeline events={events} activeEventId={activeEventId} onSelect={handleSelectEvent} onDismiss={handleDismissEvent} />
-          </section>
-          {activeEvent && (
-            <section className="w-full">
-              <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
-            </section>
-          )}
+          </div>
         </div>
+
+        {/* Tab 3: Recovery (#recovery) */}
+        {activeTab === 'recovery' && (
+          <section id="recovery" className="relative pb-12 overflow-hidden animate-fade-in">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
+                    <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
+                      Comparative Recovery Analytics
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Power Restoration Trajectories
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
+                    Analyze day-by-day VIIRS radiance recovery curves against pre-disaster baselines across electric cooperatives and ranked municipal indexes.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('map')}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-sm"
+                  >
+                    View Spatial Map →
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full">
+                <RecoveryChart
+                  municipalities={municipalitiesWithRank}
+                  selectedId={selectedId}
+                  globalRank={selectedGlobalRank}
+                  records={recoveryRecords}
+                  events={events}
+                  activeEventId={activeEventId}
+                  onEventChange={handleSelectEvent}
+                  onCreateEvent={handleCreateCustomEvent}
+                  eventDate={activeEvent?.date}
+                  onSelect={selectMunicipality}
+                  startDate={recoveryStartDate}
+                  endDate={recoveryEndDate}
+                  selectedRegionKey={selectedRegionKey}
+                  onDateRangeChange={(startDate, endDate) => {
+                    if (!activeEvent) return
+                    const cleanStart = formatIsoDate(startDate)
+                    const cleanEnd = formatIsoDate(endDate)
+                    if (cleanStart && cleanEnd) {
+                      setRecoveryDateRange({ eventId: activeEvent.id, startDate: cleanStart, endDate: cleanEnd })
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="w-full">
+                <div className="mb-3">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Municipal Resilience Index
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-ink-400">
+                    Ranked evaluation of all LGUs by current radiance recovery score and outage severity.
+                  </p>
+                </div>
+                <MunicipalityTable
+                  municipalities={municipalitiesWithRank}
+                  selectedId={selectedId}
+                  onSelect={selectMunicipality}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 4: Events (#events) */}
+        {activeTab === 'events' && (
+          <section id="events" className="relative pb-12 overflow-hidden animate-fade-in">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 mb-2">
+                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-300 uppercase tracking-wider">
+                      Disaster Event Catalog & Monitoring
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Historical Incidents & Live Hazards
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
+                    Browse historical typhoons and grid collapses, inspect ground photography and news reports, or simulate real-time GDACS multi-hazard alerts.
+                  </p>
+                </div>
+              </div>
+
+              {activeEvent && (
+                <div className="w-full">
+                  <EventSelectorPanel
+                    events={events}
+                    activeEvent={activeEvent}
+                    onSelectEvent={handleSelectEvent}
+                    onDismissEvent={handleDismissEvent}
+                    onSimulateGdacs={handleImportGdacs}
+                    importingGdacsId={importingId}
+                    importedEventIds={importedEventIds}
+                    selectedRegionKey={selectedRegionKey}
+                  />
+                </div>
+              )}
+
+              <div className="w-full">
+                <EventTimeline
+                  events={events}
+                  activeEventId={activeEventId}
+                  onSelect={handleSelectEvent}
+                  onDismiss={handleDismissEvent}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 5: Guide & Glossary (#guide) */}
+        {activeTab === 'guide' && (
+          <section id="guide" className="relative pb-12 overflow-hidden animate-fade-in">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+              <GuideGlossary onNavigateTab={handleSelectTab} />
+            </div>
+          </section>
+        )}
       </main>
+
       <Footer onSelectRegion={handleSelectProvince} selectedRegionKey={selectedRegionKey} />
     </div>
   )

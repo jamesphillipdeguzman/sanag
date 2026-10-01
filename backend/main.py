@@ -1095,20 +1095,36 @@ def api_generate_briefing(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def build_search_query(raw_query: str) -> str:
+    clean = raw_query.strip()
+    # Strip common parenthetical aliases if needed (e.g. "Typhoon Phanfone (Ursula)" -> "Typhoon Phanfone")
+    base_name = clean.split('(')[0].strip().replace('"', '')
+    if not base_name:
+        base_name = clean.replace('"', '')
+    # Ensure exact match on name plus strict contextual terms
+    return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines'
+
+
 def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
     """
     Fallback image provider querying Wikimedia Commons and Openverse APIs
     when DuckDuckGo is blocked, throttled, or returns empty on cloud hosting / datacenter IPs.
     """
     results: List[Dict[str, Any]] = []
-    clean_q = re.sub(r'\(.*?\)', '', q).strip()
+    clean = q.strip()
+    clean_q = clean.split('(')[0].strip().replace('"', '') or clean.replace('"', '')
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SanagDisasterMonitor/1.0 (contact@sanag.org)'
     }
 
-    # 1. Attempt Wikimedia Commons search
+    # 1. Attempt Wikimedia Commons search with disaster-anchored queries
     try:
-        queries = [f"{clean_q} flood damage", f"{clean_q} flood", clean_q]
+        queries = [
+            f"{clean_q} typhoon disaster damage",
+            f"{clean_q} damage flood",
+            f"{clean_q} aftermath Philippines",
+            f"{clean_q} Philippines"
+        ]
         with httpx.Client(timeout=6.0, headers=headers) as client:
             for q_try in queries:
                 params = {
@@ -1149,12 +1165,12 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[IMAGE SEARCH] [Fallback Wikimedia Error]: {type(e).__name__}: {e}", flush=True)
 
-    # 2. Attempt Openverse API search
+    # 2. Attempt Openverse API search with disaster-anchored context
     try:
         with httpx.Client(timeout=6.0, headers=headers) as client:
             r = client.get(
                 "https://api.openverse.org/v1/images/",
-                params={"q": f"{clean_q} flood", "page_size": str(count)}
+                params={"q": f"{clean_q} disaster damage flood Philippines", "page_size": str(count)}
             )
             if r.status_code == 200:
                 items = r.json().get("results", [])
@@ -1176,13 +1192,13 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
     except Exception as e:
         print(f"[IMAGE SEARCH] [Fallback Openverse Error]: {type(e).__name__}: {e}", flush=True)
 
-    # 3. Attempt Wikipedia Pageimages
+    # 3. Attempt Wikipedia Pageimages with Philippines disaster context
     try:
         with httpx.Client(timeout=5.0, headers=headers) as client:
             params = {
                 "action": "query",
                 "generator": "search",
-                "gsrsearch": f"{clean_q} Philippines",
+                "gsrsearch": f"{clean_q} typhoon flood disaster Philippines",
                 "gsrlimit": str(count),
                 "prop": "pageimages",
                 "piprop": "thumbnail|original",
@@ -1224,12 +1240,12 @@ async def api_search_event_images(
 ) -> List[Dict[str, Any]]:
     """
     Keyless photojournalism image search pipeline.
-    Attempt 1: DuckDuckGo images (via ddgs).
+    Attempt 1: DuckDuckGo images (via ddgs) with hardened disaster query anchors.
     Attempt 2: If DDGS returned empty or threw an error on datacenter IP, query Wikimedia/Openverse fallback.
     """
-    clean_q = re.sub(r'\(.*?\)', '', q).strip()
-    keywords = f"{clean_q} aftermath flood damage"
-    print(f"\n[IMAGE SEARCH] Incoming query: '{q}' -> Keywords: '{keywords}' | Max: {count}", flush=True)
+    clean_q = q.split('(')[0].replace('"', '').strip() or q.strip()
+    keywords = build_search_query(q)
+    print(f"\n[IMAGE SEARCH] Incoming query: '{q}' -> Hardened query: '{keywords}' | Max: {count}", flush=True)
 
     results: List[Dict[str, Any]] = []
 

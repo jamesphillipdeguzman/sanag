@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X } from 'lucide-react';
+import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
 
-const navLinks = [
-  { label: 'Overview', href: '#overview' },
-  { label: 'Map', href: '#map' },
-  { label: 'Recovery', href: '#recovery' },
-  { label: 'Events', href: '#events' },
-  { label: 'AI Briefing', href: '#briefing' },
+export type TabId = 'overview' | 'map' | 'recovery' | 'events' | 'guide';
+
+export interface NavTabItem {
+  id: TabId;
+  label: string;
+  href: string;
+  icon?: React.ReactNode;
+}
+
+export const navLinks: NavTabItem[] = [
+  { id: 'overview', label: 'Overview', href: '#overview' },
+  { id: 'map', label: 'Map', href: '#map' },
+  { id: 'recovery', label: 'Recovery', href: '#recovery' },
+  { id: 'events', label: 'Events', href: '#events' },
+  { id: 'guide', label: 'Guide & Glossary', href: '#guide' },
 ];
 
-export default function Navbar() {
+export interface NavbarProps {
+  activeTab?: string;
+  onSelectTab?: (tab: TabId) => void;
+}
+
+export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { theme, toggleTheme } = useTheme();
@@ -32,10 +46,12 @@ export default function Navbar() {
   }, []);
 
   const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    // If the app is currently displaying a connection error, clicking the logo
-    // navigates to the home view and triggers the refetch handler.
+    e.preventDefault();
+    onSelectTab?.('overview');
+    if (window.location.hash !== '#overview') {
+      window.history.pushState(null, '', '#overview');
+    }
     if (hasConnectionError || isOffline || isWaking) {
-      e.preventDefault();
       window.scrollTo({ top: 0, behavior: 'smooth' });
       refetchAll();
     }
@@ -44,6 +60,15 @@ export default function Navbar() {
   const handleLiveStatusClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     await refetchAll();
+  };
+
+  const handleTabClick = (e: React.MouseEvent, link: NavTabItem) => {
+    e.preventDefault();
+    onSelectTab?.(link.id);
+    if (window.location.hash !== link.href) {
+      window.history.pushState(null, '', link.href);
+    }
+    setMobileOpen(false);
   };
 
   return (
@@ -57,7 +82,7 @@ export default function Navbar() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <a
-            href="#top"
+            href="#overview"
             onClick={handleLogoClick}
             className="flex items-center gap-2.5 group cursor-pointer"
             title={hasConnectionError || isOffline || isWaking ? 'Server disconnected - Click to reconnect' : 'SANAG - Nightlight Analytics'}
@@ -90,16 +115,28 @@ export default function Navbar() {
             </div>
           </a>
 
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
-              >
-                {link.label}
-              </a>
-            ))}
+          {/* Desktop Navigation Tabs */}
+          <div className="hidden md:flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/5 backdrop-blur-md">
+            {navLinks.map((link) => {
+              const isActive = activeTab === link.id;
+              return (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={(e) => handleTabClick(e, link)}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
+                    isActive
+                      ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-300 font-bold border border-slate-200/80 dark:border-white/10 shadow-sm shadow-ocean-500/10'
+                      : 'text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
+                  }`}
+                >
+                  {isActive && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 animate-pulse" />
+                  )}
+                  <span>{link.label}</span>
+                </a>
+              );
+            })}
           </div>
 
           <div className="hidden md:flex items-center gap-3">
@@ -191,16 +228,26 @@ export default function Navbar() {
         {mobileOpen && (
           <div className="md:hidden border-t border-slate-200 dark:border-white/10 py-4 animate-fade-in bg-white/95 dark:bg-slate-950/95 rounded-b-xl px-2">
             <div className="flex flex-col gap-1">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className="px-3 py-2.5 text-sm font-medium text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-white/5"
-                >
-                  {link.label}
-                </a>
-              ))}
+              {navLinks.map((link) => {
+                const isActive = activeTab === link.id;
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={(e) => handleTabClick(e, link)}
+                    className={`px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${
+                      isActive
+                        ? 'bg-ocean-500/15 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
+                        : 'text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{link.label}</span>
+                    {isActive && (
+                      <span className="h-2 w-2 rounded-full bg-ocean-500" />
+                    )}
+                  </a>
+                );
+              })}
 
               <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10">
                 <button
