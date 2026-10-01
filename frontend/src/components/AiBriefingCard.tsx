@@ -31,6 +31,18 @@ interface ParsedBriefing {
   source: 'gemini' | 'fallback';
 }
 
+const POST_RESTORATION_BULLETS = [
+  '**Ongoing Telemetry Re-assessment**: Continue automated satellite radiance tracking and daily situational monitoring to verify sustained power delivery across all restored municipal jurisdictions.',
+  '**Long-Term Grid Stability Monitoring**: Maintain continuous telemetry monitoring of high-voltage transmission backbones, distribution substations, and feeder balancing to ensure long-term grid stability.',
+  '**Routine Utility Reporting**: Transition electric cooperatives and municipal disaster councils from emergency disaster response protocols to routine utility reporting and scheduled preventative maintenance.',
+];
+
+const STEADY_STATE_CRITICAL_ALERTS = [
+  '**Zero Active Outages**: No active critical outage clusters detected; all monitored municipal jurisdictions operate at or above benchmark recovery levels.',
+  '**Stable Grid Voltage**: Primary transmission corridors and localized distribution feeders report balanced phase loading and steady-state voltage stability with zero unserved load centers.',
+  '**Fully Restored Community Lines**: Essential public facilities, hospitals, schools, and municipal water pumping stations operate on steady-state utility power with all community distribution lines fully restored.',
+];
+
 export default function AiBriefingCard({ event, municipalities }: AiBriefingCardProps) {
   const [briefingData, setBriefingData] = useState<ParsedBriefing | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -62,23 +74,18 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     [sorted, totalCount]
   );
 
-  // Priority LGUs: Populate a robust list of multiple critical municipalities (top 4-5 severely affected LGUs)
-  // Ensures the priority areas widget and context string always reflect multiple LGUs rather than being truncated.
+  // Priority LGUs: Strictly include municipalities that actually have deficits (< 60% recovery score or warning/critical status)
+  // Prevents fully recovered (>= 60% or 100%) municipalities from ever being presented as critical deficits.
   const priorityLGUs = useMemo(() => {
-    if (critical.length >= 5) {
-      return critical.slice(0, 5);
-    }
-    const combined = [...critical];
-    const seen = new Set(critical.map((m) => m.id));
-    for (const m of sorted) {
-      if (!seen.has(m.id)) {
-        combined.push(m);
-        seen.add(m.id);
-        if (combined.length >= 5) break;
-      }
-    }
-    return combined;
-  }, [critical, sorted]);
+    return critical.slice(0, 5);
+  }, [critical]);
+
+  // Strict check: all currently rendered municipalities have recovery score >= 90% (or critical active deficits equal 0)
+  const isAllRestoredOrNoCritical = useMemo(() => {
+    const allAbove90 = municipalities.length > 0 && municipalities.every((m) => m.recoveryScore >= 90);
+    const zeroCritical = critical.length === 0;
+    return allAbove90 || zeroCritical;
+  }, [municipalities, critical]);
 
   const fetchBriefing = async () => {
     setIsLoading(true);
@@ -93,6 +100,16 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
       .map((m) => `${m.name} (${m.province}): ${m.recoveryScore}% score`)
       .join('; ');
 
+    const hasCritical = critical.length > 0;
+    const criticalOutageSummary = hasCritical
+      ? priorityLGUs
+          .map(
+            (m) =>
+              `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
+          )
+          .join('; ')
+      : 'None. All monitored municipalities have achieved recovery scores >= 60% (100% or near-full recovery), with zero active critical deficit clusters.';
+
     const contextString = `
 Disaster Incident: ${event.name} (${event.date})
 Incident Severity: ${event.severity} | Category: ${event.type}
@@ -100,13 +117,7 @@ Total Municipalities Monitored: ${municipalities.length}
 Island-wide Average Recovery Score: ${avgScore}%
 Municipalities >= 90% Restored: ${restored.length}
 Municipalities in Critical/Warning State (<60%): ${critical.length}
-Top Critical Outage LGUs: ${priorityLGUs
-        .slice(0, 5)
-        .map(
-          (m) =>
-            `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
-        )
-        .join('; ')}
+Top Critical Outage LGUs: ${criticalOutageSummary}
 ${benchmarkHeader}: ${benchmarkString}
 `.trim();
 
@@ -271,32 +282,71 @@ ${benchmarkHeader}: ${benchmarkString}
             {/* 2. Structured Key Takeaways Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {/* Critical Alerts Card */}
-              <div className="rounded-xl bg-rose-50/70 border border-rose-200 dark:bg-rose-500/5 dark:border-rose-500/20 p-4 flex flex-col justify-between transition-colors">
+              <div
+                className={`rounded-xl border p-4 flex flex-col justify-between transition-colors ${
+                  !isAllRestoredOrNoCritical && critical.length > 0
+                    ? 'bg-rose-50/70 border-rose-200 dark:bg-rose-500/5 dark:border-rose-500/20'
+                    : 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20'
+                }`}
+              >
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400">
-                        <ShieldAlert className="h-4 w-4" />
+                      <div
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg ${
+                          !isAllRestoredOrNoCritical && critical.length > 0
+                            ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
+                        }`}
+                      >
+                        {!isAllRestoredOrNoCritical && critical.length > 0 ? (
+                          <ShieldAlert className="h-4 w-4" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
                       </div>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300">
+                      <h4
+                        className={`text-xs font-bold uppercase tracking-wider ${
+                          !isAllRestoredOrNoCritical && critical.length > 0
+                            ? 'text-rose-700 dark:text-rose-300'
+                            : 'text-emerald-700 dark:text-emerald-300'
+                        }`}
+                      >
                         Critical Alerts
                       </h4>
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30">
-                      {briefingData?.criticalAlerts.length || critical.length} Flags
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                        !isAllRestoredOrNoCritical && critical.length > 0
+                          ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30'
+                          : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                      }`}
+                    >
+                      {!isAllRestoredOrNoCritical && critical.length > 0
+                        ? `${briefingData?.criticalAlerts.length || critical.length} Flags`
+                        : '0 Active Deficits'}
                     </span>
                   </div>
 
                   <ul className="space-y-2.5 text-xs text-slate-700 dark:text-ink-200">
-                    {(briefingData?.criticalAlerts && briefingData.criticalAlerts.length > 0
-                      ? briefingData.criticalAlerts
-                      : [
-                        `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
-                        `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
-                      ]
+                    {(isAllRestoredOrNoCritical
+                      ? STEADY_STATE_CRITICAL_ALERTS
+                      : (briefingData?.criticalAlerts && briefingData.criticalAlerts.length > 0
+                        ? briefingData.criticalAlerts
+                        : [
+                            `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
+                            `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
+                          ]
+                      )
                     ).map((alert, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
-                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500 dark:bg-rose-400 mt-1.5 shrink-0" />
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
+                            !isAllRestoredOrNoCritical && critical.length > 0
+                              ? 'bg-rose-500 dark:bg-rose-400'
+                              : 'bg-emerald-500 dark:bg-emerald-400'
+                          }`}
+                        />
                         <span className="flex-1">{renderInlineFormatting(alert)}</span>
                       </li>
                     ))}
@@ -356,19 +406,28 @@ ${benchmarkHeader}: ${benchmarkString}
                         Response Actions
                       </h4>
                     </div>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-ocean-100 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/15 dark:text-ocean-300 dark:border-ocean-500/30">
-                      Targeted Next Steps
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
+                        isAllRestoredOrNoCritical
+                          ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
+                          : 'bg-ocean-100 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/15 dark:text-ocean-300 dark:border-ocean-500/30'
+                      }`}
+                    >
+                      {isAllRestoredOrNoCritical ? 'Post-Restoration' : 'Targeted Next Steps'}
                     </span>
                   </div>
 
                   <ul className="space-y-2.5 text-xs text-slate-700 dark:text-ink-200">
-                    {(briefingData?.recommendations && briefingData.recommendations.length > 0
-                      ? briefingData.recommendations
-                      : [
-                        'Deploy mobile generators to unpowered municipal water pumping and district hospital stations.',
-                        'Coordinate Task Force Kapatid lineman crews from ILECO I & II to reinforce ANTECO distribution lines.',
-                        'Utilize daily VIIRS nightlight radiance passes to verify feeder re-energization reports.',
-                      ]
+                    {(isAllRestoredOrNoCritical
+                      ? POST_RESTORATION_BULLETS
+                      : (briefingData?.recommendations && briefingData.recommendations.length > 0
+                        ? briefingData.recommendations
+                        : [
+                          'Deploy mobile generators to unpowered municipal water pumping and district hospital stations.',
+                          'Coordinate Task Force Kapatid lineman crews from ILECO I & II to reinforce ANTECO distribution lines.',
+                          'Utilize daily VIIRS nightlight radiance passes to verify feeder re-energization reports.',
+                        ]
+                      )
                     ).map((rec, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 dark:bg-ocean-400 mt-1.5 shrink-0" />
@@ -395,47 +454,61 @@ ${benchmarkHeader}: ${benchmarkString}
             )}
 
             {/* 4. Priority Areas Table Needing Immediate Assistance */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-xs font-semibold text-slate-600 dark:text-ink-400 uppercase tracking-wider">
-                  Top Priority Areas Needing Immediate Assistance
-                </h4>
-                <span className="text-xs text-slate-500 dark:text-ink-400">Ranked by lowest recovery score</span>
-              </div>
+            {priorityLGUs.length > 0 ? (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-semibold text-slate-600 dark:text-ink-400 uppercase tracking-wider">
+                    Top Priority Areas Needing Immediate Assistance
+                  </h4>
+                  <span className="text-xs text-slate-500 dark:text-ink-400">Ranked by lowest recovery score (&lt; 60%)</span>
+                </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {priorityLGUs.slice(0, 4).map((m, i) => (
-                  <div
-                    key={m.id}
-                    className="flex flex-col justify-between rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/10 p-3.5 hover:border-ocean-300 dark:hover:border-ocean-500/30 transition-all shadow-sm dark:shadow-md"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-bold text-slate-500 dark:text-ink-400">#{i + 1} LGU</span>
-                        <span
-                          className="text-xs font-bold px-2 py-0.5 rounded-full"
-                          style={{
-                            color: getRecoveryColor(m.recoveryScore),
-                            backgroundColor: `${getRecoveryColor(m.recoveryScore)}18`,
-                          }}
-                        >
-                          {m.recoveryScore}%
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {priorityLGUs.slice(0, 4).map((m, i) => (
+                    <div
+                      key={m.id}
+                      className="flex flex-col justify-between rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/10 p-3.5 hover:border-ocean-300 dark:hover:border-ocean-500/30 transition-all shadow-sm dark:shadow-md"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-500 dark:text-ink-400">#{i + 1} Deficit</span>
+                          <span
+                            className="text-xs font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              color: getRecoveryColor(m.recoveryScore),
+                              backgroundColor: `${getRecoveryColor(m.recoveryScore)}18`,
+                            }}
+                          >
+                            {m.recoveryScore}%
+                          </span>
+                        </div>
+                        <h5 className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</h5>
+                        <span className="text-xs text-slate-500 dark:text-ink-400">{m.province} Province</span>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px] text-slate-500 dark:text-ink-400">
+                        <span>Est. Days:</span>
+                        <span className="font-semibold text-slate-800 dark:text-ink-200">
+                          {m.estimatedDaysToRecover === 0 ? 'Restored' : `${m.estimatedDaysToRecover} days`}
                         </span>
                       </div>
-                      <h5 className="text-sm font-bold text-slate-900 dark:text-white truncate">{m.name}</h5>
-                      <span className="text-xs text-slate-500 dark:text-ink-400">{m.province} Province</span>
                     </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-slate-200 dark:border-white/5 flex items-center justify-between text-[11px] text-slate-500 dark:text-ink-400">
-                      <span>Est. Days:</span>
-                      <span className="font-semibold text-slate-800 dark:text-ink-200">
-                        {m.estimatedDaysToRecover === 0 ? 'Restored' : `${m.estimatedDaysToRecover} days`}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-xl bg-emerald-50/70 dark:bg-emerald-500/10 border border-emerald-200/80 dark:border-emerald-500/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-emerald-800 dark:text-emerald-200">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <p className="leading-relaxed">
+                    <strong>Optimal Grid Baseline:</strong> No active critical outage clusters detected; all monitored LGUs have surpassed baseline recovery (&ge; 60%).
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30">
+                  Full Compliance
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -649,9 +722,9 @@ function parseBriefingResponse(
   } else if (payload?.briefing && typeof payload.briefing === 'string') {
     rawText = payload.briefing;
   } else if (payload?.briefing && typeof payload.briefing === 'object') {
-    return extractStructuredObject(payload.briefing, 'gemini');
+    return extractStructuredObject(payload.briefing, 'gemini', critical.length === 0);
   } else if (payload && typeof payload === 'object' && (payload.summary || payload.critical_alerts)) {
-    return extractStructuredObject(payload, 'gemini');
+    return extractStructuredObject(payload, 'gemini', critical.length === 0);
   }
 
   // Check if rawText is a JSON string (e.g. from ```json ... ```)
@@ -660,7 +733,7 @@ function parseBriefingResponse(
   if (potentialJson.startsWith('{') && potentialJson.endsWith('}')) {
     try {
       const parsedObj = JSON.parse(potentialJson);
-      return extractStructuredObject(parsedObj, 'gemini');
+      return extractStructuredObject(parsedObj, 'gemini', critical.length === 0);
     } catch {
       // Continue to markdown parsing
     }
@@ -703,6 +776,24 @@ function parseBriefingResponse(
     summary = rawText;
   }
 
+  // If active critical deficits equal 0 (or all municipalities meet recovery benchmarks),
+  // completely suppress any outage warnings, severe cluster counts, or vulnerable community text.
+  if (critical.length === 0 || (restored.length > 0 && restored.length === totalMunicipalities)) {
+    criticalAlerts = STEADY_STATE_CRITICAL_ALERTS;
+  }
+
+  // If all monitored municipalities have achieved benchmark restoration (>= 90%) with 0 active critical deficits,
+  // ensure recommendations do not advise emergency generator deployment or line repairs.
+  if (critical.length === 0 || (restored.length > 0 && restored.length === totalMunicipalities)) {
+    const hasFalseEmergencyClaim = recommendations.some((rec) =>
+      /\b(generator|mobile substation|lineman crews?|reinforce|line repairs?|debris clearance|emergency supplies)\b/i.test(rec)
+    );
+
+    if (recommendations.length === 0 || hasFalseEmergencyClaim) {
+      recommendations = POST_RESTORATION_BULLETS;
+    }
+  }
+
   return {
     rawMarkdown: rawText,
     summary,
@@ -733,11 +824,19 @@ function extractBullets(text: string): string[] {
   return items.length > 0 ? items : [text.trim()];
 }
 
-function extractStructuredObject(obj: any, source: 'gemini' | 'fallback'): ParsedBriefing {
+function extractStructuredObject(
+  obj: any,
+  source: 'gemini' | 'fallback',
+  isCriticalZero = false
+): ParsedBriefing {
   const summary = obj.summary || obj.executive_summary || obj.overview || '';
-  const criticalAlerts = normalizeArray(obj.critical_alerts || obj['critical alerts'] || obj.criticalAlerts || obj.alerts || []);
+  let criticalAlerts = normalizeArray(obj.critical_alerts || obj['critical alerts'] || obj.criticalAlerts || obj.alerts || []);
   const benchmarks = normalizeArray(obj.benchmarks || obj.restoration_benchmarks || obj.milestones || []);
   const recommendations = normalizeArray(obj.recommendations || obj.priority_recommendations || obj.takeaways || []);
+
+  if (isCriticalZero) {
+    criticalAlerts = STEADY_STATE_CRITICAL_ALERTS;
+  }
 
   const rawMarkdown = `### Executive Summary\n${summary}\n\n### Critical Alerts\n${criticalAlerts.map((a: string) => `* ${a}`).join('\n')}\n\n### Restoration Benchmarks\n${benchmarks.map((b: string) => `* ${b}`).join('\n')}\n\n### Priority Recommendations\n${recommendations.map((r: string) => `* ${r}`).join('\n')}`;
 
@@ -766,6 +865,7 @@ function createFallbackBriefing(
   totalCount: number,
   topPerforming: Municipality[] = []
 ): ParsedBriefing {
+  const hasCritical = critical.length > 0;
   const criticalNames = critical.slice(0, 3).map((m) => `${m.name} (${m.province})`).join(', ');
 
   const hasRestored = restored.length > 0;
@@ -773,13 +873,17 @@ function createFallbackBriefing(
     ? `Satellite nightlight observations confirm that ${restored.length} of ${totalCount} municipalities have achieved near-full recovery (>= 90%), led by ${restored[0].name} (${restored[0].recoveryScore}%).`
     : `Satellite nightlight observations indicate that 0 of ${totalCount} municipalities have crossed the >= 90% near-full recovery threshold, with leading hubs paced by ${topPerforming[0]?.name || 'commercial centers'} (${topPerforming[0]?.recoveryScore ?? 0}%).`;
 
-  const summary = `Following the ${event.name}, the island-wide municipal recovery average stands at ${avgScore}%. ${summaryStatus} However, ${critical.length} municipalities remain in limited-power states (<60%), exhibiting persistent distribution deficits across rural coastal and highland corridors.`;
+  const summary = hasCritical
+    ? `Following the ${event.name}, the island-wide municipal recovery average stands at ${avgScore}%. ${summaryStatus} However, ${critical.length} municipalities remain in limited-power states (<60%), exhibiting persistent distribution deficits across rural coastal and highland corridors.`
+    : `Following the ${event.name}, the island-wide municipal recovery average stands at ${avgScore}%. ${summaryStatus} All monitored municipalities have achieved or surpassed baseline recovery, with 0 jurisdictions remaining under critical outage thresholds (<60%).`;
 
-  const criticalAlerts = [
-    `${critical.length} municipalities register critical power deficits (< 60% baseline radiance), with the heaviest outages concentrated in ${criticalNames || 'southwest Antique'}.`,
-    `Distribution line reconductoring and transformer replacement are required before full energization can be restored to low-lying communities.`,
-    `Vulnerable coastal healthcare facilities and water pumping stations require dedicated fuel priority for emergency gensets.`,
-  ];
+  const criticalAlerts = hasCritical
+    ? [
+      `${critical.length} municipalities register critical power deficits (< 60% baseline radiance), with the heaviest outages concentrated in ${criticalNames || 'southwest Antique'}.`,
+      `Distribution line reconductoring and transformer replacement are required before full energization can be restored to low-lying communities.`,
+      `Vulnerable coastal healthcare facilities and water pumping stations require dedicated fuel priority for emergency gensets.`,
+    ]
+    : STEADY_STATE_CRITICAL_ALERTS;
 
   const benchmarks = hasRestored
     ? [
@@ -791,11 +895,14 @@ function createFallbackBriefing(
       `High-voltage 138kV transmission corridors across Panay remain energized, while feeder-level restoration works to elevate municipal load centers toward the 90% benchmark.`,
     ];
 
-  const recommendations = [
-    `Coordinate mutual aid linemen deployments from restored cooperatives (ILECO) to assist ANTECO and CAPELCO.`,
-    `Prioritize mobile substation deployment to southwest Antique to relieve overburdened rural feeders.`,
-    `Perform consecutive nightly VIIRS-DNB radiance verification to audit utility-reported power restoration figures.`,
-  ];
+  const allBenchmarkRestored = critical.length === 0 || (restored.length > 0 && restored.length === totalCount);
+  const recommendations = allBenchmarkRestored
+    ? POST_RESTORATION_BULLETS
+    : [
+      `Coordinate mutual aid linemen deployments from restored cooperatives (ILECO) to assist ANTECO and CAPELCO.`,
+      `Prioritize mobile substation deployment to southwest Antique to relieve overburdened rural feeders.`,
+      `Perform consecutive nightly VIIRS-DNB radiance verification to audit utility-reported power restoration figures.`,
+    ];
 
   const rawMarkdown = `### Executive Summary\n${summary}\n\n### Critical Alerts\n${criticalAlerts.map((a) => `* ${a}`).join('\n')}\n\n### Restoration Benchmarks\n${benchmarks.map((b) => `* ${b}`).join('\n')}\n\n### Priority Recommendations\n${recommendations.map((r) => `* ${r}`).join('\n')}`;
 

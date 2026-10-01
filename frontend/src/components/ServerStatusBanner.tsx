@@ -1,67 +1,120 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Loader2, CheckCircle2, AlertTriangle, RefreshCw, X, Server, WifiOff } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertTriangle, RefreshCw, X, Server } from 'lucide-react';
+import { useBackendStatus } from '@/hooks/useBackendStatus';
 import {
-  subscribeServerStatus,
-  getServerStatus,
-  pingBackend,
-  type ServerStatusDetail,
-  type ServerWakeStatus,
+  isBackendMarkedWoke,
+  markBackendWoke,
+  SESSION_STORAGE_WOKE_KEY,
 } from '@/services/apiService';
 
 export interface ServerStatusBannerProps {
   className?: string;
   autoHideReadyDelayMs?: number;
+  hasActiveData?: boolean;
+  isOfflineMode?: boolean;
+  isFallbackLoaded?: boolean;
 }
 
 export const ServerStatusBanner: React.FC<ServerStatusBannerProps> = ({
   className = '',
   autoHideReadyDelayMs = 2800,
+  hasActiveData,
+  isOfflineMode,
+  isFallbackLoaded,
 }) => {
-  const [statusInfo, setStatusInfo] = useState<ServerStatusDetail>(() => getServerStatus());
-  const [dismissed, setDismissed] = useState(false);
+  // 1. Wrap the entire wakeup check in a sessionStorage check.
+  // If it already exists or has run once this session, do not render or poll.
+  const hasWokeInSession =
+    typeof window !== 'undefined' &&
+    window.sessionStorage.getItem(SESSION_STORAGE_WOKE_KEY) === 'true';
+
+  // 2. Add an immediate short-circuit condition:
+  // If local mock/fallback data is loaded or active, set sessionStorage.setItem('sanag_backend_woke', 'true')
+  // instantly, clear any active retry intervals, and dismiss/hide the toast banner completely.
+  const isMockOrFallbackActive = Boolean(
+    hasActiveData ||
+    isFallbackLoaded ||
+    isOfflineMode
+  );
+
+  if (isMockOrFallbackActive && typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(SESSION_STORAGE_WOKE_KEY, 'true');
+    } catch {}
+  }
+
+  const {
+    status,
+    attempt,
+    maxRetries,
+    secondsRemaining,
+    message,
+    error,
+    isSuppressed,
+    isOperatingOnFallback,
+    retry,
+    dismiss,
+    isDismissed,
+  } = useBackendStatus({
+    hasActiveData,
+    isOfflineMode,
+    isFallbackLoaded,
+    autoStartPolling: false,
+  });
+
+  const [localDismissed, setLocalDismissed] = useState(false);
   const [isRetryingManually, setIsRetryingManually] = useState(false);
 
+  // Auto-hide banner and permanently mark session woke shortly after server reports 'ready'
   useEffect(() => {
-    const unsubscribe = subscribeServerStatus((detail) => {
-      setStatusInfo(detail);
-      // If a new waking or error event occurs, bring banner back if previously dismissed
-      if (detail.status === 'waking' || detail.status === 'error') {
-        setDismissed(false);
-      }
-    });
-
-    return unsubscribe;
-  }, []);
-
-  // Auto-hide banner shortly after server reports 'ready'
-  useEffect(() => {
-    if (statusInfo.status === 'ready') {
+    if (status === 'ready') {
+      markBackendWoke();
       const timer = setTimeout(() => {
-        setDismissed(true);
+        setLocalDismissed(true);
       }, autoHideReadyDelayMs);
       return () => clearTimeout(timer);
     }
-  }, [statusInfo.status, autoHideReadyDelayMs]);
+  }, [status, autoHideReadyDelayMs]);
+
+  // Reset local dismiss when waking state transitions only if not already woke in session
+  useEffect(() => {
+    if (status === 'waking' && !isBackendMarkedWoke() && !hasWokeInSession) {
+      setLocalDismissed(false);
+    }
+  }, [status, hasWokeInSession]);
 
   const handleManualRetry = useCallback(async () => {
     setIsRetryingManually(true);
     try {
-      const ok = await pingBackend();
+      const ok = await retry();
       if (ok) {
-        // If ping succeeds, prompt a subtle reload or let active components re-request
+        markBackendWoke();
         window.location.reload();
       }
     } finally {
       setIsRetryingManually(false);
     }
-  }, []);
+  }, [retry]);
 
-  // Do not render if idle or manually dismissed
-  if (dismissed || statusInfo.status === 'idle') {
+  // 1 & 2: Immediate short-circuit condition:
+  // If session is already woke, mock data is active, or user dismissed, completely suppress rendering
+  if (
+    hasWokeInSession ||
+    isBackendMarkedWoke() ||
+    isMockOrFallbackActive ||
+    isOperatingOnFallback ||
+    isSuppressed ||
+    localDismissed ||
+    isDismissed ||
+    status === 'idle'
+  ) {
     return null;
   }
 
-  const { status, attempt, maxRetries, secondsRemaining, message, error } = statusInfo;
+  // Gracefully suppress or dismiss error toast if app is operating on local mock data or offline mode
+  if (status === 'error' && (isSuppressed || isOperatingOnFallback || isOfflineMode)) {
+    return null;
+  }
 
   return (
     <div
@@ -120,10 +173,10 @@ export const ServerStatusBanner: React.FC<ServerStatusBannerProps> = ({
                 <Server className="h-3.5 w-3.5 text-slate-400" />
                 {status === 'waking' && 'Backend Server Waking Up'}
                 {status === 'ready' && 'Backend Server Online'}
-                {status === 'error' && 'Backend Wakeup Timed Out'}
+                {status === 'error' && 'Backend Server Timed Out'}
               </h4>
 
-              {status === 'waking' && attempt > 0 && (
+              {status === 'waking' && attempt > 0 && !isMockOrFallbackActive && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   Attempt {attempt} of {maxRetries}
                 </span>
@@ -141,8 +194,8 @@ export const ServerStatusBanner: React.FC<ServerStatusBannerProps> = ({
                   'The backend server took longer than expected to spin up. You can retry the connection or check your network.')}
             </p>
 
-            {/* Countdown / Progress info for waking */}
-            {status === 'waking' && (
+            {/* 3. Multi-attempt countdown loop removed entirely when on mock/fallback states */}
+            {status === 'waking' && !isMockOrFallbackActive && !isOperatingOnFallback && (
               <div className="mt-2.5 flex items-center gap-3">
                 <div className="flex-1 bg-white/10 rounded-full h-1.5 overflow-hidden">
                   <div
@@ -181,7 +234,11 @@ export const ServerStatusBanner: React.FC<ServerStatusBannerProps> = ({
           {/* Close / Dismiss Button */}
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => {
+              markBackendWoke();
+              setLocalDismissed(true);
+              dismiss();
+            }}
             aria-label="Dismiss status notification"
             className="absolute top-3 right-3 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
           >
