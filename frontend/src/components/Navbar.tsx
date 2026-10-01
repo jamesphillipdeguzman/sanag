@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Activity, Menu, Moon, Satellite, Sun, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
+import { useServerHealth } from '@/context/ServerHealthContext';
 
 const navLinks = [
   { label: 'Overview', href: '#overview' },
@@ -14,12 +15,36 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const {
+    isOnline,
+    isWaking,
+    isOffline,
+    isReconnecting,
+    isRefetching,
+    hasConnectionError,
+    refetchAll,
+  } = useServerHealth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    // If the app is currently displaying a connection error, clicking the logo
+    // navigates to the home view and triggers the refetch handler.
+    if (hasConnectionError || isOffline || isWaking) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      refetchAll();
+    }
+  };
+
+  const handleLiveStatusClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    await refetchAll();
+  };
 
   return (
     <nav
@@ -31,10 +56,27 @@ export default function Navbar() {
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <a href="#top" className="flex items-center gap-2.5 group">
+          <a
+            href="#top"
+            onClick={handleLogoClick}
+            className="flex items-center gap-2.5 group cursor-pointer"
+            title={hasConnectionError || isOffline || isWaking ? 'Server disconnected - Click to reconnect' : 'SANAG - Nightlight Analytics'}
+          >
             <div className="relative">
-              <div className="absolute inset-0 bg-ocean-500 blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
-              <div className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-lg shadow-ocean-500/30">
+              <div className={`absolute inset-0 blur-lg transition-opacity ${
+                hasConnectionError || isOffline
+                  ? 'bg-rose-500 opacity-60 group-hover:opacity-80'
+                  : isWaking
+                  ? 'bg-amber-500 opacity-60 group-hover:opacity-80'
+                  : 'bg-ocean-500 opacity-40 group-hover:opacity-60'
+              }`} />
+              <div className={`relative flex h-9 w-9 items-center justify-center rounded-lg shadow-lg transition-all ${
+                hasConnectionError || isOffline
+                  ? 'bg-gradient-to-br from-rose-600 to-amber-600 shadow-rose-500/30'
+                  : isWaking
+                  ? 'bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-500/30'
+                  : 'bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-ocean-500/30'
+              }`}>
                 <Satellite className="h-5 w-5 text-white" />
               </div>
             </div>
@@ -76,13 +118,49 @@ export default function Navbar() {
               )}
             </button>
 
-            <a
-              href="#briefing"
-              className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-ocean-600 to-ocean-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02] transition-all"
+            {/* Live Status Button with dynamic state styling & pulsing indicator */}
+            <button
+              type="button"
+              onClick={handleLiveStatusClick}
+              disabled={isRefetching}
+              title="Click to check connection and refresh active telemetry data"
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all cursor-pointer ${
+                isWaking || (isReconnecting && !isOffline)
+                  ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-600 dark:text-amber-300 shadow-md shadow-amber-500/10'
+                  : isOffline
+                  ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-600 dark:text-rose-300 shadow-md shadow-rose-500/10'
+                  : 'bg-gradient-to-r from-ocean-600 to-ocean-500 text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02]'
+              }`}
             >
-              <Activity className="h-4 w-4" />
-              Live Status
-            </a>
+              {isWaking || (isReconnecting && !isOffline) ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                  </span>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Reconnecting...</span>
+                </>
+              ) : isOffline ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+                  </span>
+                  <RefreshCw className={`h-3.5 w-3.5 ${isRefetching ? 'animate-spin' : ''}`} />
+                  <span>Offline - Retry ↻</span>
+                </>
+              ) : (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                  </span>
+                  <Activity className="h-4 w-4" />
+                  <span>Live Status</span>
+                </>
+              )}
+            </button>
           </div>
 
           <div className="flex md:hidden items-center gap-2">
@@ -123,6 +201,40 @@ export default function Navbar() {
                   {link.label}
                 </a>
               ))}
+
+              <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    await handleLiveStatusClick(e);
+                    setMobileOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
+                    isWaking || (isReconnecting && !isOffline)
+                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40'
+                      : isOffline
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40'
+                      : 'bg-ocean-600 text-white'
+                  }`}
+                >
+                  {isWaking || (isReconnecting && !isOffline) ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Reconnecting...</span>
+                    </>
+                  ) : isOffline ? (
+                    <>
+                      <RefreshCw className={`h-4 w-4 ${isRefetching ? 'animate-spin' : ''}`} />
+                      <span>Offline - Retry ↻</span>
+                    </>
+                  ) : (
+                    <>
+                      <Activity className="h-4 w-4" />
+                      <span>Live Status</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

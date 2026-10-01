@@ -982,7 +982,7 @@ function LeafletMap({
                 fillOpacity: 0.95
               });
             }
-            if (typeof (featureLayer as any).bringToFront === 'function') {
+            if (typeof (featureLayer as any).bringToFront === 'function' && (featureLayer as any)._map) {
               (featureLayer as any).bringToFront();
             }
           },
@@ -1204,6 +1204,7 @@ function LeafletMap({
     }
 
     Object.entries(layersRef.current).forEach(([id, layer]) => {
+      if (!mapRef.current || !layer || !(layer as any)._map) return;
       const props = (layer as any)?.feature?.properties || {};
       const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
@@ -1221,22 +1222,36 @@ function LeafletMap({
 
   // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
   useEffect(() => {
+    let isMounted = true;
     const map = mapRef.current;
     if (!map || !selectedRegionKey) return;
 
     fetchRegionChunk(selectedRegionKey).then((chunkData) => {
-      if (!chunkData) return;
-      renderRegionGeoJson(selectedRegionKey, chunkData);
+      if (!isMounted) return;
+      const currentMap = mapRef.current;
+      if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) return;
+
+      if (chunkData) {
+        renderRegionGeoJson(selectedRegionKey, chunkData);
+      }
 
       const preset = REGION_PRESETS[selectedRegionKey];
-      if (preset) {
-        if (selectedRegionKey === 'panay') {
-          map.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
-        } else {
-          map.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+      if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
+        try {
+          if (selectedRegionKey === 'panay') {
+            currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
+          } else {
+            currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+          }
+        } catch {
+          currentMap.setView(preset.center, preset.zoom);
         }
       }
     });
+
+    return () => {
+      isMounted = false;
+    };
   }, [selectedRegionKey]);
 
   // Listen to window focus-province and select-region events (e.g. from Footer links)
@@ -1249,18 +1264,26 @@ function LeafletMap({
       onRegionChange?.(targetKey);
 
       const map = mapRef.current;
-      if (!map) return;
+      if (!map || !(map as any)._loaded || !(map as any)._panes) return;
 
       fetchRegionChunk(targetKey).then((chunkData) => {
-        if (!chunkData) return;
-        renderRegionGeoJson(targetKey, chunkData);
+        const currentMap = mapRef.current;
+        if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) return;
+
+        if (chunkData) {
+          renderRegionGeoJson(targetKey, chunkData);
+        }
 
         const preset = REGION_PRESETS[targetKey];
-        if (preset) {
-          if (targetKey === 'panay') {
-            map.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
-          } else {
-            map.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+        if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
+          try {
+            if (targetKey === 'panay') {
+              currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
+            } else {
+              currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+            }
+          } catch {
+            currentMap.setView(preset.center, preset.zoom);
           }
         }
       });

@@ -104,8 +104,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "description": "Cascading power plant shutdowns leading to total island-wide blackout across Iloilo, Capiz, Aklan, and Antique substations. Verified via multi-day VIIRS radiance drop analysis.",
         "severity_text": "Total Grid Failure · 93 LGUs Impacted",
         "country": "Philippines",
-        "url": "https://www.youtube.com/watch?v=fXvQk_K0yT0",
-        "resource_url": "https://www.youtube.com/watch?v=fXvQk_K0yT0",
+        "url": "https://www.gdacs.org",
         "latitude": 10.72,
         "longitude": 122.56,  # Centered near Iloilo City / major transmission hubs
         "coordinates": [10.72, 122.56],
@@ -127,8 +126,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "description": "Destructive Category 5 equivalent storm tracking across Southern Visayas, heavily impacting southern portions of Panay and Negros corridors.",
         "severity_text": "Super Typhoon · Severe Radiance Loss",
         "country": "Philippines",
-        "url": "https://www.youtube.com/watch?v=R9tD38-h_u4",
-        "resource_url": "https://www.youtube.com/watch?v=R9tD38-h_u4",
+        "url": "https://www.gdacs.org",
         "latitude": 9.90,
         "longitude": 125.50,
         "coordinates": [9.90, 125.50],
@@ -150,8 +148,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "description": "Historical catastrophic storm track crossing Central Philippines, serving as the ultimate multi-year baseline benchmark for SANAG recovery modeling.",
         "severity_text": "Maximum Intensity · Historical Benchmark",
         "country": "Philippines",
-        "url": "https://www.youtube.com/watch?v=d_k8wD2R21w",
-        "resource_url": "https://www.youtube.com/watch?v=d_k8wD2R21w",
+        "url": "https://www.gdacs.org",
         "latitude": 11.10,
         "longitude": 125.30,
         "coordinates": [11.10, 125.30],
@@ -173,8 +170,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "description": "Enhanced Southwest Monsoon low-pressure precipitation triggering precautionary substation isolation across Panay River Basin (Capiz/Iloilo inland plains).",
         "severity_text": "Heavy rainfall 120mm/24h · River basin flood watch",
         "country": "Philippines",
-        "url": "https://www.youtube.com/watch?v=uK8E2jX7X6s",
-        "resource_url": "https://www.youtube.com/watch?v=uK8E2jX7X6s",
+        "url": "https://www.gdacs.org",
         "latitude": 11.50,
         "longitude": 122.75,  # Centered over Capiz / Panay River basin
         "coordinates": [11.50, 122.75],
@@ -196,8 +192,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "description": "Brought heavy flooding, widespread displacement, and power interruptions across Iloilo, Capiz, Antique, Aklan, and Guimaras.",
         "severity_text": "Severe wind gusts 140km/h · Regional grid alert",
         "country": "Philippines",
-        "url": "https://www.youtube.com/watch?v=O1eP9j2nN7s",
-        "resource_url": "https://www.youtube.com/watch?v=O1eP9j2nN7s",
+        "url": "https://www.gdacs.org",
         "latitude": 10.72,
         "longitude": 122.56,
         "coordinates": [10.72, 122.56],
@@ -448,14 +443,32 @@ def get_latest_philippines_disasters(limit: int = 50, include_historical: bool =
                     seen_ids.add(fb["event_id"])
                     deduped.append(fb)
 
-        return deduped if deduped else _get_fallback_alerts()
+        result_list = deduped if deduped else _get_fallback_alerts()
+
+        # Strictly sort in reverse chronological order (newest/most recent first)
+        result_list.sort(
+            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
+            reverse=True
+        )
+
+        return result_list
 
     except GDACSAPIError as error:
         print(f"GDACS API Error: {error}")
-        return _get_fallback_alerts()
+        fallback = _get_fallback_alerts()
+        fallback.sort(
+            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
+            reverse=True
+        )
+        return fallback
     except Exception as e:
         print(f"Unexpected error fetching GDACS feed: {e}")
-        return _get_fallback_alerts()
+        fallback = _get_fallback_alerts()
+        fallback.sort(
+            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
+            reverse=True
+        )
+        return fallback
 
 if __name__ == "__main__":
     alerts = get_latest_philippines_disasters()

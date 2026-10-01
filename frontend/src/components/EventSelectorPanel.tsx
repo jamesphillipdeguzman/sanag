@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Activity,
   AlertTriangle,
   Calendar,
+  Camera,
   CheckCircle2,
   CloudLightning,
   Droplets,
   ExternalLink,
   Flame,
+  LayoutGrid,
+  List,
   Loader2,
   RefreshCw,
   Radio,
@@ -19,6 +22,7 @@ import {
 import type { DisasterEvent, GdacsAlert } from '@/types';
 import { apiFetch } from '@/services/apiService';
 import { getSeverityColor } from '@/data/mockData';
+import MediaGalleryModal from './MediaGalleryModal';
 import {
   isEventCompatibleWithRegion,
   getRegionDisplayName,
@@ -29,6 +33,14 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'historical' | 'gdacs';
+export type ViewMode = 'grid' | 'list';
+
+export interface MediaEventData {
+  name: string;
+  date?: string;
+  type?: string;
+  severity?: string;
+}
 
 interface EventSelectorPanelProps {
   /** Curated historical events from the database */
@@ -99,6 +111,53 @@ function formatGdacsDate(dateStr?: string) {
   } catch {
     return dateStr.slice(0, 10);
   }
+}
+
+export function formatEventDate(dateStr?: string) {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00Z` : dateStr);
+    if (isNaN(d.getTime())) return dateStr.slice(0, 10);
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr.slice(0, 10);
+  }
+}
+
+export function getEventTypeBadge(type?: string) {
+  const t = (type ?? '').toLowerCase();
+  if (t === 'typhoon') {
+    return {
+      label: 'Typhoon',
+      className: 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25',
+    };
+  }
+  if (t === 'monsoon_flood' || t === 'flood') {
+    return {
+      label: t === 'monsoon_flood' ? 'Monsoon Flood' : 'Flood',
+      className: 'text-sky-700 bg-sky-50 border-sky-200 dark:text-sky-300 dark:bg-sky-500/10 dark:border-sky-500/25',
+    };
+  }
+  if (t === 'earthquake') {
+    return {
+      label: 'Earthquake',
+      className: 'text-rose-700 bg-rose-50 border-rose-200 dark:text-rose-300 dark:bg-rose-500/10 dark:border-rose-500/25',
+    };
+  }
+  if (t === 'grid_failure' || t === 'blackout') {
+    return {
+      label: t === 'grid_failure' ? 'Grid Failure' : 'Blackout',
+      className: 'text-purple-700 bg-purple-50 border-purple-200 dark:text-purple-300 dark:bg-purple-500/10 dark:border-purple-500/25',
+    };
+  }
+  return {
+    label: type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Hazard',
+    className: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25',
+  };
 }
 
 /**
@@ -196,13 +255,36 @@ export default function EventSelectorPanel({
   selectedRegionKey,
 }: EventSelectorPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('historical');
+  const [mediaModalEvent, setMediaModalEvent] = useState<MediaEventData | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('sanag_event_view_mode');
+        if (saved === 'grid' || saved === 'list') return saved;
+      } catch {
+        // ignore localStorage access error
+      }
+    }
+    return 'grid';
+  });
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sanag_event_view_mode', mode);
+      } catch {
+        // ignore localStorage access error
+      }
+    }
+  };
 
   return (
     <div className="mb-5 animate-fade-in-up" style={{ animationDelay: '0.08s' }}>
 
-      {/* ── Panel Header with Tabbed Toggle ───────────────────────────────── */}
+      {/* ── Panel Header with Title, Responsive View Toggle & Source Tabs ─────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-ink-300">
             Disaster Event Monitoring
           </span>
@@ -211,6 +293,42 @@ export default function EventSelectorPanel({
               {events.length} Incidents Tracked
             </span>
           )}
+
+          {/* Desktop View Mode Toggle (Grid vs. List) — HIDDEN on mobile (< md / 768px) */}
+          <div
+            role="group"
+            aria-label="Event layout view mode"
+            className="hidden md:flex items-center p-0.5 rounded-lg bg-slate-200/80 dark:bg-slate-900 border border-slate-300 dark:border-slate-800"
+          >
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('grid')}
+              title="Grid view (multi-column cards)"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+              className={`flex items-center justify-center p-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('list')}
+              title="List view (single-column compact rows)"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+              className={`flex items-center justify-center p-1.5 rounded-md transition-all cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Pill toggle */}
@@ -252,7 +370,9 @@ export default function EventSelectorPanel({
           activeEvent={activeEvent}
           onSelectEvent={onSelectEvent}
           onDismissEvent={onDismissEvent}
+          onOpenMedia={setMediaModalEvent}
           selectedRegionKey={selectedRegionKey}
+          viewMode={viewMode}
         />
       </div>
 
@@ -267,10 +387,22 @@ export default function EventSelectorPanel({
           activeEvent={activeEvent}
           onSelectEvent={onSelectEvent}
           onSimulateGdacs={onSimulateGdacs}
+          onOpenMedia={setMediaModalEvent}
           importingGdacsId={importingGdacsId}
           importedEventIds={importedEventIds}
+          viewMode={viewMode}
         />
       </div>
+
+      {/* In-App Media Gallery & Ground Footage Modal */}
+      <MediaGalleryModal
+        isOpen={mediaModalEvent !== null}
+        onClose={() => setMediaModalEvent(null)}
+        eventName={mediaModalEvent?.name || ''}
+        eventDate={mediaModalEvent?.date}
+        eventType={mediaModalEvent?.type}
+        eventSeverity={mediaModalEvent?.severity}
+      />
     </div>
   );
 }
@@ -342,17 +474,30 @@ function HistoricalPanel({
   activeEvent,
   onSelectEvent,
   onDismissEvent,
+  onOpenMedia,
   selectedRegionKey,
+  viewMode = 'grid',
 }: {
   events: DisasterEvent[];
   activeEvent: DisasterEvent;
   onSelectEvent: (id: string) => void;
   onDismissEvent?: () => void;
+  onOpenMedia: (data: MediaEventData) => void;
   selectedRegionKey?: string;
+  viewMode?: ViewMode;
 }) {
+  // Strictly sort historical presets in reverse chronological order (newest / most recent first)
+  const sortedEvents = useMemo(() => {
+    return [...events].sort((a, b) => {
+      const dateA = new Date(a.startDate || a.date || 0).getTime() || 0;
+      const dateB = new Date(b.startDate || b.date || 0).getTime() || 0;
+      return dateB - dateA; // Descending (latest first)
+    });
+  }, [events]);
+
   const isPanayOrNationwide = isPanayRegion(selectedRegionKey) || isNationwideRegion(selectedRegionKey);
   const regionName = getRegionDisplayName(selectedRegionKey);
-  const incompatibleEvents = events.filter((e) => !isEventCompatibleWithRegion(e, selectedRegionKey));
+  const incompatibleEvents = sortedEvents.filter((e) => !isEventCompatibleWithRegion(e, selectedRegionKey));
   const hasIncompatible = !isPanayOrNationwide && incompatibleEvents.length > 0;
 
   return (
@@ -371,7 +516,7 @@ function HistoricalPanel({
       </div>
 
       {/* Event Selector Dropdown Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
             Event Dropdown:
@@ -383,20 +528,20 @@ function HistoricalPanel({
               onChange={(e) => {
                 const val = e.target.value;
                 if (!val) return;
-                const chosen = events.find((evt) => evt.id === val);
+                const chosen = sortedEvents.find((evt) => evt.id === val);
                 if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
                 onSelectEvent(val);
               }}
-              className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-ink-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-ocean-500 focus:outline-none cursor-pointer"
+              className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer"
             >
-              {events.map((evt) => {
+              {sortedEvents.map((evt) => {
                 const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
                 return (
                   <option
                     key={evt.id}
                     value={evt.id}
                     disabled={!isCompatible}
-                    className={!isCompatible ? 'text-slate-400 dark:text-ink-600 bg-slate-100 dark:bg-ink-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
+                    className={!isCompatible ? 'text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
                   >
                     {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
                   </option>
@@ -416,124 +561,280 @@ function HistoricalPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {events.map((event) => {
-          const isSelected    = event.id === activeEvent.id;
-          const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
-          const severityColor = getSeverityColor(event.severity);
+      {/* Responsive View Mode: Grid (multi-column on >= md, single-column on mobile) vs List (single-column compact rows) */}
+      {viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {sortedEvents.map((event) => {
+            const isSelected    = event.id === activeEvent.id;
+            const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
+            const severityColor = getSeverityColor(event.severity);
+            const typeBadge     = getEventTypeBadge(event.type);
+            const formattedDate = formatEventDate(event.startDate || event.date);
 
-          return (
-            <div key={event.id} className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  if (isCompatible) onSelectEvent(event.id);
-                }}
-                disabled={!isCompatible}
-                aria-disabled={!isCompatible}
-                aria-pressed={isSelected}
-                title={
-                  !isCompatible
-                    ? `"${event.name}" is a Panay-exclusive disaster event and is disabled for ${regionName} to prevent geographic mismatches.`
-                    : undefined
-                }
-                className={`group relative text-left w-full p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
-                  !isCompatible
-                    ? 'opacity-50 grayscale-[40%] bg-slate-100/70 dark:bg-ink-950/70 border-dashed border-slate-300 dark:border-white/10 cursor-not-allowed'
-                    : isSelected
-                    ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 dark:border-ocean-500/80 dark:bg-gradient-to-br dark:from-ocean-500/15 dark:via-ink-900/90 dark:to-ink-900 dark:shadow-[0_0_20px_rgba(89,159,253,0.18)] dark:ring-ocean-400/50 cursor-pointer'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 dark:border-white/10 dark:bg-ink-900/60 dark:hover:bg-ink-900/90 dark:hover:border-white/20 shadow-sm dark:shadow-none cursor-pointer'
-                }`}
-              >
-                {!isCompatible && (
-                  <div className="mb-2 py-0.5 px-2 rounded bg-rose-500/10 border border-rose-500/25 text-[10px] font-semibold text-rose-700 dark:text-rose-400 flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>Panay Exclusive · Disabled for {regionName}</span>
+            return (
+              <div key={event.id} className="relative">
+                <div
+                  role="button"
+                  tabIndex={isCompatible ? 0 : -1}
+                  onClick={() => {
+                    if (isCompatible) onSelectEvent(event.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (isCompatible && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      onSelectEvent(event.id);
+                    }
+                  }}
+                  aria-disabled={!isCompatible}
+                  aria-pressed={isSelected}
+                  title={
+                    !isCompatible
+                      ? `"${event.name}" is a Panay-exclusive disaster event and is disabled for ${regionName} to prevent geographic mismatches.`
+                      : undefined
+                  }
+                  className={`group relative text-left w-full p-3.5 rounded-xl border transition-all flex flex-col justify-between focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                    !isCompatible
+                      ? 'opacity-50 grayscale-[40%] bg-slate-100/70 dark:bg-slate-950/70 border-dashed border-slate-300 dark:border-slate-800 cursor-not-allowed'
+                      : isSelected
+                      ? 'border-emerald-500 bg-emerald-50/70 shadow-md ring-1 ring-emerald-500/50 dark:border-emerald-500 dark:bg-gradient-to-br dark:from-emerald-950/30 dark:via-slate-900/90 dark:to-slate-900 dark:shadow-[0_0_20px_rgba(16,185,129,0.18)] dark:ring-emerald-400/50 cursor-pointer'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-emerald-500/50 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-900/90 dark:hover:border-emerald-500/40 shadow-sm dark:shadow-none cursor-pointer'
+                  }`}
+                >
+                  {!isCompatible && (
+                    <div className="mb-2 py-0.5 px-2 rounded bg-rose-500/10 border border-rose-500/25 text-[10px] font-semibold text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      <span>Panay Exclusive · Disabled for {regionName}</span>
+                    </div>
+                  )}
+
+                  {/* Header: Icon, Title & Active Checkmark */}
+                  <div className="flex items-start justify-between gap-2 mb-2 w-full">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`p-1.5 rounded-lg shrink-0 ${isSelected ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        {getHistoricalIcon(event)}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className={`text-sm font-bold truncate pr-3 ${
+                          !isCompatible
+                            ? 'text-slate-500 dark:text-slate-400'
+                            : isSelected
+                            ? 'text-slate-900 dark:text-white'
+                            : 'text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+                        }`}>
+                          {event.name}
+                        </h3>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${typeBadge.className}`}>
+                            {typeBadge.label}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                        <span className="hidden xl:inline">Active</span>
+                      </span>
+                    )}
                   </div>
-                )}
 
-                <div className="flex items-start justify-between gap-2 mb-2 w-full">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-100 dark:bg-ocean-500/20' : 'bg-slate-100 dark:bg-white/5'}`}>
+                  {/* Metadata Row: Formatted Date, VIIRS status, Severity */}
+                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 w-full gap-1">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-400 shrink-0" />
+                      <span className="truncate">{formattedDate}</span>
+                    </span>
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
+                        event.viirs_data_available !== false
+                          ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25'
+                          : 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25'
+                      }`}
+                      title={event.viirs_data_available !== false ? 'NASA VIIRS Radiance Confirmed' : 'VIIRS Radiance Pending'}
+                    >
+                      {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
+                    </span>
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                      style={{
+                        color: severityColor,
+                        backgroundColor: `${severityColor}18`,
+                        border: `1px solid ${severityColor}35`,
+                      }}
+                    >
+                      {event.severity}
+                    </span>
+                  </div>
+
+                  {/* Action Row: In-App Search Ground Images Button */}
+                  <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1 w-full">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMedia({
+                          name: event.name,
+                          date: formattedDate,
+                          type: event.type,
+                          severity: event.severity,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors py-0.5 px-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer"
+                      title="Search ground images and damage photography in-app"
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                      <span>Search Ground Images</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dismiss X — only on the active card */}
+                {isSelected && onDismissEvent && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDismissEvent(); }}
+                    title="Dismiss active event"
+                    className="absolute top-2.5 right-2.5 flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 hover:bg-rose-100 text-slate-500 hover:text-rose-600 dark:bg-slate-800 dark:hover:bg-rose-500/25 dark:text-slate-400 dark:hover:text-rose-300 transition-all cursor-pointer z-10"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* List View: single-column compact rows */
+        <div className="flex flex-col gap-2.5">
+          {sortedEvents.map((event) => {
+            const isSelected    = event.id === activeEvent.id;
+            const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
+            const severityColor = getSeverityColor(event.severity);
+            const typeBadge     = getEventTypeBadge(event.type);
+            const formattedDate = formatEventDate(event.startDate || event.date);
+
+            return (
+              <div key={event.id} className="relative">
+                <div
+                  role="button"
+                  tabIndex={isCompatible ? 0 : -1}
+                  onClick={() => {
+                    if (isCompatible) onSelectEvent(event.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (isCompatible && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      onSelectEvent(event.id);
+                    }
+                  }}
+                  aria-disabled={!isCompatible}
+                  aria-pressed={isSelected}
+                  title={
+                    !isCompatible
+                      ? `"${event.name}" is a Panay-exclusive disaster event and is disabled for ${regionName} to prevent geographic mismatches.`
+                      : undefined
+                  }
+                  className={`group relative text-left w-full px-3.5 py-2.5 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-2.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+                    !isCompatible
+                      ? 'opacity-50 grayscale-[40%] bg-slate-100/70 dark:bg-slate-950/70 border-dashed border-slate-300 dark:border-slate-800 cursor-not-allowed'
+                      : isSelected
+                      ? 'border-emerald-500 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-500/50 dark:border-emerald-500 dark:bg-gradient-to-r dark:from-emerald-950/30 dark:via-slate-900/90 dark:to-slate-900 dark:ring-emerald-400/50 cursor-pointer'
+                      : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-emerald-500/50 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-900/90 dark:hover:border-emerald-500/40 shadow-sm dark:shadow-none cursor-pointer'
+                  }`}
+                >
+                  {/* Left Side: Icon, Type Badge, Title, Formatted Start Date */}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <div className={`p-1.5 rounded-lg shrink-0 ${isSelected ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
                       {getHistoricalIcon(event)}
                     </div>
-                    <h3 className={`text-sm font-bold truncate pr-5 ${
-                      !isCompatible
-                        ? 'text-slate-500 dark:text-ink-400'
-                        : isSelected
-                        ? 'text-slate-900 dark:text-white'
-                        : 'text-slate-800 dark:text-ink-200 group-hover:text-ocean-600 dark:group-hover:text-white'
-                    }`}>
-                      {event.name}
-                    </h3>
+                    <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 self-start sm:self-auto ${typeBadge.className}`}>
+                        {typeBadge.label}
+                      </span>
+                      <h3 className={`text-sm font-bold truncate ${
+                        !isCompatible
+                          ? 'text-slate-500 dark:text-slate-400'
+                          : isSelected
+                          ? 'text-slate-900 dark:text-white'
+                          : 'text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400'
+                      }`}>
+                        {event.name}
+                      </h3>
+                      <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                        <Calendar className="h-3 w-3 text-slate-400 dark:text-slate-400 shrink-0" />
+                        <span>{formattedDate}</span>
+                      </span>
+                    </div>
                   </div>
-                  {isSelected && (
-                    <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-600 dark:text-ocean-300 shrink-0">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
-                      <span className="hidden xl:inline">Active</span>
-                    </span>
-                  )}
-                </div>
 
-                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-ink-400 mt-1 pt-2 border-t border-slate-100 dark:border-white/5 w-full gap-1">
-                  <span className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3 text-slate-400 dark:text-ink-400 shrink-0" />
-                    <span className="truncate">{event.startDate || event.date}</span>
-                  </span>
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
-                      event.viirs_data_available !== false
-                        ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25'
-                        : 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25'
-                    }`}
-                    title={event.viirs_data_available !== false ? 'NASA VIIRS Radiance Confirmed' : 'VIIRS Radiance Pending'}
-                  >
-                    {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
-                  </span>
-                  <span
-                    className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                    style={{
-                      color: severityColor,
-                      backgroundColor: `${severityColor}18`,
-                      border: `1px solid ${severityColor}35`,
-                    }}
-                  >
-                    {event.severity}
-                  </span>
-                </div>
-
-                {event.resource_url && (
-                  <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-white/5 flex items-center justify-end">
-                    <a
-                      href={event.resource_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
-                      title="Watch verified documentary footage or official news coverage"
+                  {/* Right Side: VIIRS badge, Severity, Resource URL link, Selection status */}
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
+                        event.viirs_data_available !== false
+                          ? 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/10 dark:border-emerald-500/25'
+                          : 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-500/10 dark:border-amber-500/25'
+                      }`}
+                      title={event.viirs_data_available !== false ? 'NASA VIIRS Radiance Confirmed' : 'VIIRS Radiance Pending'}
                     >
-                      <ExternalLink className="h-3 w-3" />
-                      <span>Watch Footage</span>
-                    </a>
-                  </div>
-                )}
-              </button>
+                      {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
+                    </span>
 
-              {/* Dismiss X — only on the active card */}
-              {isSelected && onDismissEvent && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDismissEvent(); }}
-                  title="Dismiss active event"
-                  className="absolute top-2 right-2 flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 hover:bg-rose-100 text-slate-500 hover:text-rose-600 dark:bg-white/10 dark:hover:bg-rose-500/25 dark:text-ink-400 dark:hover:text-rose-300 transition-all cursor-pointer z-10"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+                      style={{
+                        color: severityColor,
+                        backgroundColor: `${severityColor}18`,
+                        border: `1px solid ${severityColor}35`,
+                      }}
+                    >
+                      {event.severity}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenMedia({
+                          name: event.name,
+                          date: formattedDate,
+                          type: event.type,
+                          severity: event.severity,
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors px-2 py-0.5 rounded bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 cursor-pointer"
+                      title="Search ground images and damage photography in-app"
+                    >
+                      <Camera className="h-3 w-3" />
+                      <span className="hidden sm:inline">Search Ground Images</span>
+                      <span className="sm:hidden">Images</span>
+                    </button>
+
+                    {isSelected && (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 pl-1 shrink-0">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                        <span>Active</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dismiss X — only on the active card */}
+                {isSelected && onDismissEvent && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDismissEvent(); }}
+                    title="Dismiss active event"
+                    className="absolute -top-1.5 -right-1.5 md:top-2 md:right-2 flex h-5 w-5 items-center justify-center rounded-md bg-slate-200 hover:bg-rose-100 text-slate-500 hover:text-rose-600 dark:bg-slate-800 dark:hover:bg-rose-500/25 dark:text-slate-400 dark:hover:text-rose-300 transition-all cursor-pointer z-10 shadow-sm"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }
@@ -545,24 +846,20 @@ function GdacsPanel({
   activeEvent,
   onSelectEvent,
   onSimulateGdacs,
+  onOpenMedia,
   importingGdacsId,
   importedEventIds,
+  viewMode = 'grid',
 }: {
   events: DisasterEvent[];
   activeEvent: DisasterEvent;
   onSelectEvent: (id: string) => void;
   onSimulateGdacs?: (alert: GdacsAlert, tempEvent?: DisasterEvent) => void | Promise<void>;
+  onOpenMedia?: (data: MediaEventData) => void;
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
+  viewMode?: ViewMode;
 }) {
-  /**
-   * Resolve a GDACS alert to its already-imported DisasterEvent ID.
-   * The importedEventIds Set contains every event.id that exists in the events[]
-   * array. We try several common ID shapes that handleImportGdacs uses:
-   *   - alert.id (e.g. "gdacs-19900614")
-   *   - "gdacs-" + alert.event_id
-   *   - String(alert.event_id)
-   */
   const resolveImportedId = (alert: GdacsAlert): string | null => {
     const candidates = [
       alert.id ? String(alert.id) : null,
@@ -571,9 +868,7 @@ function GdacsPanel({
     ].filter(Boolean) as string[];
     for (const c of candidates) {
       if (importedEventIds?.has(c)) return c;
-      // Also check by matching event name in the events array
     }
-    // Fallback: match by normalised name
     const normName = (alert.name ?? '').toLowerCase().trim();
     const byName = events.find((e) => (e.name ?? '').toLowerCase().trim() === normName);
     if (byName) return byName.id;
@@ -596,7 +891,15 @@ function GdacsPanel({
         : Array.isArray(json.alerts)
         ? json.alerts
         : [];
-      setAlerts(list);
+
+      // Strictly sort normalized GDACS events in reverse chronological order (newest first)
+      const sortedList = [...list].sort((a, b) => {
+        const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0;
+        const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0;
+        return dateB - dateA;
+      });
+
+      setAlerts(sortedList);
       setLastFetch(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load live alerts');
@@ -605,8 +908,16 @@ function GdacsPanel({
     }
   }, []);
 
-  // Fetch once when this panel first mounts (i.e. user first switches to tab)
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
+
+  // Memoize sorted alerts with fallback protection
+  const sortedAlerts = useMemo(() => {
+    return [...alerts].sort((a, b) => {
+      const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0;
+      const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0;
+      return dateB - dateA; // Descending (latest first)
+    });
+  }, [alerts]);
 
   const lastFetchLabel = lastFetch
     ? lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -615,12 +926,10 @@ function GdacsPanel({
   const handleCardClick = (alert: GdacsAlert) => {
     const importedId = resolveImportedId(alert);
     if (importedId) {
-      // Already in the events array — re-select it to reload the map + radiance
       onSelectEvent(importedId);
       return;
     }
 
-    // Construct temporary event matching historical catalog
     const tempEvent = createTemporaryEventFromGdacs(alert);
 
     if (onSimulateGdacs) {
@@ -642,7 +951,7 @@ function GdacsPanel({
           onClick={fetchAlerts}
           disabled={loading}
           title="Refresh live GDACS alerts"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-ink-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-ink-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
         >
           {loading
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -658,12 +967,12 @@ function GdacsPanel({
       </div>
 
       {/* Loading skeleton */}
-      {loading && alerts.length === 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {loading && sortedAlerts.length === 0 && (
+        <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" : "flex flex-col gap-2.5"}>
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="h-28 rounded-xl bg-slate-100 dark:bg-ink-900/50 border border-slate-200 dark:border-white/5 animate-pulse"
+              className={`${viewMode === 'grid' ? 'h-28' : 'h-16'} rounded-xl bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 animate-pulse`}
             />
           ))}
         </div>
@@ -678,7 +987,7 @@ function GdacsPanel({
           <button
             type="button"
             onClick={fetchAlerts}
-            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-ocean-600 hover:bg-ocean-500 transition-colors cursor-pointer"
+            className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors cursor-pointer shadow-sm"
           >
             <RefreshCw className="h-3.5 w-3.5" /> Retry
           </button>
@@ -686,7 +995,7 @@ function GdacsPanel({
       )}
 
       {/* Empty state */}
-      {!loading && !error && alerts.length === 0 && (
+      {!loading && !error && sortedAlerts.length === 0 && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
           <Radio className="h-8 w-8 text-ink-500" />
           <p className="text-sm font-semibold text-slate-700 dark:text-ink-200">No active GDACS alerts</p>
@@ -697,9 +1006,9 @@ function GdacsPanel({
       )}
 
       {/* Alert cards */}
-      {alerts.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {alerts.map((alert) => {
+      {sortedAlerts.length > 0 && (
+        <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" : "flex flex-col gap-2.5"}>
+          {sortedAlerts.map((alert) => {
             const alertId      = String(alert.event_id ?? alert.id ?? '');
             const isImporting  = importingGdacsId === alertId;
             const importedId   = resolveImportedId(alert);
@@ -716,6 +1025,8 @@ function GdacsPanel({
                 isActive={isActiveCard}
                 onCardClick={() => handleCardClick(alert)}
                 onSimulate={onSimulateGdacs}
+                onOpenMedia={onOpenMedia}
+                viewMode={viewMode}
               />
             );
           })}
@@ -735,27 +1046,171 @@ function GdacsAlertCard({
   isActive,
   onCardClick,
   onSimulate,
+  onOpenMedia,
+  viewMode = 'grid',
 }: {
   alert: GdacsAlert;
   alertId: string;
   isImporting: boolean;
   isImported: boolean;
-  /** True when this card's event is the currently active/selected event */
   isActive: boolean;
-  /** Called when the card surface or action button is clicked */
   onCardClick: () => void;
   onSimulate?: (alert: GdacsAlert, tempEvent?: DisasterEvent) => void | Promise<void>;
+  onOpenMedia?: (data: MediaEventData) => void;
+  viewMode?: ViewMode;
 }) {
   const levelClasses = gdacsLevelClasses(alert.alert_level);
   const dotClass     = gdacsLevelDot(alert.alert_level);
 
-  // Lat/lng telemetry string — shown when coordinates are available
   const coords = alert.coordinates ?? (alert.latitude != null && alert.longitude != null
     ? [alert.longitude, alert.latitude] as [number, number]
     : null);
   const coordLabel = coords
     ? `${Number(coords[1] ?? coords[0]).toFixed(3)}°, ${Number(coords[0] ?? coords[1]).toFixed(3)}°`
     : null;
+
+  if (viewMode === 'list') {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onCardClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onCardClick();
+          }
+        }}
+        aria-pressed={isActive}
+        className={`group relative text-left w-full px-3.5 py-2.5 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-sm dark:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
+          isActive
+            ? 'border-emerald-500 bg-emerald-50/70 shadow-sm ring-1 ring-emerald-500/50 dark:border-emerald-500 dark:bg-gradient-to-r dark:from-emerald-950/30 dark:via-slate-900/90 dark:to-slate-900 dark:ring-emerald-400/50 cursor-default'
+            : isImported
+            ? 'border-emerald-400/50 bg-emerald-50/40 dark:bg-emerald-500/8 dark:border-emerald-500/40 hover:border-emerald-500/70 dark:hover:border-emerald-400/60 hover:shadow-md cursor-pointer'
+            : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/90 cursor-pointer'
+        }`}
+      >
+        {/* Left: Icon, Badge, Name, Date, Country */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className={`p-1.5 rounded-lg shrink-0 ${
+            isActive ? 'bg-emerald-100 dark:bg-emerald-500/20'
+            : isImported ? 'bg-emerald-50 dark:bg-emerald-500/15'
+            : 'bg-slate-100 dark:bg-slate-800'
+          }`}>
+            {getGdacsIcon(alert.type, alert.name)}
+          </div>
+          <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2.5">
+            <span className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 self-start sm:self-auto ${levelClasses}`}>
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
+              {alert.alert_level}
+            </span>
+            <h3
+              className={`text-sm font-bold truncate ${
+                isActive ? 'text-slate-900 dark:text-white'
+                : 'text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-white'
+              }`}
+              title={alert.name}
+            >
+              {alert.name}
+            </h3>
+            <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 shrink-0">
+              <Calendar className="h-3 w-3 shrink-0" />
+              <span>{formatGdacsDate(alert.date || alert.fromdate)}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Actions, Coords & External link */}
+        <div className="flex items-center gap-2 shrink-0 self-end md:self-auto flex-wrap">
+          {coordLabel && (
+            <span
+              className="hidden lg:inline-flex items-center gap-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700"
+              title="Centroid Geographic Coordinates"
+            >
+              <Radio className="h-2.5 w-2.5 text-emerald-400" />
+              {coordLabel}
+            </span>
+          )}
+
+          {isActive ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+              Active Simulation
+            </span>
+          ) : isImported ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCardClick();
+              }}
+              disabled={isImporting}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all cursor-pointer"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Select Event
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCardClick();
+              }}
+              disabled={isImporting}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shadow-sm shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Zap className="h-3.5 w-3.5 fill-current" />
+                  Simulate
+                </>
+              )}
+            </button>
+          )}
+
+          {onOpenMedia && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMedia({
+                  name: alert.name,
+                  date: formatGdacsDate(alert.date || alert.fromdate),
+                  type: alert.type || alert.category,
+                  severity: alert.alert_level,
+                });
+              }}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors px-2 py-0.5 rounded bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 cursor-pointer"
+              title="Search ground images in-app"
+            >
+              <Camera className="h-3 w-3" />
+              <span className="hidden sm:inline">Images</span>
+            </button>
+          )}
+
+          {alert.url && (
+            <a
+              href={alert.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+              title="View on GDACS website"
+            >
+              <ExternalLink className="h-3 w-3" />
+              <span className="hidden sm:inline">GDACS</span>
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -769,20 +1224,20 @@ function GdacsAlertCard({
         }
       }}
       aria-pressed={isActive}
-      className={`group relative text-left w-full flex flex-col justify-between p-3.5 rounded-xl border transition-all shadow-sm dark:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ocean-500/50 ${
+      className={`group relative text-left w-full flex flex-col justify-between p-3.5 rounded-xl border transition-all shadow-sm dark:shadow-none focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 ${
         isActive
-          ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 dark:border-ocean-500/80 dark:bg-gradient-to-br dark:from-ocean-500/15 dark:via-ink-900/90 dark:to-ink-900 dark:shadow-[0_0_20px_rgba(89,159,253,0.18)] dark:ring-ocean-400/50 cursor-default'
+          ? 'border-emerald-500 bg-emerald-50/80 shadow-md ring-1 ring-emerald-500/50 dark:border-emerald-500 dark:bg-gradient-to-br dark:from-emerald-950/30 dark:via-slate-900/90 dark:to-slate-900 dark:shadow-[0_0_20px_rgba(16,185,129,0.18)] dark:ring-emerald-400/50 cursor-default'
           : isImported
-          ? 'border-ocean-400/50 bg-ocean-50/40 dark:bg-ocean-500/8 dark:border-ocean-500/40 hover:border-ocean-500/70 dark:hover:border-ocean-400/60 hover:shadow-md cursor-pointer'
-          : 'border-slate-200 bg-white dark:border-white/10 dark:bg-ink-900/60 hover:border-slate-300 dark:hover:border-white/20 hover:bg-slate-50 dark:hover:bg-ink-900/90 cursor-pointer'
+          ? 'border-emerald-400/50 bg-emerald-50/40 dark:bg-emerald-500/8 dark:border-emerald-500/40 hover:border-emerald-500/70 dark:hover:border-emerald-400/60 hover:shadow-md cursor-pointer'
+          : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900/90 cursor-pointer'
       }`}
     >
       {/* Top row */}
       <div className="flex items-start gap-2 mb-2">
         <div className={`p-1.5 rounded-lg shrink-0 ${
-          isActive ? 'bg-ocean-100 dark:bg-ocean-500/20'
-          : isImported ? 'bg-ocean-50 dark:bg-ocean-500/15'
-          : 'bg-slate-100 dark:bg-white/5'
+          isActive ? 'bg-emerald-100 dark:bg-emerald-500/20'
+          : isImported ? 'bg-emerald-50 dark:bg-emerald-500/15'
+          : 'bg-slate-100 dark:bg-slate-800'
         }`}>
           {getGdacsIcon(alert.type, alert.name)}
         </div>
@@ -790,52 +1245,52 @@ function GdacsAlertCard({
           <h3
             className={`text-sm font-bold truncate leading-tight ${
               isActive ? 'text-slate-900 dark:text-white'
-              : 'text-slate-800 dark:text-ink-100 group-hover:text-ocean-700 dark:group-hover:text-white'
+              : 'text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-white'
             }`}
             title={alert.name}
           >
             {alert.name}
           </h3>
           <p
-            className="text-[11px] text-slate-500 dark:text-ink-400 truncate mt-0.5"
+            className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5"
             title={alert.description}
           >
             {alert.description || `${alert.type} · ${alert.country ?? 'Philippines'}`}
           </p>
         </div>
 
-        {/* Active badge — mirrors Historical tab design */}
+        {/* Active badge */}
         {isActive && (
-          <span className="flex items-center gap-1 text-[11px] font-semibold text-ocean-600 dark:text-ocean-300 shrink-0">
-            <CheckCircle2 className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+          <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300 shrink-0">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
             <span className="hidden xl:inline">Active</span>
           </span>
         )}
       </div>
 
       {/* Metadata row */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-white/5 gap-1 flex-wrap">
+      <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/80 gap-1 flex-wrap">
         <span className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider ${levelClasses}`}>
           <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${dotClass}`} />
           {alert.alert_level}
         </span>
-        <span className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-ink-400">
+        <span className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
           <Calendar className="h-3 w-3 shrink-0" />
           {formatGdacsDate(alert.date || alert.fromdate)}
         </span>
         {alert.country && (
-          <span className="text-[10px] text-slate-400 dark:text-ink-500 truncate max-w-[72px]">
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[72px]">
             {alert.country}
           </span>
         )}
       </div>
 
       {/* Action / telemetry row */}
-      <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-100 dark:border-white/5 flex-wrap">
+      <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex-wrap">
         <div className="flex items-center gap-2">
           {isActive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-ocean-700 dark:text-ocean-300 bg-ocean-500/15 border border-ocean-500/30">
-              <CheckCircle2 className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
               Active Simulation
             </span>
           ) : isImported ? (
@@ -877,29 +1332,52 @@ function GdacsAlertCard({
 
           {coordLabel && (
             <span
-              className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-500 dark:text-ink-400 bg-slate-100/80 dark:bg-white/5 px-2 py-0.5 rounded border border-slate-200/60 dark:border-white/5"
+              className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200/60 dark:border-slate-700"
               title="Centroid Geographic Coordinates"
             >
-              <Radio className="h-2.5 w-2.5 text-ocean-400" />
+              <Radio className="h-2.5 w-2.5 text-emerald-400" />
               {coordLabel}
             </span>
           )}
         </div>
 
-        {alert.url && (
-          <a
-            href={alert.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-ink-500 hover:text-ocean-500 dark:hover:text-ocean-300 transition-colors ml-auto"
-            title="View on GDACS website"
-          >
-            <ExternalLink className="h-3 w-3" />
-            <span className="hidden sm:inline">GDACS</span>
-          </a>
-        )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          {onOpenMedia && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenMedia({
+                  name: alert.name,
+                  date: formatGdacsDate(alert.date || alert.fromdate),
+                  type: alert.type || alert.category,
+                  severity: alert.alert_level,
+                });
+              }}
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors py-0.5 px-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer"
+              title="Search ground images in-app"
+            >
+              <Camera className="h-3 w-3" />
+              <span>Images</span>
+            </button>
+          )}
+
+          {alert.url && (
+            <a
+              href={alert.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-slate-400 hover:text-emerald-500 dark:hover:text-emerald-300 transition-colors"
+              title="View on GDACS website"
+            >
+              <ExternalLink className="h-3 w-3" />
+              <span className="hidden sm:inline">GDACS</span>
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+

@@ -8,6 +8,7 @@ import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
 import { apiFetch, setHasLocalFallbackData } from './services/apiService.ts'
+import { useServerHealth } from './context/ServerHealthContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import {
   isPanayRegion,
@@ -174,9 +175,22 @@ function daysSince(dateString) {
 
 function App() {
   const [municipalities, setMunicipalities] = useState([])
-  const [events, setEvents] = useState(mockEvents)
+  const [events, setEvents] = useState(() => {
+    return [...mockEvents].sort((a, b) => {
+      const dateA = new Date(a.startDate || a.date || 0).getTime() || 0
+      const dateB = new Date(b.startDate || b.date || 0).getTime() || 0
+      return dateB - dateA
+    })
+  })
   const [selectedId, setSelectedId] = useState(null)
-  const [activeEventId, setActiveEventId] = useState(PRIMARY_EVENT_ID)
+  const [activeEventId, setActiveEventId] = useState(() => {
+    const sorted = [...mockEvents].sort((a, b) => {
+      const dateA = new Date(a.startDate || a.date || 0).getTime() || 0
+      const dateB = new Date(b.startDate || b.date || 0).getTime() || 0
+      return dateB - dateA
+    })
+    return sorted[0]?.id || PRIMARY_EVENT_ID
+  })
   const [eventsError, setEventsError] = useState('')
   const [recoveryDate, setRecoveryDate] = useState(null)
   const [latestObservationDate, setLatestObservationDate] = useState(null)
@@ -193,14 +207,12 @@ function App() {
 
   const geojsonFeaturesRef = useRef(null)
 
-  // Notify apiService that initial mock/fallback dataset is successfully loaded and ready
+  // Register useServerHealth refetch handler hook
+  const { registerRefetchHandler } = useServerHealth()
+
+  // Notify apiService that initial mock/fallback dataset is available
   useEffect(() => {
     setHasLocalFallbackData(true)
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.setItem('sanag_backend_woke', 'true')
-      } catch {}
-    }
   }, [])
 
   const fetchGdacsAlerts = useCallback(async () => {
@@ -210,7 +222,12 @@ function App() {
       if (!res.ok) throw new Error(`GDACS request failed: ${res.status}`)
       const payload = await res.json()
       if (payload.alerts) {
-        setGdacsAlerts(payload.alerts)
+        const sortedAlerts = [...payload.alerts].sort((a, b) => {
+          const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0
+          const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0
+          return dateB - dateA
+        })
+        setGdacsAlerts(sortedAlerts)
       }
     } catch (err) {
       console.error('Failed to load GDACS live feed:', err)
@@ -676,113 +693,155 @@ function App() {
     })))
   }, [activeEvent?.date])
 
-  useEffect(() => {
-    apiFetch('/api/v1/events')
-      .then((response) => {
-        if (!response.ok) throw new Error(`Events request failed: ${response.status}`)
-        return response.json()
+  const fetchEvents = useCallback(async () => {
+    setEventsError('')
+    try {
+      const response = await apiFetch('/api/v1/events')
+      if (!response.ok) throw new Error(`Events request failed: ${response.status}`)
+      const payload = await response.json()
+      const rawEvents = payload.events.map(mapApiEvent)
+      // Deduplicate and filter out obsolete/erroneous pre-2012 events
+      const apiEvents = rawEvents.filter((evt, idx, arr) => {
+        const isErroneous =
+          evt.id === 'gdacs-1568718' ||
+          evt.id === 'panay-earthquake-1990' ||
+          evt.id === '19900614' ||
+          evt.id === 'gdacs-19900614' ||
+          evt.id === 'odette' ||
+          evt.name?.includes('1990') ||
+          evt.name?.includes('Panay Fault') ||
+          (evt.name?.includes('Odette') && !evt.name?.includes('Rai'))
+        if (isErroneous) return false
+        return idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
       })
-      .then((payload) => {
-        const rawEvents = payload.events.map(mapApiEvent)
-        // Deduplicate and filter out obsolete/erroneous pre-2012 events
-        const apiEvents = rawEvents.filter((evt, idx, arr) => {
-          const isErroneous =
-            evt.id === 'gdacs-1568718' ||
-            evt.id === 'panay-earthquake-1990' ||
-            evt.id === '19900614' ||
-            evt.id === 'gdacs-19900614' ||
-            evt.id === 'odette' ||
-            evt.name?.includes('1990') ||
-            evt.name?.includes('Panay Fault') ||
-            (evt.name?.includes('Odette') && !evt.name?.includes('Rai'))
-          if (isErroneous) return false
-          return idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
+      if (apiEvents.length > 0) {
+        // Strictly sort events in reverse chronological order (newest / most recent first)
+        const sortedEvents = [...apiEvents].sort((a, b) => {
+          const dateA = new Date(a.startDate || a.date || 0).getTime() || 0
+          const dateB = new Date(b.startDate || b.date || 0).getTime() || 0
+          return dateB - dateA
         })
-        if (apiEvents.length > 0) {
-          setEvents(apiEvents)
-          // Default to the flagship Panay blackout event which has verified VIIRS satellite data
-          const defaultEvent = apiEvents.find((e) => e.id === PRIMARY_EVENT_ID) ?? apiEvents[0]
-          setActiveEventId((prev) => prev || defaultEvent?.id || null)
-        }
-      })
-      .catch((error) => setEventsError(error.message))
+        setEvents(sortedEvents)
+        // Default to the most recent event (top item of the sorted list)
+        const defaultEvent = sortedEvents[0] ?? sortedEvents.find((e) => e.id === PRIMARY_EVENT_ID)
+        setActiveEventId((prev) => prev || defaultEvent?.id || null)
+      }
+    } catch (error) {
+      setEventsError(error.message)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchEvents()
+  }, [fetchEvents])
+
+  const fetchActiveEventRadiance = useCallback(async (eventId, sDate, eDate, signal) => {
+    if (!eventId || !sDate) return
+    try {
+      const params = new URLSearchParams({ observation_date: sDate })
+      const response = await apiFetch(`/api/v1/events/${eventId}/radiance?${params}`, { signal })
+      if (!response.ok) return null
+      const payload = await response.json()
+      if (payload?.data && payload.data.length > 0) {
+        const records = payload.data.map((item) => ({
+          ...item,
+          daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+          date: item.observation_date,
+        }))
+        setMunicipalities((current) => {
+          const mapped = applyRecoveryScores(current, records, sDate, eDate)
+          setRecoveryDate(payload.data[0]?.observation_date ?? sDate)
+          return mapped
+        })
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        // Fall back gracefully if spatial data is not available for this event
+      }
+    }
   }, [])
 
   useEffect(() => {
     if (!activeEventId || !recoveryStartDate) return
-
     const controller = new AbortController()
-    const params = new URLSearchParams({ observation_date: recoveryStartDate })
-    apiFetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) return null
-        return response.json()
-      })
-      .then((payload) => {
-        if (payload?.data && payload.data.length > 0) {
-          const records = payload.data.map((item) => ({
-            ...item,
-            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
-            date: item.observation_date,
-          }))
-          setMunicipalities((current) => {
-            const mapped = applyRecoveryScores(current, records, recoveryStartDate, recoveryEndDate)
-            setRecoveryDate(payload.data[0]?.observation_date ?? recoveryStartDate)
-            return mapped
-          })
-        }
-      })
-      .catch((error) => {
-        if (error.name !== 'AbortError') {
-          // Fall back gracefully if spatial data is not available for this event
-        }
-      })
+    fetchActiveEventRadiance(activeEventId, recoveryStartDate, recoveryEndDate, controller.signal)
     return () => controller.abort()
-  }, [activeEventId, recoveryStartDate, recoveryEndDate])
+  }, [activeEventId, recoveryStartDate, recoveryEndDate, fetchActiveEventRadiance])
+
+  const fetchRecoveryScores = useCallback(async (sDate, eDate, signal) => {
+    if (!sDate || !eDate || sDate > eDate) return
+    try {
+      const params = new URLSearchParams({ start_date: sDate, end_date: eDate })
+      const response = await apiFetch(`/api/v1/recovery-scores?${params}`, { signal })
+      if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
+      const payload = await response.json()
+      setRecoveryRecords(payload.data)
+      // Derive the latest observation date from returned records so the default
+      // end-date tracks real data rather than the static event+30 fallback
+      if (payload.data && payload.data.length > 0) {
+        const maxDate = payload.data
+          .map((r) => r.date || r.observation_date)
+          .filter(Boolean)
+          .sort()
+          .at(-1)
+        if (maxDate) setLatestObservationDate(maxDate)
+
+        // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
+        setMunicipalities((current) => applyRecoveryScores(current, payload.data, sDate, eDate))
+        setRecoveryDate(sDate)
+      }
+    } catch (error) {
+      if (error.name !== 'AbortError') setEventsError(error.message)
+    }
+  }, [])
 
   useEffect(() => {
     if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
-
     const controller = new AbortController()
-    const params = new URLSearchParams({ start_date: recoveryStartDate, end_date: recoveryEndDate })
-    apiFetch(`/api/v1/recovery-scores?${params}`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
-        return response.json()
-      })
-      .then((payload) => {
-        setRecoveryRecords(payload.data)
-        // Derive the latest observation date from returned records so the default
-        // end-date tracks real data rather than the static event+30 fallback
-        if (payload.data && payload.data.length > 0) {
-          const maxDate = payload.data
-            .map((r) => r.date || r.observation_date)
-            .filter(Boolean)
-            .sort()
-            .at(-1)
-          if (maxDate) setLatestObservationDate(maxDate)
-
-          // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
-          setMunicipalities((current) => applyRecoveryScores(current, payload.data, recoveryStartDate, recoveryEndDate))
-          setRecoveryDate(recoveryStartDate)
-        }
-      })
-      .catch((error) => {
-        if (error.name !== 'AbortError') setEventsError(error.message)
-      })
-
+    fetchRecoveryScores(recoveryStartDate, recoveryEndDate, controller.signal)
     return () => controller.abort()
-  }, [activeEvent?.date, recoveryEndDate, recoveryStartDate])
+  }, [activeEvent?.date, recoveryEndDate, recoveryStartDate, fetchRecoveryScores])
+
+  // Register global refetch handler for server health reconnects
+  useEffect(() => {
+    const unregister = registerRefetchHandler('app-active-data', async () => {
+      setEventsError('')
+      await Promise.allSettled([
+        fetchEvents(),
+        fetchGdacsAlerts(),
+        activeEventId && recoveryStartDate
+          ? fetchActiveEventRadiance(activeEventId, recoveryStartDate, recoveryEndDate)
+          : Promise.resolve(),
+        recoveryStartDate && recoveryEndDate
+          ? fetchRecoveryScores(recoveryStartDate, recoveryEndDate)
+          : Promise.resolve(),
+      ])
+    })
+    return unregister
+  }, [
+    registerRefetchHandler,
+    fetchEvents,
+    fetchGdacsAlerts,
+    activeEventId,
+    recoveryStartDate,
+    recoveryEndDate,
+    fetchActiveEventRadiance,
+    fetchRecoveryScores,
+  ])
+
+  // Clear component errors on global reset
+  useEffect(() => {
+    const onReset = () => setEventsError('')
+    window.addEventListener('sanag:reset-errors', onReset)
+    return () => window.removeEventListener('sanag:reset-errors', onReset)
+  }, [])
 
   return (
     <div id="top">
       <Navbar />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
-      <ServerStatusBanner
-        hasActiveData={municipalities.length > 0 || events.length > 0}
-        isFallbackLoaded={true}
-      />
+      <ServerStatusBanner />
 
       {/* Floating Feedback Notification */}
       {toastMessage && (
