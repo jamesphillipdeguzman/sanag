@@ -162,21 +162,21 @@ Both team members work together on:
 
 # 🛠️ Technology Stack
 
-| Area                     | Technology                          |
-| ------------------------ | ----------------------------------- |
-| Satellite Data           | NASA VIIRS VNP46A2                  |
-| Additional Baseline Data | NOAA VCMSLCFG                       |
-| Satellite Processing     | Google Earth Engine                 |
-| Data Processing          | Python / Pandas                     |
-| Backend                  | FastAPI + Uvicorn                   |
-| Database                 | SQLite                              |
-| Frontend Framework       | React 19 + Vite 8                   |
-| Mapping                  | Leaflet.js + CartoDB Basemap Tiles  |
-| Geographic Data          | GeoJSON (PSA ADM3 boundaries)       |
-| Charts                   | Recharts                            |
-| AI                       | Gemini API (gemini-2.0-flash)       |
-| Containerization         | Docker                              |
-| Source Control           | Git / GitHub                        |
+| Area                     | Technology                         |
+| ------------------------ | ---------------------------------- |
+| Satellite Data           | NASA VIIRS VNP46A2                 |
+| Additional Baseline Data | NOAA VCMSLCFG                      |
+| Satellite Processing     | Google Earth Engine                |
+| Data Processing          | Python / Pandas                    |
+| Backend                  | FastAPI + Uvicorn                  |
+| Database                 | SQLite                             |
+| Frontend Framework       | React 19 + Vite 8                  |
+| Mapping                  | Leaflet.js + CartoDB Basemap Tiles |
+| Geographic Data          | GeoJSON (PSA ADM3 boundaries)      |
+| Charts                   | Recharts                           |
+| AI                       | Gemini API (gemini-2.0-flash)      |
+| Containerization         | Docker                             |
+| Source Control           | Git / GitHub                       |
 
 ---
 
@@ -186,12 +186,12 @@ Both team members work together on:
 
 ## Prerequisites
 
-| Tool | Minimum Version | Notes |
-|------|----------------|-------|
-| Python | 3.11+ | Required for the FastAPI backend |
-| Node.js | 18+ | Required for the Vite/React frontend |
-| npm | 9+ | Included with Node.js |
-| Git | Any | For cloning the repository |
+| Tool    | Minimum Version | Notes                                |
+| ------- | --------------- | ------------------------------------ |
+| Python  | 3.11+           | Required for the FastAPI backend     |
+| Node.js | 18+             | Required for the Vite/React frontend |
+| npm     | 9+              | Included with Node.js                |
+| Git     | Any             | For cloning the repository           |
 
 ## 1 — Clone the Repository
 
@@ -257,7 +257,7 @@ Create a `.env` file in the **`backend/`** directory. This file must **never** b
 # ─── backend/.env ─────────────────────────────────────────────────────────────
 
 # Required — Google Gemini API key used for AI disaster-recovery briefings.
-# Model: gemini-2.0-flash
+# Model: gemini-3.8-flash
 # Obtain at: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
@@ -276,10 +276,10 @@ VITE_MY_API_KEY=your_carto_api_key_here
 
 ### Variable Reference
 
-| Variable | Location | Required | Purpose |
-|----------|----------|----------|---------|
-| `GEMINI_API_KEY` | `backend/.env` | **Yes** | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error. |
-| `VITE_MY_API_KEY` | `frontend/.env` | No | Appended as a query parameter to CARTO tile URLs. If omitted, tiles load from CARTO's anonymous CDN which may be rate-limited under heavy traffic. |
+| Variable          | Location        | Required | Purpose                                                                                                                                                       |
+| ----------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`  | `backend/.env`  | **Yes**  | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error. |
+| `VITE_MY_API_KEY` | `frontend/.env` | No       | Appended as a query parameter to CARTO tile URLs. If omitted, tiles load from CARTO's anonymous CDN which may be rate-limited under heavy traffic.            |
 
 > **Security note:** Both `.env` files are in `.gitignore`. Never paste real API keys directly into source files or commit them to the repository.
 
@@ -291,59 +291,59 @@ The FastAPI backend runs at `http://localhost:8000`. All endpoints are also brow
 
 ## System
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/` | Health-check — returns `{"status": "SANAG Engine Online", "version": "1.1.0"}` |
+| Method | Endpoint | Description                                                                    |
+| ------ | -------- | ------------------------------------------------------------------------------ |
+| `GET`  | `/`      | Health-check — returns `{"status": "SANAG Engine Online", "version": "1.1.0"}` |
 
 ## Municipalities
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/municipalities` | `scope`, `region`, `province` | Returns monitored LGU list with ADM3_PCODE for Leaflet binding. Defaults to 93 Panay municipalities (`scope=panay`). |
-| `GET` | `/api/v1/regions` | — | Returns nationwide regional centre coordinates and province metadata. |
+| Method | Endpoint                 | Key Query Params              | Description                                                                                                          |
+| ------ | ------------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/municipalities` | `scope`, `region`, `province` | Returns monitored LGU list with ADM3_PCODE for Leaflet binding. Defaults to 93 Panay municipalities (`scope=panay`). |
+| `GET`  | `/api/v1/regions`        | —                             | Returns nationwide regional centre coordinates and province metadata.                                                |
 
 ## Events
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/events` | — | Lists all historical disaster and power-disruption events with computed affected population and VIIRS data availability flag. |
-| `POST` | `/api/v1/events/import-gdacs` | — | Imports a live GDACS alert as a new event record in the database. |
+| Method | Endpoint                      | Key Query Params | Description                                                                                                                   |
+| ------ | ----------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/events`              | —                | Lists all historical disaster and power-disruption events with computed affected population and VIIRS data availability flag. |
+| `POST` | `/api/v1/events/import-gdacs` | —                | Imports a live GDACS alert as a new event record in the database.                                                             |
 
 ## GDACS Live Feeds
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/gdacs-live` | `limit` | Fetches real-time GDACS natural hazard alerts filtered for the Philippines (max 100 results). |
-| `GET` | `/api/v1/gdacs/alerts` | `limit` | Alias for `/api/v1/gdacs-live`. |
-| `GET` | `/api/v1/events/gdacs/live` | `limit` | Alias for `/api/v1/gdacs-live`. |
+| Method | Endpoint                    | Key Query Params | Description                                                                                   |
+| ------ | --------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/gdacs-live`        | `limit`          | Fetches real-time GDACS natural hazard alerts filtered for the Philippines (max 100 results). |
+| `GET`  | `/api/v1/gdacs/alerts`      | `limit`          | Alias for `/api/v1/gdacs-live`.                                                               |
+| `GET`  | `/api/v1/events/gdacs/live` | `limit`          | Alias for `/api/v1/gdacs-live`.                                                               |
 
 ## Recovery Engine
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/recovery-scores` | `municipality`, `start_date`, `end_date`, `month`, `event_id` | Computes R(t) recovery scores for one or all municipalities across a date window. Returns `r_t`, `baseline_radiance`, `daily_radiance`, and `pcode` for direct map binding. |
-| `GET` | `/api/v1/events/{event_id}/radiance` | `municipality`, `observation_date` | Returns per-municipality radiance snapshot for a specific event date. Accepts event slug (e.g. `panay-blackout-2024`) or numeric ID. |
+| Method | Endpoint                             | Key Query Params                                              | Description                                                                                                                                                                 |
+| ------ | ------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/recovery-scores`            | `municipality`, `start_date`, `end_date`, `month`, `event_id` | Computes R(t) recovery scores for one or all municipalities across a date window. Returns `r_t`, `baseline_radiance`, `daily_radiance`, and `pcode` for direct map binding. |
+| `GET`  | `/api/v1/events/{event_id}/radiance` | `municipality`, `observation_date`                            | Returns per-municipality radiance snapshot for a specific event date. Accepts event slug (e.g. `panay-blackout-2024`) or numeric ID.                                        |
 
 ## Timeline
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/resilience/timeline` | `municipality`, `muniId`, `start_date`, `end_date`, `month`, `event_id` | Day-by-day recovery timeline for a municipality via query params. |
-| `GET` | `/api/v1/resilience/timeline/{municipality_identifier}` | `start_date`, `end_date`, `month`, `event_id` | Same as above but municipality is passed as a path segment (name or ADM3_PCODE). |
+| Method | Endpoint                                                | Key Query Params                                                        | Description                                                                      |
+| ------ | ------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `GET`  | `/api/v1/resilience/timeline`                           | `municipality`, `muniId`, `start_date`, `end_date`, `month`, `event_id` | Day-by-day recovery timeline for a municipality via query params.                |
+| `GET`  | `/api/v1/resilience/timeline/{municipality_identifier}` | `start_date`, `end_date`, `month`, `event_id`                           | Same as above but municipality is passed as a path segment (name or ADM3_PCODE). |
 
 ## Weather
 
-| Method | Endpoint | Key Query Params | Description |
-|--------|----------|-----------------|-------------|
-| `GET` | `/api/v1/weather/historical` | `start_date`, `end_date`, `latitude`, `longitude` | Historical daily weather data from Open-Meteo. Falls back to mock data if external API is unreachable. |
-| `GET` | `/api/v1/weather/forecast` | `days`, `latitude`, `longitude` | Daily weather forecast for the Panay region (1–16 days). |
+| Method | Endpoint                     | Key Query Params                                  | Description                                                                                            |
+| ------ | ---------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `GET`  | `/api/v1/weather/historical` | `start_date`, `end_date`, `latitude`, `longitude` | Historical daily weather data from Open-Meteo. Falls back to mock data if external API is unreachable. |
+| `GET`  | `/api/v1/weather/forecast`   | `days`, `latitude`, `longitude`                   | Daily weather forecast for the Panay region (1–16 days).                                               |
 
 ## AI Briefing
 
-| Method | Endpoint | Body / Params | Description |
-|--------|----------|--------------|-------------|
+| Method | Endpoint                    | Body / Params                                      | Description                                                                                                                               |
+| ------ | --------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/api/v1/generate-briefing` | `{"event_context": "..."}` or `?event_context=...` | Generates an AI situational briefing using Gemini. Requires `GEMINI_API_KEY`. Also accessible at `/api/generate-briefing` (legacy alias). |
-| `POST` | `/api/v1/executive-summary` | `{"event_context": "..."}` | Alias for `/api/v1/generate-briefing`. |
+| `POST` | `/api/v1/executive-summary` | `{"event_context": "..."}`                         | Alias for `/api/v1/generate-briefing`.                                                                                                    |
 
 ---
 
@@ -823,13 +823,13 @@ SANAG uses NASA VIIRS nighttime-light satellite observations as a **proxy indica
 
 ## NASA VIIRS Satellite Data (VNP46A2)
 
-| Constraint | Detail |
-|-----------|--------|
-| **Temporal resolution** | Daily composites; one observation per 24-hour pass over Panay Island. A single cloudy overpass produces a data gap that cannot be filled retroactively. |
-| **Spatial resolution** | ~500 m pixel grid. Small barangays or sparsely populated municipalities may fall within a single pixel, limiting granularity below the LGU level. |
-| **Radiance units** | Measurements are in nanoWatts/cm²/sr. Raw values are not directly interpretable as electricity kilowatt-hours or grid voltage — they represent reflected and emitted visible-infrared light, not power consumption. |
-| **Overpass timing** | The Suomi NPP satellite passes over the Philippines during late local evening hours. Observations therefore capture activity during a narrow nighttime window, not 24-hour load. |
-| **Data latency** | Level-2 VNP46A2 gap-filled products are typically published 5–7 days after observation date. Near-real-time assessment is not possible using this dataset alone. |
+| Constraint              | Detail                                                                                                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Temporal resolution** | Daily composites; one observation per 24-hour pass over Panay Island. A single cloudy overpass produces a data gap that cannot be filled retroactively.                                                             |
+| **Spatial resolution**  | ~500 m pixel grid. Small barangays or sparsely populated municipalities may fall within a single pixel, limiting granularity below the LGU level.                                                                   |
+| **Radiance units**      | Measurements are in nanoWatts/cm²/sr. Raw values are not directly interpretable as electricity kilowatt-hours or grid voltage — they represent reflected and emitted visible-infrared light, not power consumption. |
+| **Overpass timing**     | The Suomi NPP satellite passes over the Philippines during late local evening hours. Observations therefore capture activity during a narrow nighttime window, not 24-hour load.                                    |
+| **Data latency**        | Level-2 VNP46A2 gap-filled products are typically published 5–7 days after observation date. Near-real-time assessment is not possible using this dataset alone.                                                    |
 
 ## Cloud Occlusion Over Panay Island
 
@@ -851,7 +851,25 @@ The Recovery Ratio R(t) = Post-Event Light / Baseline Light is a **proxy**, not 
 
 > **SANAG estimates recovery based on observed nighttime-light changes. It does not directly measure electrical voltage, current, or physical grid infrastructure. Results are analytical indicators intended for academic and situational-awareness purposes only.**
 
+---
 
+# 🔮 Future Improvements & Scalability Roadmap
+
+As SANAG scales from its initial Panay Island baseline into a comprehensive nationwide disaster response and power grid intelligence platform, the following scalable milestones define the development roadmap:
+
+1. **Nationwide Province Expansion**:
+   - Add support for uploading custom provincial GeoJSON boundaries and vector tiles to analyze power recovery outside Panay Island (e.g., Region IV-A CALABARZON, Region VII Central Visayas, Region VIII Eastern Visayas, and Northern/Southern Mindanao).
+   - Enable plug-and-play ingestion of multi-scale administrative layers (ADM2 provincial, ADM3 municipal, and ADM4 barangay levels) with dynamic spatial indexing and on-the-fly raster aggregation.
+
+2. **Automated GDACS-to-Region Linkage**:
+   - Implement spatial bounding-box (`bbox`) and polygon intersection logic to automatically map live GDACS hazard coordinates and centroid alerts to target LGU boundaries upon ingestion.
+   - Automatically trigger pre-calibrated baseline lookups and regional recovery timelines as soon as live seismic, cyclonic, or flood events are imported into the engine, removing manual geographic configuration.
+
+3. **Multi-Sensor Fusion (SAR & Cloud Penetration)**:
+   - Integrate Sentinel-1 Synthetic Aperture Radar (SAR) observations alongside NASA VIIRS Day-Night Band imagery to ensure continuous, all-weather, cloud-penetrating damage assessment during active typhoon seasons.
+
+4. **Distribution Utility Telemetry Ingestion**:
+   - Establish automated webhooks and ingestion pipelines with regional electric cooperatives (e.g., ILECO, ANTECO, CAPELCO, AKELCO) and WESM grid dispatch telemetry to ground-truth satellite estimates against physical substation feeder telemetry.
 
 ---
 
@@ -961,4 +979,4 @@ SANAG is complete when:
 
 > *"No man can serve two masters; for either he will hate the one and love the other, or else he will hold to the one and despise the other."*
 > 
-> — **Katherine Cendana** *(3 Nephi 13:24)*
+> — **Katherine Cendana** *(3 Nephi 13:24)*
