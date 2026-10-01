@@ -55,6 +55,7 @@ export interface PanayMapProps {
   selectedRegionKey?: string;
   onRegionChange?: (regionKey: string) => void;
   onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
+  isActiveTab?: boolean;
 }
 
 export interface LeafletMapProps {
@@ -72,6 +73,7 @@ export interface LeafletMapProps {
   onRegionChange?: (key: string) => void;
   onChunkLoaded?: (newItems: Municipality[]) => void;
   onChunkLoadingChange?: (loading: boolean) => void;
+  isActiveTab?: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -150,6 +152,7 @@ export default function PanayMap({
   selectedRegionKey: externalRegionKey,
   onRegionChange: externalOnRegionChange,
   onMunicipalitiesLoaded,
+  isActiveTab = true,
 }: PanayMapProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
@@ -421,6 +424,7 @@ export default function PanayMap({
                   onRegionChange={handleRegionChange}
                   onChunkLoaded={handleChunkLoaded}
                   onChunkLoadingChange={setIsRegionChunkLoading}
+                  isActiveTab={isActiveTab}
                 />
 
                 {isLoading && municipalities.length > 0 && (
@@ -749,6 +753,7 @@ function LeafletMap({
   onRegionChange,
   onChunkLoaded,
   onChunkLoadingChange,
+  isActiveTab = true,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -769,6 +774,35 @@ function LeafletMap({
   const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
+
+  // Handle map invalidation and size re-calculations when Map tab becomes active or window resizes
+  useEffect(() => {
+    const handleInvalidate = () => {
+      const map = mapRef.current;
+      if (map && (map as any)._loaded && (map as any)._panes) {
+        try {
+          map.invalidateSize();
+        } catch {}
+      }
+    };
+
+    window.addEventListener('sanag:invalidate-map-size', handleInvalidate);
+    window.addEventListener('resize', handleInvalidate);
+
+    if (isActiveTab) {
+      const timer = setTimeout(handleInvalidate, 80);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('sanag:invalidate-map-size', handleInvalidate);
+        window.removeEventListener('resize', handleInvalidate);
+      };
+    }
+
+    return () => {
+      window.removeEventListener('sanag:invalidate-map-size', handleInvalidate);
+      window.removeEventListener('resize', handleInvalidate);
+    };
+  }, [isActiveTab]);
 
   // Panay coordinates constant
   const PANAY_CENTER: [number, number] = [11.0, 122.5];
@@ -1538,7 +1572,7 @@ function LeafletMap({
       {/* Static initial class; applyMapLock() mutates classList directly without re-rendering LeafletMap */}
       <div
         ref={mapElement}
-        className="leaflet-map is-locked"
+        className={`leaflet-map is-locked ${isActiveTab ? 'is-maximized-height' : ''}`}
         aria-label="Philippine municipality recovery map"
       />
 

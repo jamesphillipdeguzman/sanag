@@ -1,11 +1,10 @@
 import { useMemo } from 'react';
-import { Activity, AlertTriangle, TrendingUp, Users } from 'lucide-react';
+import { Activity, AlertTriangle, TrendingUp, Users, Map as MapIcon, BarChart3, Calendar, BookOpen, ArrowRight } from 'lucide-react';
 import type { Municipality, DisasterEvent, GdacsAlert } from '@/types';
 import { formatAffectedPopulation } from '@/data/mockData';
-import PanayMap from '@/components/PanayMap';
 import GdacsAlertBanner from '@/components/GdacsAlertBanner';
 import WeatherForecast from '@/components/WeatherForecast';
-import EventSelectorPanel from '@/components/EventSelectorPanel';
+import AiBriefingCard from '@/components/AiBriefingCard';
 
 interface OverviewProps {
   municipalities: Municipality[];
@@ -17,16 +16,13 @@ interface OverviewProps {
   onSelectMunicipality: (id: string) => void;
   globalRank?: number | null;
   recoveryDate?: string | null;
-  isMapLoading?: boolean;
   gdacsAlerts?: GdacsAlert[];
   onSimulateGdacs?: (alert: GdacsAlert, tempEvent?: DisasterEvent) => void | Promise<void>;
   isGdacsLoading?: boolean;
   onRefreshGdacs?: () => void;
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
-  onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
-  selectedRegionKey?: string;
-  onRegionChange?: (regionKey: string) => void;
+  onNavigateTab?: (tab: 'overview' | 'map' | 'recovery' | 'events' | 'guide') => void;
 }
 
 export default function Overview({
@@ -36,19 +32,16 @@ export default function Overview({
   onSelectEvent,
   onDismissEvent,
   selectedId,
-  globalRank,
   onSelectMunicipality,
+  globalRank,
   recoveryDate,
-  isMapLoading = false,
   gdacsAlerts = [],
   onSimulateGdacs,
   isGdacsLoading = false,
   onRefreshGdacs,
   importingGdacsId = null,
   importedEventIds = new Set(),
-  onMunicipalitiesLoaded,
-  selectedRegionKey,
-  onRegionChange,
+  onNavigateTab,
 }: OverviewProps) {
   // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 93 LGUs)
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
@@ -89,10 +82,8 @@ export default function Overview({
     return activeEvent.affectedPopulation || 0;
   }, [panayMunicipalities, activeEvent.affectedPopulation]);
 
-
-
   return (
-    <section id="overview" className="relative pt-20 lg:pt-24 pb-8 overflow-hidden">
+    <section id="overview" className="relative pb-8 overflow-hidden animate-fade-in">
       {/* Background aesthetics */}
       <div className="absolute inset-0 bg-slate-50 dark:bg-ink-950 pointer-events-none transition-colors" />
       <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
@@ -101,7 +92,7 @@ export default function Overview({
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ROW 1: Header + Summary Metrics (aligned for standard viewport visibility) */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10 mb-3 animate-fade-in-up">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10 mb-4 animate-fade-in-up">
           {/* Header left */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
@@ -155,13 +146,13 @@ export default function Overview({
           </div>
         </div>
 
-        {/* Weather Forecast Mini-Widget Strip directly above GDACS telemetry bar */}
-        <div className="mb-3 animate-fade-in-up" style={{ animationDelay: '0.02s' }}>
+        {/* 5-Day Weather Forecast Mini-Widget Strip */}
+        <div className="mb-4 animate-fade-in-up" style={{ animationDelay: '0.02s' }}>
           <WeatherForecast />
         </div>
 
-        {/* GDACS Situational Telemetry Marquee Banner directly beneath Header */}
-        <div className="mb-4 animate-fade-in-up" style={{ animationDelay: '0.04s' }}>
+        {/* GDACS Situational Telemetry Alert Bar */}
+        <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '0.04s' }}>
           <GdacsAlertBanner
             alerts={gdacsAlerts}
             isLoading={isGdacsLoading}
@@ -175,36 +166,89 @@ export default function Overview({
           />
         </div>
 
-        {/* ROW 2: Tabbed Event Selector — Historical Case Studies | Live GDACS Hazards */}
-        <EventSelectorPanel
-          events={events}
-          activeEvent={activeEvent}
-          onSelectEvent={onSelectEvent}
-          onDismissEvent={onDismissEvent}
-          onSimulateGdacs={onSimulateGdacs}
-          importingGdacsId={importingGdacsId}
-          importedEventIds={importedEventIds}
-          selectedRegionKey={selectedRegionKey}
-        />
+        {/* Executive AI Situational Briefing (Gemini 2.0 Flash) */}
+        <div className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.06s' }}>
+          <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
+        </div>
 
-        {/* ROW 3: Interactive Leaflet Map & Side Panel (Immediately visible in standard viewport) */}
-        <section id="map" className="relative animate-fade-in-up" style={{ animationDelay: '0.15s' }}>
-          <PanayMap
-            municipalities={municipalities}
-            selectedId={selectedId}
-            globalRank={globalRank}
-            onSelect={onSelectMunicipality}
-            recoveryDate={recoveryDate}
-            isLoading={isMapLoading}
-            gdacsAlerts={gdacsAlerts}
-            activeEventId={activeEvent?.id}
-            activeEvent={activeEvent}
-            onSimulateGdacs={onSimulateGdacs}
-            onMunicipalitiesLoaded={onMunicipalitiesLoaded}
-            selectedRegionKey={selectedRegionKey}
-            onRegionChange={onRegionChange}
-          />
-        </section>
+        {/* Quick-Jump Exploration Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2 border-t border-slate-200 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('map')}
+            className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 hover:border-ocean-500/40 text-left transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-ocean-500/10 text-ocean-600 dark:text-ocean-400 group-hover:scale-105 transition-transform">
+                <MapIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-ocean-500 transition-colors">
+                  Satellite Map Grid
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Explore LGU radiance polygons</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:translate-x-1 group-hover:text-ocean-500 transition-all" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('recovery')}
+            className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 hover:border-emerald-500/40 text-left transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-500 transition-colors">
+                  Recovery Curves
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Compare electric cooperatives</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:translate-x-1 group-hover:text-emerald-500 transition-all" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('events')}
+            className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 hover:border-blue-500/40 text-left transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:scale-105 transition-transform">
+                <Calendar className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-500 transition-colors">
+                  Disaster Events
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">Historical & live GDACS incidents</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:translate-x-1 group-hover:text-blue-500 transition-all" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('guide')}
+            className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 hover:border-amber-500/40 text-left transition-all group cursor-pointer"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:scale-105 transition-transform">
+                <BookOpen className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-amber-500 transition-colors">
+                  Guide & Glossary
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">VIIRS physics & scoring standards</p>
+              </div>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-400 group-hover:translate-x-1 group-hover:text-amber-500 transition-all" />
+          </button>
+        </div>
       </div>
     </section>
   );
