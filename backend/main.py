@@ -78,6 +78,10 @@ class EventModel(BaseModel):
     description: Optional[str] = None
     date: str
     category: str
+    startDate: Optional[str] = None
+    endDate: Optional[str] = None
+    type: Optional[str] = None
+    resource_url: Optional[str] = None
     image_url: Optional[str] = None
     affected_population: Optional[int] = None
     critical_municipalities: Optional[List[Dict[str, Any]]] = None
@@ -401,20 +405,42 @@ def get_regions():
         }
 
 
+@app.get("/api/v1/events/presets", tags=["Events"])
+def get_event_presets():
+    """
+    Returns the verified Panay disaster event presets catalog (VIIRS epoch: 2012–present).
+    """
+    from event_presets import get_presets
+    return get_presets()
+
+
 @app.get("/api/v1/events", response_model=EventsResponse, tags=["Events"])
 def get_events():
     """
     Returns all historical disaster and power disruption event records
-    with computed total affected population based on municipal radiance recovery.
+    with computed total affected population based on municipal radiance recovery
+    and structured event metadata (startDate, endDate, type, resource_url).
     """
     try:
+        from event_presets import get_presets
+        presets_list = get_presets()
+        presets_by_id = {p["id"]: p for p in presets_list}
+
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
         # Check actual table schema to dynamically alias columns safely
         cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
-        if "event_title" in cols:
+        has_metadata = "start_date" in cols and "resource_url" in cols
+        
+        if has_metadata:
+            sql = """
+                SELECT id, municipality_code, name, description, date, category, image_url,
+                       start_date, end_date, type, resource_url
+                FROM events ORDER BY date DESC
+            """
+        elif "event_title" in cols:
             sql = """
                 SELECT 
                     id, 
@@ -433,11 +459,42 @@ def get_events():
         rows = cursor.fetchall()
 
         events = []
+        seen_ids = set()
+
         for row in rows:
             event = dict(row)
-            if event.get("id") is not None:
-                event["id"] = str(event["id"])
+            ev_id = str(event.get("id", "")).strip()
+            name = str(event.get("name", "")).strip()
+
+            # Filter out erroneous/non-existent and pre-VIIRS events
+            if (
+                ev_id in {"gdacs-1568718", "1568718", "panay-earthquake-1990", "19900614", "gdacs-19900614", "odette", "typhoon-tino", "gdacs-tc-odette-2021"}
+                or "1990" in name
+                or "Panay Fault" in name
+                or ("Odette" in name and "Rai" not in name)
+            ):
+                continue
+
+            if ev_id in seen_ids:
+                continue
+            seen_ids.add(ev_id)
+
+            event["id"] = ev_id
             date_val = str(event["date"]) if event.get("date") is not None else None
+            
+            # Enrich with preset metadata if available
+            preset_match = presets_by_id.get(ev_id)
+            if not preset_match:
+                for p in presets_list:
+                    if p["name"].lower() == name.lower() or p.get("startDate") == date_val:
+                        preset_match = p
+                        break
+
+            event["startDate"] = event.get("start_date") or (preset_match.get("startDate") if preset_match else date_val)
+            event["endDate"] = event.get("end_date") or (preset_match.get("endDate") if preset_match else None)
+            event["type"] = event.get("type") or (preset_match.get("type") if preset_match else "typhoon" if "typhoon" in event.get("category", "").lower() else "grid_failure" if "power" in event.get("category", "").lower() else "monsoon_flood")
+            event["resource_url"] = event.get("resource_url") or (preset_match.get("resource_url") if preset_match else None)
+
             # Compute total affected population dynamically from satellite observations
             event["affected_population"] = compute_event_affected_population(cursor, date_val)
             event["critical_municipalities"] = compute_event_critical_municipalities(cursor, date_val, limit=5)

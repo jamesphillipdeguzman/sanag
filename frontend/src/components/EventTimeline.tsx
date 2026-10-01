@@ -1,7 +1,7 @@
 import React from 'react';
 import type { DisasterEvent } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
-import { Activity, X, Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
+import { Activity, X, Zap, CloudRain, Waves, ChevronRight, ExternalLink } from 'lucide-react';
 
 interface EventTimelineProps {
   events: DisasterEvent[];
@@ -12,8 +12,10 @@ interface EventTimelineProps {
 
 const typeIcon: Record<string, React.ReactNode> = {
   blackout: <Zap className="h-4 w-4" />,
+  grid_failure: <Zap className="h-4 w-4" />,
   typhoon: <CloudRain className="h-4 w-4" />,
   flood: <Waves className="h-4 w-4" />,
+  monsoon_flood: <Waves className="h-4 w-4" />,
   earthquake: <Activity className="h-4 w-4" />,
   // GDACS short-codes — map to the same icons so imported events render correctly
   TC: <CloudRain className="h-4 w-4" />,
@@ -126,6 +128,17 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                   <span className="text-slate-500 dark:text-ink-400">
                     Type: <span className="font-semibold capitalize text-slate-900 dark:text-white">{active.type}</span>
                   </span>
+                  {active.resource_url && (
+                    <a
+                      href={active.resource_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-300/60 dark:border-rose-500/30 text-xs font-semibold transition-all hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      <span>Watch Verified Footage</span>
+                    </a>
+                  )}
                 </div>
               </div>
               {/* X dismiss button in the detail panel */}

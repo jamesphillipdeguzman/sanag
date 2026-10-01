@@ -157,12 +157,6 @@ def ensure_database_schema(conn: sqlite3.Connection):
     event_cols = [col[1] for col in cursor.fetchall()]
     if "barangay_code" in event_cols or not event_cols:
         print("Realigning events table schema (removing barangay_code, using TEXT PRIMARY KEY)...")
-        # Back up existing event data if any
-        existing_events = []
-        if event_cols:
-            cursor.execute("SELECT * FROM events")
-            existing_events = cursor.fetchall()
-
         cursor.execute("DROP TABLE IF EXISTS events")
         cursor.execute("""
             CREATE TABLE events (
@@ -172,9 +166,18 @@ def ensure_database_schema(conn: sqlite3.Connection):
                 description TEXT,
                 date TEXT NOT NULL,
                 category TEXT NOT NULL,
-                image_url TEXT
+                image_url TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                type TEXT,
+                resource_url TEXT
             )
         """)
+    else:
+        for new_col in ["start_date TEXT", "end_date TEXT", "type TEXT", "resource_url TEXT"]:
+            col_name = new_col.split()[0]
+            if col_name not in event_cols:
+                cursor.execute(f"ALTER TABLE events ADD COLUMN {new_col}")
 
     conn.commit()
 
@@ -364,53 +367,46 @@ def seed_event_and_baseline_references(conn: sqlite3.Connection, lookup: Dict[st
         """, baseline_seeds)
         print(f"Seeded {len(baseline_seeds)} reference baselines for 2024-01 pre-event analysis.")
 
-    # 2. Seed Realigned Events Table
+    # 2. Seed Realigned Events Table & Clean Obsolete / Erroneous Records
+    cursor.execute("""
+        DELETE FROM events 
+        WHERE id IN ('gdacs-1568718', '1568718', 'panay-earthquake-1990', '19900614', 'gdacs-19900614', 'odette', 'haiyan', 'monsoon', 'typhoon-tino', 'gdacs-tc-odette-2021')
+           OR name LIKE '%1990%Panay%' 
+           OR name LIKE '%Panay Fault%' 
+           OR (name LIKE '%Odette%' AND name NOT LIKE '%Rai%')
+    """)
+    # Remove any 1990 observations that predate VIIRS
+    try:
+        cursor.execute("DELETE FROM radiance_observations WHERE observation_date LIKE '1990-%'")
+    except Exception:
+        pass
+
+    from event_presets import PANAY_EVENT_PRESETS
+
     events_data = [
         (
-            "panay-blackout-2024",
+            evt["id"],
             "PANAY_ALL",
-            "Panay Island Grid Collapse",
-            "Major transmission line trips causing complete island-wide blackout across Panay and Guimaras.",
-            "2024-01-02",
-            "Power Disruption",
-            None
-        ),
-        (
-            "haiyan",
-            "PANAY_ALL",
-            "Typhoon Haiyan Aftermath",
-            "A regional power disruption affecting coastal and inland communities across Panay Island.",
-            "2013-11-08",
-            "Typhoon",
-            None
-        ),
-        (
-            "odette",
-            "PANAY_ALL",
-            "Typhoon Odette",
-            "Heavy winds and flooding caused widespread outages and delayed restoration work.",
-            "2021-12-16",
-            "Typhoon",
-            None
-        ),
-        (
-            "monsoon",
-            "PANAY_ALL",
-            "Southwest Monsoon Floods",
-            "Flooding interrupted distribution lines in low-lying municipalities.",
-            "2024-08-02",
-            "Flood",
-            None
+            evt["name"],
+            evt.get("description", ""),
+            evt["startDate"],
+            evt.get("category", "Typhoon" if evt["type"] == "typhoon" else "Power Disruption" if evt["type"] == "grid_failure" else "Flood"),
+            None,
+            evt["startDate"],
+            evt["endDate"],
+            evt["type"],
+            evt.get("resource_url")
         )
+        for evt in PANAY_EVENT_PRESETS
     ]
 
     cursor.executemany("""
-        INSERT OR REPLACE INTO events (id, municipality_code, name, description, date, category, image_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO events (id, municipality_code, name, description, date, category, image_url, start_date, end_date, type, resource_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, events_data)
 
     conn.commit()
-    print("SUCCESS: Events table seeded with historical grid collapse and disaster milestones.")
+    print(f"SUCCESS: Events table seeded with {len(events_data)} verified disaster milestones (VIIRS epoch 2012–present).")
 
 def run_ingestion():
     print("=========================================================")
