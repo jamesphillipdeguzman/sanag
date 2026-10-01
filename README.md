@@ -257,7 +257,7 @@ Create a `.env` file in the **`backend/`** directory. This file must **never** b
 # ─── backend/.env ─────────────────────────────────────────────────────────────
 
 # Required — Google Gemini API key used for AI disaster-recovery briefings.
-# Model: gemini-3.8-flash
+# Model: gemini-2.0-flash
 # Obtain at: https://aistudio.google.com/app/apikey
 GEMINI_API_KEY=your_gemini_api_key_here
 ```

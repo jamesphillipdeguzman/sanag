@@ -17,6 +17,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { DisasterEvent, GdacsAlert } from '@/types';
+import { apiFetch } from '@/services/apiService';
 import { getSeverityColor } from '@/data/mockData';
 import {
   isEventCompatibleWithRegion,
@@ -571,7 +572,7 @@ function GdacsPanel({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/gdacs/alerts?limit=25');
+      const res = await apiFetch('/api/v1/gdacs/alerts?limit=25');
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const json = await res.json();
       const list: GdacsAlert[] = Array.isArray(json)

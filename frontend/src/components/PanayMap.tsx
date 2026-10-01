@@ -1239,6 +1239,41 @@ function LeafletMap({
     });
   }, [selectedRegionKey]);
 
+  // Listen to window focus-province and select-region events (e.g. from Footer links)
+  useEffect(() => {
+    const handleFocusEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ provinceKey?: string; regionKey?: string }>;
+      const targetKey = customEvent.detail?.provinceKey || customEvent.detail?.regionKey;
+      if (!targetKey) return;
+
+      onRegionChange?.(targetKey);
+
+      const map = mapRef.current;
+      if (!map) return;
+
+      fetchRegionChunk(targetKey).then((chunkData) => {
+        if (!chunkData) return;
+        renderRegionGeoJson(targetKey, chunkData);
+
+        const preset = REGION_PRESETS[targetKey];
+        if (preset) {
+          if (targetKey === 'panay') {
+            map.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
+          } else {
+            map.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+          }
+        }
+      });
+    };
+
+    window.addEventListener('sanag:focus-province', handleFocusEvent);
+    window.addEventListener('sanag:select-region', handleFocusEvent);
+    return () => {
+      window.removeEventListener('sanag:focus-province', handleFocusEvent);
+      window.removeEventListener('sanag:select-region', handleFocusEvent);
+    };
+  }, [onRegionChange]);
+
   // Update GeoJSON polygon styles and tooltip content dynamically when municipality scores or selection change
   useEffect(() => {
     const map = new Map<string, Municipality>();

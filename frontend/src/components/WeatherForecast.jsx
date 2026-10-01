@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { apiFetch } from '../services/apiService.ts'
 import {
   Sun,
   CloudSun,
@@ -250,7 +251,7 @@ export default function WeatherForecast() {
         setLoading(true)
         setError('')
 
-        const response = await fetch(
+        const response = await apiFetch(
           '/api/v1/weather/forecast?days=5'
         )
 
