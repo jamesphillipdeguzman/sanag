@@ -105,8 +105,8 @@ export default function GdacsAlertBanner({
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 sm:w-10 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-slate-950 dark:via-slate-950/80 dark:to-transparent z-10" />
 
           {isLoading && alerts.length === 0 ? (
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-ink-400 px-4">
-              <Loader2 className="h-3 w-3 animate-spin text-ocean-500 dark:text-ocean-400" />
+            <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 px-4">
+              <Loader2 className="h-3 w-3 animate-spin text-ocean-600 dark:text-ocean-400" />
               <span>Connecting to live GDACS disaster alert telemetry...</span>
             </div>
           ) : alerts.length === 0 ? (
