@@ -7,6 +7,12 @@ import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
+import {
+  isPanayRegion,
+  isNationwideRegion,
+  isPanayExclusiveEvent,
+  getRegionDisplayName,
+} from './utils/eventScope.ts'
 import './App.css'
 
 function normalizeMunicipalityName(name) {
@@ -168,6 +174,7 @@ function App() {
   const [recoveryRecords, setRecoveryRecords] = useState([])
   const [isMapLoading, setIsMapLoading] = useState(true)
   const [recoveryDateRange, setRecoveryDateRange] = useState(null)
+  const [selectedRegionKey, setSelectedRegionKey] = useState('panay')
 
   // GDACS live feeds & simulation state
   const [gdacsAlerts, setGdacsAlerts] = useState([])
@@ -432,7 +439,24 @@ function App() {
           : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
     : ''
 
+  const handleRegionChange = useCallback((newKey) => {
+    setSelectedRegionKey(newKey)
 
+    // If switching to a non-Panay region (e.g. 'r4a', 'ncr', 'r3', 'r7', etc.):
+    if (!isPanayRegion(newKey) && !isNationwideRegion(newKey)) {
+      // If currently active event is Panay-exclusive, automatically switch to a compatible incident
+      if (activeEvent && isPanayExclusiveEvent(activeEvent)) {
+        const compatible = events.find((e) => !isPanayExclusiveEvent(e))
+        if (compatible) {
+          handleSelectEvent(compatible.id)
+          setToastMessage(
+            `Geographic scope switched to ${getRegionDisplayName(newKey)}. Automatically selected "${compatible.name}" to prevent Panay blackout mismatch.`
+          )
+          setTimeout(() => setToastMessage(null), 6000)
+        }
+      }
+    }
+  }, [activeEvent, events, handleSelectEvent])
 
   const handleCreateCustomEvent = useCallback((newEvent) => {
     setEvents((prev) => {
@@ -757,6 +781,8 @@ function App() {
           importingGdacsId={importingId}
           importedEventIds={importedEventIds}
           onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
+          selectedRegionKey={selectedRegionKey}
+          onRegionChange={handleRegionChange}
         />
       ) : (
         /* Empty state shown when no event is active */
@@ -803,6 +829,7 @@ function App() {
               onSelect={selectMunicipality}
               startDate={recoveryStartDate}
               endDate={recoveryEndDate}
+              selectedRegionKey={selectedRegionKey}
               onDateRangeChange={(startDate, endDate) => {
                 if (!activeEvent) return
                 const cleanStart = formatIsoDate(startDate)

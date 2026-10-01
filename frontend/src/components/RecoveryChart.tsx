@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { events as defaultMockEvents } from '@/data/mockData';
 import { useTheme } from '@/hooks/useTheme';
+import { isEventCompatibleWithRegion, getRegionDisplayName } from '@/utils/eventScope';
 
 export type ViewMode = 'hubs' | 'critical';
 
@@ -31,6 +32,7 @@ interface RecoveryChartProps {
   endDate?: string;
   onDateRangeChange?: (startDate: string, endDate: string) => void;
   onSelect?: (id: string | null) => void;
+  selectedRegionKey?: string;
 }
 
 interface RecoveryRecord {
@@ -53,6 +55,7 @@ export default function RecoveryChart({
   endDate = '',
   onDateRangeChange,
   onSelect,
+  selectedRegionKey,
 }: RecoveryChartProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -187,10 +190,13 @@ export default function RecoveryChart({
   // Handle disaster event dropdown selection with automatic start & end date binding
   const handleEventSelect = (selectedId: string) => {
     if (!selectedId) return;
+    const chosen = allEvents.find((e) => String(e.id) === String(selectedId));
+    if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) {
+      return;
+    }
     if (onEventChange) {
       onEventChange(selectedId);
     }
-    const chosen = allEvents.find((e) => String(e.id) === String(selectedId));
     if (chosen && onDateRangeChange) {
       const sDate = chosen.date
         ? chosen.date.length >= 10 && !isNaN(new Date(chosen.date).getTime())
@@ -496,11 +502,19 @@ export default function RecoveryChart({
                 onChange={(event) => handleEventSelect(event.target.value)}
                 className="w-full appearance-none rounded-md border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-ink-950 py-2 pl-3 pr-8 text-sm font-medium text-slate-900 dark:text-white shadow-sm transition-colors [color-scheme:light] dark:[color-scheme:dark] hover:border-slate-400 dark:hover:border-white/20 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
               >
-                {allEvents.map((evt) => (
-                  <option key={evt.id} value={evt.id} className="bg-white dark:bg-ink-950 text-slate-900 dark:text-white py-1">
-                    {evt.name} ({evt.date ? evt.date.slice(0, 10) : 'N/A'})
-                  </option>
-                ))}
+                {allEvents.map((evt) => {
+                  const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
+                  return (
+                    <option
+                      key={evt.id}
+                      value={evt.id}
+                      disabled={!isCompatible}
+                      className={!isCompatible ? 'text-slate-400 dark:text-ink-600 bg-slate-100 dark:bg-ink-950 font-normal' : 'bg-white dark:bg-ink-950 text-slate-900 dark:text-white py-1 font-medium'}
+                    >
+                      {evt.name} ({evt.date ? evt.date.slice(0, 10) : 'N/A'}){!isCompatible ? ` — Incompatible with ${getRegionDisplayName(selectedRegionKey)}` : ''}
+                    </option>
+                  );
+                })}
               </select>
               <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-ink-400" />
             </div>

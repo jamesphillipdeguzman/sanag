@@ -25,6 +25,8 @@ interface OverviewProps {
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
   onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
+  selectedRegionKey?: string;
+  onRegionChange?: (regionKey: string) => void;
 }
 
 export default function Overview({
@@ -45,6 +47,8 @@ export default function Overview({
   importingGdacsId = null,
   importedEventIds = new Set(),
   onMunicipalitiesLoaded,
+  selectedRegionKey,
+  onRegionChange,
 }: OverviewProps) {
   // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 93 LGUs)
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
@@ -180,6 +184,7 @@ export default function Overview({
           onSimulateGdacs={onSimulateGdacs}
           importingGdacsId={importingGdacsId}
           importedEventIds={importedEventIds}
+          selectedRegionKey={selectedRegionKey}
         />
 
         {/* ROW 3: Interactive Leaflet Map & Side Panel (Immediately visible in standard viewport) */}
@@ -196,6 +201,8 @@ export default function Overview({
             activeEvent={activeEvent}
             onSimulateGdacs={onSimulateGdacs}
             onMunicipalitiesLoaded={onMunicipalitiesLoaded}
+            selectedRegionKey={selectedRegionKey}
+            onRegionChange={onRegionChange}
           />
         </section>
       </div>

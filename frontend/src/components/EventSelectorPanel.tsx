@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import type { DisasterEvent, GdacsAlert } from '@/types';
 import { getSeverityColor } from '@/data/mockData';
+import {
+  isEventCompatibleWithRegion,
+  getRegionDisplayName,
+  isPanayRegion,
+  isNationwideRegion,
+} from '@/utils/eventScope';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +40,8 @@ interface EventSelectorPanelProps {
   importingGdacsId?: string | null;
   /** Set of event IDs that already exist in the events[] array (already imported) */
   importedEventIds?: Set<string>;
+  /** Currently active geographic region key (e.g., 'panay', 'r4a', 'ncr', 'philippines') */
+  selectedRegionKey?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -184,6 +192,7 @@ export default function EventSelectorPanel({
   onSimulateGdacs,
   importingGdacsId = null,
   importedEventIds = new Set(),
+  selectedRegionKey,
 }: EventSelectorPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('historical');
 
@@ -242,6 +251,7 @@ export default function EventSelectorPanel({
           activeEvent={activeEvent}
           onSelectEvent={onSelectEvent}
           onDismissEvent={onDismissEvent}
+          selectedRegionKey={selectedRegionKey}
         />
       </div>
 
@@ -331,41 +341,125 @@ function HistoricalPanel({
   activeEvent,
   onSelectEvent,
   onDismissEvent,
+  selectedRegionKey,
 }: {
   events: DisasterEvent[];
   activeEvent: DisasterEvent;
   onSelectEvent: (id: string) => void;
   onDismissEvent?: () => void;
+  selectedRegionKey?: string;
 }) {
+  const isPanayOrNationwide = isPanayRegion(selectedRegionKey) || isNationwideRegion(selectedRegionKey);
+  const regionName = getRegionDisplayName(selectedRegionKey);
+  const incompatibleEvents = events.filter((e) => !isEventCompatibleWithRegion(e, selectedRegionKey));
+  const hasIncompatible = !isPanayOrNationwide && incompatibleEvents.length > 0;
+
   return (
     <>
-      <p className="text-[11px] text-slate-500 dark:text-ink-400 mb-2.5">
-        Select a curated incident to recompute spatial radiance &amp; recovery curves from NASA VIIRS satellite data.
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
+        <p className="text-[11px] text-slate-500 dark:text-ink-400">
+          Select a curated incident to recompute spatial radiance &amp; recovery curves from NASA VIIRS satellite data.
+        </p>
+
+        {/* Region context badge */}
+        {!isPanayOrNationwide && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 bg-ocean-500/10 border border-ocean-500/25 px-2.5 py-0.5 rounded-full self-start sm:self-auto shrink-0">
+            <span>Scope: {regionName}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Event Selector Dropdown Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
+            Event Dropdown:
+          </label>
+          <div className="relative flex-1 max-w-md">
+            <select
+              id="historical-event-select"
+              value={activeEvent?.id || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                const chosen = events.find((evt) => evt.id === val);
+                if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
+                onSelectEvent(val);
+              }}
+              className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-white/15 bg-white dark:bg-ink-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-ocean-500 focus:outline-none cursor-pointer"
+            >
+              {events.map((evt) => {
+                const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
+                return (
+                  <option
+                    key={evt.id}
+                    value={evt.id}
+                    disabled={!isCompatible}
+                    className={!isCompatible ? 'text-slate-400 dark:text-ink-600 bg-slate-100 dark:bg-ink-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
+                  >
+                    {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+
+        {hasIncompatible && (
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg shrink-0">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <span>
+              <strong>{regionName} active:</strong> {incompatibleEvents.length} Panay-exclusive incident{incompatibleEvents.length > 1 ? 's' : ''} disabled to prevent geographic mismatch.
+            </span>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {events.map((event) => {
           const isSelected    = event.id === activeEvent.id;
+          const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
           const severityColor = getSeverityColor(event.severity);
 
           return (
             <div key={event.id} className="relative">
               <button
                 type="button"
-                onClick={() => onSelectEvent(event.id)}
+                onClick={() => {
+                  if (isCompatible) onSelectEvent(event.id);
+                }}
+                disabled={!isCompatible}
+                aria-disabled={!isCompatible}
                 aria-pressed={isSelected}
-                className={`group relative text-left w-full p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 dark:border-ocean-500/80 dark:bg-gradient-to-br dark:from-ocean-500/15 dark:via-ink-900/90 dark:to-ink-900 dark:shadow-[0_0_20px_rgba(89,159,253,0.18)] dark:ring-ocean-400/50'
-                    : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 dark:border-white/10 dark:bg-ink-900/60 dark:hover:bg-ink-900/90 dark:hover:border-white/20 shadow-sm dark:shadow-none'
+                title={
+                  !isCompatible
+                    ? `"${event.name}" is a Panay-exclusive disaster event and is disabled for ${regionName} to prevent geographic mismatches.`
+                    : undefined
+                }
+                className={`group relative text-left w-full p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
+                  !isCompatible
+                    ? 'opacity-50 grayscale-[40%] bg-slate-100/70 dark:bg-ink-950/70 border-dashed border-slate-300 dark:border-white/10 cursor-not-allowed'
+                    : isSelected
+                    ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 dark:border-ocean-500/80 dark:bg-gradient-to-br dark:from-ocean-500/15 dark:via-ink-900/90 dark:to-ink-900 dark:shadow-[0_0_20px_rgba(89,159,253,0.18)] dark:ring-ocean-400/50 cursor-pointer'
+                    : 'border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 dark:border-white/10 dark:bg-ink-900/60 dark:hover:bg-ink-900/90 dark:hover:border-white/20 shadow-sm dark:shadow-none cursor-pointer'
                 }`}
               >
+                {!isCompatible && (
+                  <div className="mb-2 py-0.5 px-2 rounded bg-rose-500/10 border border-rose-500/25 text-[10px] font-semibold text-rose-700 dark:text-rose-400 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    <span>Panay Exclusive · Disabled for {regionName}</span>
+                  </div>
+                )}
+
                 <div className="flex items-start justify-between gap-2 mb-2 w-full">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className={`p-1.5 rounded-lg ${isSelected ? 'bg-ocean-100 dark:bg-ocean-500/20' : 'bg-slate-100 dark:bg-white/5'}`}>
                       {getHistoricalIcon(event)}
                     </div>
                     <h3 className={`text-sm font-bold truncate pr-5 ${
-                      isSelected
+                      !isCompatible
+                        ? 'text-slate-500 dark:text-ink-400'
+                        : isSelected
                         ? 'text-slate-900 dark:text-white'
                         : 'text-slate-800 dark:text-ink-200 group-hover:text-ocean-600 dark:group-hover:text-white'
                     }`}>
