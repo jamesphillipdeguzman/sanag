@@ -6,6 +6,8 @@ import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
 import Overview from './pages/Overview.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
+import ServerStatusBanner from './components/ServerStatusBanner.tsx'
+import { apiFetch } from './services/apiService.ts'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import {
   isPanayRegion,
@@ -187,7 +189,7 @@ function App() {
   const fetchGdacsAlerts = useCallback(async () => {
     setIsGdacsLoading(true)
     try {
-      const res = await fetch('/api/v1/gdacs/alerts')
+      const res = await apiFetch('/api/v1/gdacs/alerts')
       if (!res.ok) throw new Error(`GDACS request failed: ${res.status}`)
       const payload = await res.json()
       if (payload.alerts) {
@@ -363,7 +365,7 @@ function App() {
     const importKey = rawAlertId || alertId
     setImportingId(importKey)
     try {
-      fetch('/api/v1/events/import-gdacs', {
+      apiFetch('/api/v1/events/import-gdacs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -457,6 +459,13 @@ function App() {
       }
     }
   }, [activeEvent, events, handleSelectEvent])
+
+  const handleSelectProvince = useCallback((regionKey) => {
+    if (!activeEventId) {
+      setActiveEventId(PRIMARY_EVENT_ID)
+    }
+    handleRegionChange(regionKey)
+  }, [activeEventId, handleRegionChange])
 
   const handleCreateCustomEvent = useCallback((newEvent) => {
     setEvents((prev) => {
@@ -588,7 +597,7 @@ function App() {
 
     const fetchRadiance = async () => {
       try {
-        const res = await fetch(`/api/v1/events/${activeEventId}/radiance`)
+        const res = await apiFetch(`/api/v1/events/${activeEventId}/radiance`)
         if (!res.ok) return null
         return await res.json()
       } catch {
@@ -651,7 +660,7 @@ function App() {
   }, [activeEvent?.date])
 
   useEffect(() => {
-    fetch('/api/v1/events')
+    apiFetch('/api/v1/events')
       .then((response) => {
         if (!response.ok) throw new Error(`Events request failed: ${response.status}`)
         return response.json()
@@ -677,7 +686,7 @@ function App() {
 
     const controller = new AbortController()
     const params = new URLSearchParams({ observation_date: recoveryStartDate })
-    fetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
+    apiFetch(`/api/v1/events/${activeEventId}/radiance?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) return null
         return response.json()
@@ -709,7 +718,7 @@ function App() {
 
     const controller = new AbortController()
     const params = new URLSearchParams({ start_date: recoveryStartDate, end_date: recoveryEndDate })
-    fetch(`/api/v1/recovery-scores?${params}`, { signal: controller.signal })
+    apiFetch(`/api/v1/recovery-scores?${params}`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
         return response.json()
@@ -741,6 +750,9 @@ function App() {
   return (
     <div id="top">
       <Navbar />
+
+      {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
+      <ServerStatusBanner />
 
       {/* Floating Feedback Notification */}
       {toastMessage && (
@@ -853,7 +865,7 @@ function App() {
           )}
         </div>
       </main>
-      <Footer />
+      <Footer onSelectRegion={handleSelectProvince} selectedRegionKey={selectedRegionKey} />
     </div>
   )
 }

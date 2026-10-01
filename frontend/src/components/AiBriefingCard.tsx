@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import type { Municipality, DisasterEvent } from '@/types';
+import { apiFetch } from '@/services/apiService';
 import { getRecoveryColor } from '@/data/mockData';
 import {
   Sparkles,
@@ -112,7 +113,7 @@ ${benchmarkHeader}: ${benchmarkString}
     try {
       // Send both via body and query param to guarantee compatibility with FastAPI
       const url = `/api/generate-briefing?event_context=${encodeURIComponent(contextString)}`;
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event_context: contextString }),
@@ -153,7 +154,7 @@ ${benchmarkHeader}: ${benchmarkString}
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">AI Situational Briefing</h3>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/25">
-                {isLoading ? 'Synthesizing...' : briefingData?.source === 'gemini' ? 'Gemini 3.8 Flash' : 'Satellite Telemetry'}
+                {isLoading ? 'Synthesizing...' : briefingData?.source === 'gemini' ? 'Gemini 2.0 Flash' : 'Satellite Telemetry'}
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5">
@@ -171,8 +172,8 @@ ${benchmarkHeader}: ${benchmarkString}
                 type="button"
                 onClick={() => setActiveTab('structured')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'structured'
-                    ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
+                  ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
                   }`}
               >
                 <LayoutGrid className="h-3.5 w-3.5" />
@@ -183,8 +184,8 @@ ${benchmarkHeader}: ${benchmarkString}
                 type="button"
                 onClick={() => setActiveTab('markdown')}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${activeTab === 'markdown'
-                    ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
-                    : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
+                  ? 'bg-white text-ocean-700 shadow-sm border border-slate-200 dark:bg-ocean-500/20 dark:text-ocean-200 dark:border-ocean-500/30'
+                  : 'text-slate-600 hover:text-slate-900 dark:text-ink-400 dark:hover:text-white'
                   }`}
               >
                 <FileText className="h-3.5 w-3.5" />
@@ -324,15 +325,15 @@ ${benchmarkHeader}: ${benchmarkString}
                     {(briefingData?.benchmarks && briefingData.benchmarks.length > 0
                       ? briefingData.benchmarks
                       : (restored.length > 0
-                          ? [
-                              `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
-                              `Island-wide recovery velocity reached ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
-                            ]
-                          : [
-                              `No municipalities have crossed the >= 90% restoration threshold yet. Highest-performing hubs: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
-                              `Island-wide recovery average currently tracks at ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
-                            ]
-                        )
+                        ? [
+                          `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+                          `Island-wide recovery velocity reached ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
+                        ]
+                        : [
+                          `No municipalities have crossed the >= 90% restoration threshold yet. Highest-performing hubs: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+                          `Island-wide recovery average currently tracks at ${avgScore}% baseline radiance across ${municipalities.length} LGUs.`,
+                        ]
+                      )
                     ).map((benchmark, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 mt-1.5 shrink-0" />
@@ -445,7 +446,7 @@ ${benchmarkHeader}: ${benchmarkString}
             verify with local utility command centers (ILECO, ANTECO, CAPELCO, AKELCO).
           </p>
           <span className="shrink-0 font-mono text-[10px] text-slate-500 dark:text-ink-400">
-            Engine: {briefingData?.source === 'gemini' ? 'Gemini 2.5 Flash API' : 'SANAG Telemetry Synthesis'}
+            Engine: {briefingData?.source === 'gemini' ? 'Gemini 2.0 Flash API' : 'SANAG Telemetry Synthesis'}
           </span>
         </div>
       </div>
@@ -782,13 +783,13 @@ function createFallbackBriefing(
 
   const benchmarks = hasRestored
     ? [
-        `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
-        `High-voltage 138kV transmission corridors across Panay remain fully energized, stabilizing regional commercial hubs at >= 90% capacity.`,
-      ]
+      `Near-full recovery thresholds (>= 90%) confirmed in ${restored.length} municipalities: ${restored.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+      `High-voltage 138kV transmission corridors across Panay remain fully energized, stabilizing regional commercial hubs at >= 90% capacity.`,
+    ]
     : [
-        `No municipalities have crossed the >= 90% near-full recovery threshold yet. Top-performing hubs currently leading recovery: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
-        `High-voltage 138kV transmission corridors across Panay remain energized, while feeder-level restoration works to elevate municipal load centers toward the 90% benchmark.`,
-      ];
+      `No municipalities have crossed the >= 90% near-full recovery threshold yet. Top-performing hubs currently leading recovery: ${topPerforming.slice(0, 3).map((m) => `${m.name} (${m.recoveryScore}%)`).join(', ')}.`,
+      `High-voltage 138kV transmission corridors across Panay remain energized, while feeder-level restoration works to elevate municipal load centers toward the 90% benchmark.`,
+    ];
 
   const recommendations = [
     `Coordinate mutual aid linemen deployments from restored cooperatives (ILECO) to assist ANTECO and CAPELCO.`,

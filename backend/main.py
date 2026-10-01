@@ -286,6 +286,17 @@ def read_root():
     return {"status": "SANAG Engine Online", "docs": "/docs", "version": "1.1.0"}
 
 
+@app.get("/health", tags=["System"])
+@app.get("/api/v1/health", tags=["System"])
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "sanag-backend",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "1.1.0"
+    }
+
+
 @app.get("/api/v1/municipalities", response_model=MunicipalityResponse, tags=["Municipalities"])
 def get_municipalities(
     scope: Optional[str] = Query("panay", description="Scope: 'panay' (default, 93 LGUs), 'nationwide', or region code"),
