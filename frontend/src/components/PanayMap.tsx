@@ -1424,14 +1424,17 @@ function LeafletMap({
       const popupContainer = document.createElement('div');
       popupContainer.className = 'gdacs-popup-content p-3.5 text-slate-700 dark:text-ink-100 max-w-[285px] font-sans';
       popupContainer.innerHTML = `
-        <div class="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-200 dark:border-white/10">
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider" 
+        <div class="flex items-center gap-2 pb-2 mb-2 pr-8 border-b border-slate-200 dark:border-white/10">
+          <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" 
                 style="background-color: ${color}22; color: ${color}; border: 1px solid ${color}45;">
             ${alert.alert_level || 'Green'} Alert
           </span>
-          <span class="text-[10px] text-slate-500 dark:text-ink-400 font-mono">${alert.type || 'HAZARD'}</span>
+          ${alert.type ? `
+          <span class="rounded-md bg-slate-200/80 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-700 dark:text-slate-300">
+            ${alert.type}
+          </span>` : ''}
         </div>
-        <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1 leading-snug">${alert.name}</h4>
+        <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1 leading-snug pr-4">${alert.name}</h4>
         <p class="text-[11px] text-slate-600 dark:text-ink-300 mb-2.5 leading-relaxed line-clamp-2">${alert.description || ''}</p>
         <div class="bg-slate-100/80 dark:bg-black/50 rounded-lg p-2 mb-2.5 border border-slate-200/80 dark:border-white/5 space-y-1 text-[10px]">
           <div class="flex items-center justify-between text-slate-600 dark:text-ink-300">

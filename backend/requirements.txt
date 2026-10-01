@@ -8,3 +8,5 @@ python-dotenv
 gdacs-api
 types-xmltodict
 types-requests
+ddgs
+duckduckgo_search
