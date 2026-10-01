@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
+import { useLiveCounter } from '@/hooks/useLiveCounter';
+import packageInfo from '../../package.json';
+
+export const APP_VERSION = packageInfo?.version || '1.2.0';
 
 export type TabId = 'overview' | 'map' | 'recovery' | 'events' | 'guide';
 
@@ -28,6 +32,7 @@ export interface NavbarProps {
 export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const liveNodes = useLiveCounter(16, 12, 18);
   const { theme, toggleTheme } = useTheme();
   const {
     isOnline,
@@ -139,7 +144,29 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
             })}
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2.5">
+            {/* Live Monitoring Activity Counter Pill */}
+            <div
+              className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-semibold shadow-xs"
+              title="Real-time Panay Island telemetry & monitoring nodes"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span className="whitespace-nowrap font-medium text-[11px] lg:text-xs">
+                {liveNodes} Active Nodes · 93 LGUs
+              </span>
+            </div>
+
+            {/* Version Badge */}
+            <span
+              className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/50 select-none"
+              title="Current SANAG build version"
+            >
+              v{APP_VERSION}
+            </span>
+
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -200,7 +227,19 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
             </button>
           </div>
 
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
+            {/* Mobile Live Activity Pill */}
+            <div
+              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold select-none"
+              title="Active monitoring telemetry nodes"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              <span>{liveNodes} Nodes</span>
+            </div>
+
             {/* Mobile Theme Toggle */}
             <button
               type="button"
@@ -249,7 +288,22 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
                 );
               })}
 
-              <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10">
+              <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10 space-y-2">
+                {/* Mobile Active Node & Version Summary */}
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-ink-300">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{liveNodes} Telemetry Nodes</span>
+                    <span className="text-slate-400 hidden xs:inline">· 93 LGUs</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 border border-slate-300/60 dark:border-slate-700/50">
+                    v{APP_VERSION}
+                  </span>
+                </div>
+
                 <button
                   type="button"
                   onClick={async (e) => {

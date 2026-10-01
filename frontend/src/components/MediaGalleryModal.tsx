@@ -93,6 +93,13 @@ export default function MediaGalleryModal({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
+
   // Handle keyboard navigation for Lightbox
   useEffect(() => {
     if (!isOpen) return;
@@ -137,7 +144,7 @@ export default function MediaGalleryModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="media-gallery-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm overflow-hidden h-[100dvh]"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           if (selectedIndex !== null) {
@@ -149,11 +156,11 @@ export default function MediaGalleryModal({
       }}
     >
       <div
-        className="relative w-full max-w-5xl max-h-[92vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden transition-all"
+        className="relative w-full sm:max-w-4xl lg:max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-t-2xl sm:rounded-2xl flex flex-col h-[85dvh] max-h-[85dvh] sm:h-auto sm:max-h-[85vh] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 gap-3">
+        {/* Modal Header */}
+        <div className="flex-shrink-0 flex items-start justify-between p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
               <Camera className="h-5 w-5" />
@@ -205,7 +212,7 @@ export default function MediaGalleryModal({
         </div>
 
         {/* Manual Search Query Bar */}
-        <div className="px-4 sm:px-5 py-2.5 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex-shrink-0 px-4 sm:px-5 py-2.5 bg-slate-50 dark:bg-slate-950/40 border-b border-slate-100 dark:border-slate-800">
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -237,13 +244,13 @@ export default function MediaGalleryModal({
           )}
         </div>
 
-        {/* Modal Body */}
-        <div className="flex-1 overflow-y-auto min-h-[360px] p-4 sm:p-5">
+        {/* Scrollable Gallery Content */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 space-y-4">
           {/* Lightbox / Detail view */}
           {currentItem ? (
             <div className="flex flex-col lg:flex-row gap-4 h-full animate-fade-in">
               {/* Image Display */}
-              <div className="relative flex-1 flex flex-col items-center justify-center bg-black/95 rounded-xl overflow-hidden min-h-[320px] max-h-[58vh]">
+              <div className="relative flex-1 flex flex-col items-center justify-center bg-black/95 rounded-xl overflow-hidden min-h-[220px] sm:min-h-[320px] max-h-[40vh] sm:max-h-[58vh]">
                 <img
                   src={currentItem.imageUrl || currentItem.thumbnailUrl}
                   alt={currentItem.title}
@@ -489,7 +496,7 @@ export default function MediaGalleryModal({
         </div>
 
         {/* Footer */}
-        <div className="p-3 px-4 sm:px-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 flex flex-wrap items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 gap-2">
+        <div className="flex-shrink-0 p-3 px-4 sm:px-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 flex flex-wrap items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 gap-2">
           <div className="flex items-center gap-1.5">
             <Info className="h-3.5 w-3.5 text-slate-400" />
             <span>Disaster aftermath photojournalism indexed from national and international news wires.</span>
