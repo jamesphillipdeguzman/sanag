@@ -2,9 +2,24 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
+import re
+import urllib.parse
+import httpx
 import sqlite3
 import math
 import logging
+import asyncio
+from pathlib import Path
+
+# Load environment variables from .env files
+try:
+    from dotenv import load_dotenv
+    _backend_dir = Path(__file__).resolve().parent
+    load_dotenv(_backend_dir / ".env")
+    load_dotenv(_backend_dir.parent / ".env")
+except ImportError:
+    pass
+
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import List, Optional, Dict, Any, Union, Tuple
@@ -291,6 +306,7 @@ def read_root():
 
 
 @app.get("/health", tags=["System"])
+@app.get("/api/health", tags=["System"])
 @app.get("/api/v1/health", tags=["System"])
 def health_check():
     return {
@@ -503,6 +519,13 @@ def get_events():
             events.append(event)
 
         conn.close()
+
+        # Sort all historical events in reverse chronological order (newest / most recent first)
+        events.sort(
+            key=lambda ev: str(ev.get("startDate") or ev.get("start_date") or ev.get("date") or ""),
+            reverse=True
+        )
+
         return {"events": events}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -516,6 +539,7 @@ def get_gdacs_alerts(limit: int = Query(25, ge=1, le=100)):
     Fetches real-time GDACS natural hazard alerts filtered for the Philippines,
     enriching each item with status on whether it is already imported into SANAG,
     as well as spatial geographic coordinates (latitude, longitude, bbox, geometry).
+    Results are strictly sorted in reverse chronological order (newest first).
     """
     try:
         raw_alerts = get_latest_philippines_disasters(limit=limit)
@@ -538,6 +562,12 @@ def get_gdacs_alerts(limit: int = Query(25, ge=1, le=100)):
             item["viirs_data_available"] = check_viirs_data_availability(alert_date, conn=conn)
             enriched.append(item)
         conn.close()
+
+        # Strictly sort enriched alerts in reverse chronological order (newest / most recent first)
+        enriched.sort(
+            key=lambda item: str(item.get("fromdate") or item.get("startDate") or item.get("date") or item.get("pubDate") or ""),
+            reverse=True
+        )
 
         return {
             "status": "success",
@@ -1063,5 +1093,99 @@ def api_generate_briefing(
         return {"status": "success", "briefing": briefing}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/search-event-images", tags=["Image Search"])
+@app.get("/api/v1/search-event-images", tags=["Image Search"])
+@app.get("/api/media/search", tags=["Image Search"])
+async def api_search_event_images(
+    q: str = Query(..., description="Query for disaster ground images"),
+    count: int = Query(12, description="Number of results")
+) -> List[Dict[str, Any]]:
+    """
+    Keyless photojournalism image search pipeline using DuckDuckGo (via ddgs)
+    for disaster ground footage, damage, and flood aftermath.
+    Queries DDGS().images(keywords=f"{q} Philippines damage flood", max_results=12)
+    and returns clean normalized JSON array:
+    [
+      {
+        "id": "...",
+        "title": "...",
+        "thumbnailUrl": "...",
+        "imageUrl": "...",
+        "sourceUrl": "...",
+        "domain": "..."
+      }
+    ]
+    """
+    clean_q = re.sub(r'\(.*?\)', '', q).strip()
+    keywords = f"{clean_q} Philippines damage flood"
+    print(f"\n[IMAGE SEARCH] Incoming query: '{q}' -> Keywords: '{keywords}' | Max: {count}", flush=True)
+
+    def _fetch_ddgs():
+        try:
+            from ddgs import DDGS  # type: ignore[import-untyped,import-not-found]
+        except ImportError:
+            from duckduckgo_search import DDGS  # type: ignore[import-untyped,import-not-found]
+        client = DDGS()
+        try:
+            return client.images(keywords, max_results=count)
+        except TypeError:
+            # Fallback for alternative or legacy DDGS signatures
+            return getattr(client, "images")(query=keywords, max_results=count)
+
+    try:
+        raw_items = await asyncio.to_thread(_fetch_ddgs)
+        if not raw_items:
+            print(f"[IMAGE SEARCH] DDGS returned 0 items for '{keywords}'", flush=True)
+            return []
+
+        out: List[Dict[str, Any]] = []
+        for idx, r in enumerate(raw_items):
+            thumb = r.get("thumbnail") or r.get("image") or ""
+            img = r.get("image") or thumb
+            page_url = r.get("url") or img
+            domain = r.get("source") or ""
+            if not domain and page_url:
+                domain = urllib.parse.urlparse(page_url).netloc.replace("www.", "")
+
+            if thumb or img:
+                out.append({
+                    "id": f"ddgs-{idx}",
+                    "title": r.get("title") or clean_q,
+                    "thumbnailUrl": thumb,
+                    "imageUrl": img,
+                    "sourceUrl": page_url,
+                    "domain": domain or "News Wire",
+                })
+
+        print(f"[IMAGE SEARCH] Successfully normalized {len(out)} image items.", flush=True)
+        return out
+    except Exception as e:
+        print(f"[IMAGE SEARCH] DDGS Error for query '{q}': {e}", flush=True)
+        return []
+
+
+
+@app.get("/api/search-images", tags=["Image Search"])
+@app.get("/api/v1/search-images", tags=["Image Search"])
+async def api_search_images(q: str = Query(..., description="Query for disaster ground images")):
+    """Legacy compatibility endpoint returning items array."""
+    results = await api_search_event_images(q=q, count=12)
+    items = [
+        {
+            "title": r["title"],
+            "link": r["thumbnailUrl"],
+            "displayLink": r["domain"],
+            "image": {
+                "thumbnailLink": r["thumbnailUrl"],
+                "contextLink": r["sourceUrl"]
+            }
+        }
+        for r in results
+    ]
+    return {"status": "success", "items": items}
+
+
 
     

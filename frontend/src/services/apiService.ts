@@ -1,14 +1,14 @@
 /**
  * API Fetch Service with Automated Cold-Start Retry Mechanism
- * Specifically designed to handle 502 Bad Gateway and 503 Service Unavailable
- * errors caused by free-tier backend servers spinning up from sleep mode.
+ * Specifically designed to gracefully handle 502 Bad Gateway, 503 Service Unavailable,
+ * and 504 Gateway Timeout errors caused by backend spin-up / cold starts.
  */
 
 export const SERVER_STATUS_EVENT = 'sanag:server-status';
 export const SERVER_STATUS_EVENT_ALIAS = 'server-wake-status';
 export const SESSION_STORAGE_WOKE_KEY = 'sanag_backend_woke';
 
-export type ServerWakeStatus = 'idle' | 'waking' | 'ready' | 'error';
+export type ServerWakeStatus = 'idle' | 'waking' | 'ready' | 'error' | 'disconnected';
 
 export interface ServerStatusDetail {
   status: ServerWakeStatus;
@@ -19,6 +19,7 @@ export interface ServerStatusDetail {
   message?: string;
   error?: string | null;
   url?: string;
+  statusCode?: number;
   isFallbackActive?: boolean;
   suppressError?: boolean;
 }
@@ -26,18 +27,23 @@ export interface ServerStatusDetail {
 export interface ApiFetchOptions extends RequestInit {
   maxRetries?: number;
   retryDelayMs?: number;
-  backoffMultiplier?: number;
+  backoffDelays?: number[];
   skipRetry?: boolean;
   isBackground?: boolean;
 }
 
+// Cold start status codes and exponential backoff intervals: 2s, 5s, 10s (up to 3 retries)
+export const COLD_START_STATUS_CODES = [502, 503, 504];
+export const DEFAULT_COLD_START_BACKOFF = [2000, 5000, 10000];
+
 // Global wake-up state management
 let activeWakingCount = 0;
 let currentAttempt = 0;
-let currentMaxRetries = 8;
+let currentMaxRetries = 3;
 let currentStatus: ServerWakeStatus = 'idle';
-let currentDelayMs = 6000;
+let currentDelayMs = 2000;
 let lastError: string | null = null;
+let lastStatusCode: number | undefined = undefined;
 let readyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 // Global dataset readiness and offline status tracking
@@ -58,12 +64,22 @@ export function isBackendMarkedWoke(): boolean {
 }
 
 /**
- * Permanently marks the backend as woke for this browser session.
+ * Marks the backend as woke for this browser session.
  */
 export function markBackendWoke(): void {
   if (typeof window === 'undefined') return;
   try {
     window.sessionStorage.setItem(SESSION_STORAGE_WOKE_KEY, 'true');
+  } catch {}
+}
+
+/**
+ * Clears the woke flag in sessionStorage (e.g. when connection error occurs).
+ */
+export function clearBackendWoke(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.removeItem(SESSION_STORAGE_WOKE_KEY);
   } catch {}
 }
 
@@ -78,23 +94,17 @@ export function setHasActiveApiResponse(active: boolean): void {
 }
 
 /**
- * Notifies apiService that local fallback or mock dataset is successfully loaded and active.
+ * Notifies apiService that local fallback or mock dataset is successfully loaded.
  */
 export function setHasLocalFallbackData(hasFallback: boolean): void {
   hasLocalFallbackData = hasFallback;
-  if (hasFallback) {
-    markBackendWoke();
-  }
 }
 
 /**
- * Sets offline or demo mode flag to suppress backend timeout warnings.
+ * Sets offline or demo mode flag.
  */
 export function setIsOfflineOrDemoMode(offline: boolean): void {
   isOfflineOrDemoMode = offline;
-  if (offline) {
-    markBackendWoke();
-  }
 }
 
 /**
@@ -120,9 +130,9 @@ export function getAppDataReadiness(): {
 
   return {
     hasActiveApiResponse: hasActiveApiResponse || isWoke,
-    hasLocalFallbackData: hasLocalFallbackData || isWoke,
+    hasLocalFallbackData: hasLocalFallbackData,
     isOfflineOrDemoMode: offline,
-    isOperatingSuccessfully: hasActiveApiResponse || hasLocalFallbackData || offline || isWoke,
+    isOperatingSuccessfully: hasActiveApiResponse || hasLocalFallbackData || offline,
     isWokeInSession: isWoke,
   };
 }
@@ -131,16 +141,18 @@ export function getAppDataReadiness(): {
  * Dispatches server status events to window listeners.
  */
 export function dispatchServerStatus(detail: ServerStatusDetail): void {
-  // If backend is already marked woke in session and a waking event is attempted, ignore to prevent looping
-  if (isBackendMarkedWoke() && detail.status === 'waking') {
-    return;
-  }
-
   currentStatus = detail.status;
   currentAttempt = detail.attempt;
   currentMaxRetries = detail.maxRetries;
   currentDelayMs = detail.delayMs;
   lastError = detail.error ?? null;
+  lastStatusCode = detail.statusCode;
+
+  if (detail.status === 'ready') {
+    markBackendWoke();
+  } else if (detail.status === 'waking' || detail.status === 'error' || detail.status === 'disconnected') {
+    clearBackendWoke();
+  }
 
   if (typeof window !== 'undefined') {
     const payload = { detail };
@@ -160,13 +172,14 @@ export function getServerStatus(): ServerStatusDetail {
     maxRetries: currentMaxRetries,
     delayMs: currentDelayMs,
     error: lastError,
+    statusCode: lastStatusCode,
     isFallbackActive: readiness.isOperatingSuccessfully,
-    suppressError: Boolean(readiness.isOperatingSuccessfully && currentStatus === 'error'),
+    suppressError: false,
   };
 }
 
 /**
- * Subscribes a listener to server status changes. Returns an cleanup unsubscribe function.
+ * Subscribes a listener to server status changes. Returns a cleanup unsubscribe function.
  */
 export function subscribeServerStatus(
   callback: (detail: ServerStatusDetail) => void
@@ -187,21 +200,17 @@ export function subscribeServerStatus(
 }
 
 /**
- * Determines whether a response or error corresponds to a server waking from sleep mode.
+ * Determines whether a response or error corresponds to a cold-start sleeping server.
  */
-function isServerSleeping(status?: number, error?: unknown): boolean {
-  // 502 Bad Gateway: Reverse proxy (Render/Cloudflare/Fly/Nginx) cannot reach container
-  // 503 Service Unavailable: Container starting up or capacity limited
-  // 504 Gateway Timeout: Edge proxy timed out waiting for spin-up
-  if (status === 502 || status === 503 || status === 504) {
+export function isColdStartError(status?: number, error?: unknown): boolean {
+  if (status && COLD_START_STATUS_CODES.includes(status)) {
     return true;
   }
 
-  // Network exceptions on cold start (connection refused, reset, CORS preflight failure during boot)
   if (error && typeof error === 'object') {
     const err = error as { name?: string; message?: string };
     if (err.name === 'AbortError') {
-      return false; // User or component purposefully aborted the request
+      return false; // User purposefully aborted
     }
     const msg = (err.message || '').toLowerCase();
     if (
@@ -209,7 +218,8 @@ function isServerSleeping(status?: number, error?: unknown): boolean {
       msg.includes('networkerror') ||
       msg.includes('connection refused') ||
       msg.includes('network error') ||
-      msg.includes('load failed')
+      msg.includes('load failed') ||
+      msg.includes('net::err_connection')
     ) {
       return true;
     }
@@ -243,9 +253,8 @@ function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
 }
 
 /**
- * Enhanced fetch wrapper with automatic cold-start retry mechanism and status broadcasting.
- * Non-blocking retry interval extended to 6000ms to smoothly accommodate Render free tier spin-up.
- * Validates data readiness to suppress false alarm timeouts when operating on local mock data.
+ * Enhanced fetch wrapper with automatic retry specifically configured for 502, 503, and 504 cold-start errors.
+ * Retries up to 3 times with exponential backoff: 2s, 5s, 10s before surfacing an error.
  *
  * @param input URL or Request object
  * @param init Request options including retry overrides
@@ -255,9 +264,8 @@ export async function apiFetch(
   init?: ApiFetchOptions
 ): Promise<Response> {
   const {
-    maxRetries = 8,
-    retryDelayMs = 6000,
-    backoffMultiplier = 1.0,
+    maxRetries = 3,
+    backoffDelays = DEFAULT_COLD_START_BACKOFF,
     skipRetry = false,
     isBackground = false,
     ...fetchInit
@@ -265,47 +273,22 @@ export async function apiFetch(
 
   const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
-  // If user disabled retry or not an API call, use standard fetch
+  // If user disabled retry, pass directly to standard fetch
   if (skipRetry) {
     return fetch(input, fetchInit);
   }
 
   let attempt = 0;
-  let delay = retryDelayMs;
   let causedWaking = false;
 
   while (attempt <= maxRetries) {
     try {
       const response = await fetch(input, fetchInit);
 
-      if (response.ok) {
-        setHasActiveApiResponse(true);
-        markBackendWoke();
-      }
-
-      // Check if this response indicates a sleeping server
-      if (isServerSleeping(response.status)) {
-        const readiness = getAppDataReadiness();
-
-        // 2 & 3. Immediate short-circuit condition:
-        // If local mock/fallback data is loaded or active, or session already marked woke,
-        // instantly set sanag_backend_woke, remove multi-attempt countdown loop entirely,
-        // and dismiss/hide any toast banner.
-        if (readiness.isOperatingSuccessfully || isBackendMarkedWoke()) {
-          markBackendWoke();
-          dispatchServerStatus({
-            status: 'idle',
-            attempt: 0,
-            maxRetries: 0,
-            delayMs: 0,
-            message: '',
-            suppressError: true,
-            isFallbackActive: true,
-          });
-          return response;
-        }
-
+      // Check if this response is a 502, 503, or 504 cold-start status
+      if (isColdStartError(response.status)) {
         if (attempt < maxRetries) {
+          const delayMs = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1] ?? 5000;
           attempt += 1;
           if (!causedWaking) {
             activeWakingCount += 1;
@@ -321,54 +304,77 @@ export async function apiFetch(
             status: 'waking',
             attempt,
             maxRetries,
-            delayMs: delay,
-            message: 'Backend server is waking up from sleep mode. Please wait a moment while live telemetry initializes...',
-            isFallbackActive: readiness.isOperatingSuccessfully,
+            delayMs,
+            secondsRemaining: Math.ceil(delayMs / 1000),
+            statusCode: response.status,
+            message: 'Server is waking up (cold start)...',
             url: urlStr,
           });
 
-          // Countdown ticker during delay for smooth UI feedback
+          // Countdown ticker during delay for smooth user feedback
           const startTime = Date.now();
           const tickInterval = 500;
-          while (Date.now() - startTime < delay) {
-            const remainingSec = Math.max(1, Math.ceil((delay - (Date.now() - startTime)) / 1000));
+          while (Date.now() - startTime < delayMs) {
+            const remainingSec = Math.max(1, Math.ceil((delayMs - (Date.now() - startTime)) / 1000));
             dispatchServerStatus({
               status: 'waking',
               attempt,
               maxRetries,
-              delayMs: delay,
+              delayMs,
               secondsRemaining: remainingSec,
-              message: 'Backend server is waking up from sleep mode. Please wait a moment while live telemetry initializes...',
-              isFallbackActive: readiness.isOperatingSuccessfully,
+              statusCode: response.status,
+              message: 'Server is waking up (cold start)...',
               url: urlStr,
             });
-            await sleep(Math.min(tickInterval, delay - (Date.now() - startTime)), fetchInit.signal);
+            await sleep(Math.min(tickInterval, delayMs - (Date.now() - startTime)), fetchInit.signal);
           }
 
-          delay = Math.round(delay * backoffMultiplier);
-          continue; // Retry request
+          continue; // Retry request with backoff
         }
+
+        // All 3 retries exhausted for 502/503/504
+        if (causedWaking) {
+          activeWakingCount = Math.max(0, activeWakingCount - 1);
+          causedWaking = false;
+        }
+
+        dispatchServerStatus({
+          status: 'disconnected',
+          attempt: maxRetries,
+          maxRetries,
+          delayMs: 0,
+          statusCode: response.status,
+          message: `Server returned HTTP ${response.status} during cold start after ${maxRetries} retry attempts.`,
+          error: `HTTP ${response.status}`,
+          url: urlStr,
+        });
+
+        return response;
       }
 
-      // If we got here, server responded (or with non-cold-start client error like 400/404)
+      // Successful or standard non-cold-start response
+      if (response.ok) {
+        setHasActiveApiResponse(true);
+        markBackendWoke();
+      }
+
       if (causedWaking) {
         activeWakingCount = Math.max(0, activeWakingCount - 1);
         causedWaking = false;
       }
 
-      // If all waking requests finished, mark ready
-      if (activeWakingCount === 0 && currentStatus === 'waking') {
-        markBackendWoke();
+      // If waking completed successfully, broadcast ready status
+      if (activeWakingCount === 0 && (currentStatus === 'waking' || currentStatus === 'disconnected')) {
         dispatchServerStatus({
           status: 'ready',
-          attempt,
+          attempt: 0,
           maxRetries,
           delayMs: 0,
+          statusCode: response.status,
           message: 'Backend server is online!',
           url: urlStr,
         });
 
-        // Auto-reset to idle after 2.8 seconds
         readyTimeoutId = setTimeout(() => {
           if (activeWakingCount === 0) {
             dispatchServerStatus({
@@ -379,7 +385,7 @@ export async function apiFetch(
               message: '',
             });
           }
-        }, 2800);
+        }, 2500);
       }
 
       return response;
@@ -393,29 +399,10 @@ export async function apiFetch(
         throw err;
       }
 
-      const readiness = getAppDataReadiness();
-
-      // Immediate short-circuit condition on network errors:
-      // If local mock/fallback data is loaded or active, or session already marked woke,
-      // instantly set sanag_backend_woke, remove multi-attempt countdown loop entirely,
-      // and dismiss/hide any toast banner.
-      if (readiness.isOperatingSuccessfully || isBackendMarkedWoke()) {
-        markBackendWoke();
-        dispatchServerStatus({
-          status: 'idle',
-          attempt: 0,
-          maxRetries: 0,
-          delayMs: 0,
-          message: '',
-          suppressError: true,
-          isFallbackActive: true,
-        });
-        throw err;
-      }
-
-      // Network error during cold start
-      if (isServerSleeping(undefined, err)) {
+      // Check if network error indicates cold start
+      if (isColdStartError(undefined, err)) {
         if (attempt < maxRetries) {
+          const delayMs = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1] ?? 5000;
           attempt += 1;
           if (!causedWaking) {
             activeWakingCount += 1;
@@ -431,58 +418,53 @@ export async function apiFetch(
             status: 'waking',
             attempt,
             maxRetries,
-            delayMs: delay,
-            message: 'Backend server is waking up from sleep mode. Please wait a moment while live telemetry initializes...',
-            isFallbackActive: readiness.isOperatingSuccessfully,
+            delayMs,
+            secondsRemaining: Math.ceil(delayMs / 1000),
+            statusCode: 504,
+            message: 'Server is waking up (cold start)...',
             url: urlStr,
           });
 
           const startTime = Date.now();
           const tickInterval = 500;
-          while (Date.now() - startTime < delay) {
-            const remainingSec = Math.max(1, Math.ceil((delay - (Date.now() - startTime)) / 1000));
+          while (Date.now() - startTime < delayMs) {
+            const remainingSec = Math.max(1, Math.ceil((delayMs - (Date.now() - startTime)) / 1000));
             dispatchServerStatus({
               status: 'waking',
               attempt,
               maxRetries,
-              delayMs: delay,
+              delayMs,
               secondsRemaining: remainingSec,
-              message: 'Backend server is waking up from sleep mode. Please wait a moment while live telemetry initializes...',
-              isFallbackActive: readiness.isOperatingSuccessfully,
+              statusCode: 504,
+              message: 'Server is waking up (cold start)...',
               url: urlStr,
             });
-            await sleep(Math.min(tickInterval, delay - (Date.now() - startTime)), fetchInit.signal);
+            await sleep(Math.min(tickInterval, delayMs - (Date.now() - startTime)), fetchInit.signal);
           }
 
-          delay = Math.round(delay * backoffMultiplier);
           continue; // Retry
         }
       }
 
-      // If retries exhausted or other error
+      // Retries exhausted or non-retryable error
       if (causedWaking) {
         activeWakingCount = Math.max(0, activeWakingCount - 1);
         causedWaking = false;
       }
 
-      const shouldSuppress = readiness.isOperatingSuccessfully;
       const errorMessage =
         attempt >= maxRetries
           ? `Backend server failed to respond after ${maxRetries} retry attempts.`
           : (err as Error)?.message || 'Network request failed';
 
-      // 2. Gracefully dismiss or suppress timeout error when operating on local mock/fallback data
       dispatchServerStatus({
-        status: shouldSuppress ? 'idle' : 'error',
-        attempt: shouldSuppress ? 0 : attempt,
+        status: 'disconnected',
+        attempt: maxRetries,
         maxRetries,
         delayMs: 0,
-        message: shouldSuppress
-          ? 'Application operating on local fallback dataset while backend initializes.'
-          : 'Backend server took too long to wake up. Please check your connection or retry.',
-        error: shouldSuppress ? null : errorMessage,
-        suppressError: shouldSuppress,
-        isFallbackActive: readiness.isOperatingSuccessfully,
+        statusCode: 504,
+        message: 'Server is waking up (cold start)...',
+        error: errorMessage,
         url: urlStr,
       });
 
@@ -490,30 +472,7 @@ export async function apiFetch(
     }
   }
 
-  // Fallback exhausted error if loop terminated on 502/503
-  if (causedWaking) {
-    activeWakingCount = Math.max(0, activeWakingCount - 1);
-  }
-
-  const readiness = getAppDataReadiness();
-  const shouldSuppress = readiness.isOperatingSuccessfully;
-  const exhaustedMsg = `Server unreachable: cold start retries exhausted (${maxRetries} attempts).`;
-
-  dispatchServerStatus({
-    status: shouldSuppress ? 'idle' : 'error',
-    attempt: shouldSuppress ? 0 : maxRetries,
-    maxRetries,
-    delayMs: 0,
-    message: shouldSuppress
-      ? 'Application operating on local fallback dataset while backend initializes.'
-      : 'Backend server took too long to wake up. Please retry.',
-    error: shouldSuppress ? null : exhaustedMsg,
-    suppressError: shouldSuppress,
-    isFallbackActive: readiness.isOperatingSuccessfully,
-    url: urlStr,
-  });
-
-  throw new Error(exhaustedMsg);
+  throw new Error(`Cold start retries exhausted (${maxRetries} attempts).`);
 }
 
 /**
@@ -540,30 +499,70 @@ export async function apiFetchJson<T = unknown>(
 }
 
 /**
- * Sends a lightweight, non-blocking ping to the backend health endpoint.
- * Increased retry interval (6000ms) prevents disruptive false alarms during Render spin-up.
+ * Performs a health check against GET /api/health (with fallbacks to /api/v1/health and /health).
+ * Resets status to ready when online, or updates status to disconnected/waking on error.
  */
-export async function pingBackend(options?: {
-  silent?: boolean;
-  maxRetries?: number;
-  retryDelayMs?: number;
-}): Promise<boolean> {
-  const { silent = true, maxRetries = 6, retryDelayMs = 6000 } = options || {};
-  try {
-    const res = await apiFetch('/api/v1/health', {
-      maxRetries,
-      retryDelayMs,
-      skipRetry: false,
-      isBackground: silent,
-    });
-    if (res.ok) {
-      setHasActiveApiResponse(true);
-      return true;
+export async function checkServerHealth(): Promise<boolean> {
+  const endpoints = ['/api/health', '/api/v1/health', '/health'];
+
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (res.ok) {
+        setHasActiveApiResponse(true);
+        markBackendWoke();
+        dispatchServerStatus({
+          status: 'ready',
+          attempt: 0,
+          maxRetries: 3,
+          delayMs: 0,
+          statusCode: res.status,
+          message: 'Backend server is online!',
+        });
+
+        setTimeout(() => {
+          if (currentStatus === 'ready') {
+            dispatchServerStatus({
+              status: 'idle',
+              attempt: 0,
+              maxRetries: 3,
+              delayMs: 0,
+              message: '',
+            });
+          }
+        }, 2500);
+
+        return true;
+      }
+    } catch {
+      // Continue to next fallback
     }
-    return false;
-  } catch {
-    return false;
   }
+
+  // All health endpoints failed
+  dispatchServerStatus({
+    status: 'disconnected',
+    attempt: 3,
+    maxRetries: 3,
+    delayMs: 0,
+    statusCode: 504,
+    message: 'Server is waking up (cold start)...',
+    error: 'Backend health check failed',
+  });
+
+  return false;
+}
+
+/**
+ * Sends a lightweight, non-blocking ping to the backend health endpoint.
+ */
+export async function pingBackend(): Promise<boolean> {
+  return checkServerHealth();
 }
 
 export default apiFetch;

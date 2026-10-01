@@ -1,7 +1,7 @@
 import React from 'react';
 import type { DisasterEvent } from '@/types';
 import { getSeverityColor, formatAffectedPopulation } from '@/data/mockData';
-import { Activity, X, Zap, CloudRain, Waves, ChevronRight, ExternalLink } from 'lucide-react';
+import { Activity, X, Zap, CloudRain, Waves, ChevronRight } from 'lucide-react';
 
 interface EventTimelineProps {
   events: DisasterEvent[];
@@ -24,7 +24,16 @@ const typeIcon: Record<string, React.ReactNode> = {
 };
 
 export default function EventTimeline({ events, activeEventId, onSelect, onDismiss }: EventTimelineProps) {
-  const active = events.find((e) => e.id === activeEventId);
+  // Strictly sort events in reverse chronological order (newest first)
+  const sortedEvents = React.useMemo(() => {
+    return [...events].sort((a, b) => {
+      const dateA = new Date(a.startDate || a.date || 0).getTime() || 0;
+      const dateB = new Date(b.startDate || b.date || 0).getTime() || 0;
+      return dateB - dateA;
+    });
+  }, [events]);
+
+  const active = sortedEvents.find((e) => e.id === activeEventId);
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-lg dark:shadow-xl transition-colors">
@@ -40,7 +49,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
           <div className="absolute top-5 left-0 right-0 h-px bg-gradient-to-r from-transparent via-slate-300 dark:via-white/15 to-transparent" />
 
           <div className="flex gap-3 overflow-x-auto scrollbar-thin py-2 px-1">
-            {events.map((event) => {
+            {sortedEvents.map((event) => {
               const isActive = event.id === activeEventId;
               const color = getSeverityColor(event.severity);
 
@@ -128,17 +137,6 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                   <span className="text-slate-500 dark:text-ink-400">
                     Type: <span className="font-semibold capitalize text-slate-900 dark:text-white">{active.type}</span>
                   </span>
-                  {active.resource_url && (
-                    <a
-                      href={active.resource_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-300/60 dark:border-rose-500/30 text-xs font-semibold transition-all hover:underline"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      <span>Watch Verified Footage</span>
-                    </a>
-                  )}
                 </div>
               </div>
               {/* X dismiss button in the detail panel */}

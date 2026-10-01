@@ -59,6 +59,9 @@ export interface GdacsAlert {
   alert_score?: number;
   date: string;
   fromdate?: string;
+  startDate?: string;
+  pubDate?: string;
+  todate?: string;
   description: string;
   severity_text?: string;
   country?: string;

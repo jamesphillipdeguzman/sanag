@@ -11,7 +11,6 @@ import {
   Layers,
   Plus,
   Sparkles,
-  ExternalLink,
 } from 'lucide-react';
 import { events as defaultMockEvents } from '@/data/mockData';
 import { useTheme } from '@/hooks/useTheme';
@@ -558,24 +557,6 @@ export default function RecoveryChart({
                   />
                 </div>
               </div>
-
-              {/* Verified Resource URL External Link */}
-              {currentEvent?.resource_url && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-transparent select-none">Documentation</label>
-                  <a
-                    id="event-resource-link"
-                    href={currentEvent.resource_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-300/80 dark:border-rose-500/30 text-sm font-semibold shadow-sm transition-all hover:shadow hover:shadow-rose-500/15 active:scale-[0.98] cursor-pointer"
-                    title="Watch verified documentary footage or official news coverage"
-                  >
-                    <ExternalLink className="h-4 w-4 text-rose-500 shrink-0" />
-                    <span>Watch Verified Footage</span>
-                  </a>
-                </div>
-              )}
             </div>
           )}
 
