@@ -476,26 +476,75 @@ export async function apiFetch(
 }
 
 /**
- * Helper to fetch and parse JSON with automatic cold-start retry and error checking.
+ * Safely parses JSON from a Response or raw string.
+ * Catches truncation or malformed JSON syntax errors, logs detailed diagnostics to console,
+ * and returns fallback value without throwing raw uncaught SyntaxErrors in the UI.
+ */
+export async function safeJsonParse<T = unknown>(
+  input: Response | string,
+  fallback: T | null = null
+): Promise<T | null> {
+  let text = '';
+  try {
+    if (typeof input === 'string') {
+      text = input;
+    } else {
+      text = await input.text();
+    }
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.error(
+      `[apiService] JSON parse error: ${(err as Error)?.message}. ` +
+      `Payload length: ${text.length} chars. ` +
+      `Preview: "${text.slice(0, 300)}" ... Tail: "...${text.slice(-300)}"`,
+      err
+    );
+    return fallback;
+  }
+}
+
+/**
+ * Helper to fetch and parse JSON with automatic cold-start retry and safe error checking.
  */
 export async function apiFetchJson<T = unknown>(
   input: RequestInfo | URL,
   init?: ApiFetchOptions
 ): Promise<T> {
+  const urlStr = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const response = await apiFetch(input, init);
   if (!response.ok) {
     let errorDetail = `HTTP ${response.status} ${response.statusText}`;
     try {
-      const errJson = await response.json();
-      if (errJson && typeof errJson === 'object' && 'detail' in errJson) {
-        errorDetail = String(errJson.detail);
+      const errText = await response.text();
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson && typeof errJson === 'object' && 'detail' in errJson) {
+          errorDetail = String(errJson.detail);
+        }
+      } catch {
+        // Non-json error body
       }
     } catch {
-      // Non-json error body
+      // Body reading error
     }
     throw new Error(errorDetail);
   }
-  return response.json() as Promise<T>;
+
+  let rawText = '';
+  try {
+    rawText = await response.text();
+    return JSON.parse(rawText) as T;
+  } catch (parseError) {
+    console.error(
+      `[apiService] JSON parse error for URL "${urlStr}": ${(parseError as Error)?.message}. ` +
+      `Payload length: ${rawText.length} bytes/chars. ` +
+      `Preview: "${rawText.slice(0, 300)}" ... Tail: "...${rawText.slice(-300)}"`,
+      parseError
+    );
+    throw new Error(
+      `Response payload incomplete or truncated (${rawText.length} bytes received). Please retry.`
+    );
+  }
 }
 
 /**
