@@ -1095,6 +1095,126 @@ def api_generate_briefing(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
+    """
+    Fallback image provider querying Wikimedia Commons and Openverse APIs
+    when DuckDuckGo is blocked, throttled, or returns empty on cloud hosting / datacenter IPs.
+    """
+    results: List[Dict[str, Any]] = []
+    clean_q = re.sub(r'\(.*?\)', '', q).strip()
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SanagDisasterMonitor/1.0 (contact@sanag.org)'
+    }
+
+    # 1. Attempt Wikimedia Commons search
+    try:
+        queries = [f"{clean_q} flood damage", f"{clean_q} flood", clean_q]
+        with httpx.Client(timeout=6.0, headers=headers) as client:
+            for q_try in queries:
+                params = {
+                    "action": "query",
+                    "generator": "search",
+                    "gsrsearch": q_try,
+                    "gsrnamespace": "6",
+                    "gsrlimit": str(count),
+                    "prop": "imageinfo",
+                    "iiprop": "url|mime",
+                    "iiurlwidth": "600",
+                    "format": "json"
+                }
+                r = client.get("https://commons.wikimedia.org/w/api.php", params=params)
+                if r.status_code == 200:
+                    pages = r.json().get("query", {}).get("pages", {})
+                    for pid, p in pages.items():
+                        info = p.get("imageinfo", [{}])[0]
+                        mime = info.get("mime", "")
+                        if not mime.startswith("image/") or "svg" in mime:
+                            continue
+                        thumb = info.get("thumburl") or info.get("url")
+                        img = info.get("url") or thumb
+                        desc = info.get("descriptionurl") or img
+                        title = p.get("title", "").replace("File:", "").strip()
+                        if thumb and img:
+                            results.append({
+                                "id": f"wiki-{pid}",
+                                "title": title,
+                                "thumbnailUrl": thumb,
+                                "imageUrl": img,
+                                "sourceUrl": desc,
+                                "domain": "commons.wikimedia.org"
+                            })
+                    if results:
+                        print(f"[IMAGE SEARCH] [Fallback Wikimedia] Found {len(results)} items for '{q_try}'", flush=True)
+                        return results[:count]
+    except Exception as e:
+        print(f"[IMAGE SEARCH] [Fallback Wikimedia Error]: {type(e).__name__}: {e}", flush=True)
+
+    # 2. Attempt Openverse API search
+    try:
+        with httpx.Client(timeout=6.0, headers=headers) as client:
+            r = client.get(
+                "https://api.openverse.org/v1/images/",
+                params={"q": f"{clean_q} flood", "page_size": str(count)}
+            )
+            if r.status_code == 200:
+                items = r.json().get("results", [])
+                for idx, item in enumerate(items):
+                    thumb = item.get("thumbnail") or item.get("url")
+                    img = item.get("url") or thumb
+                    if thumb and img:
+                        results.append({
+                            "id": str(item.get("id") or f"openverse-{idx}"),
+                            "title": item.get("title") or clean_q,
+                            "thumbnailUrl": thumb,
+                            "imageUrl": img,
+                            "sourceUrl": item.get("foreign_landing_url") or img,
+                            "domain": item.get("source") or "openverse.org"
+                        })
+                if results:
+                    print(f"[IMAGE SEARCH] [Fallback Openverse] Found {len(results)} items", flush=True)
+                    return results[:count]
+    except Exception as e:
+        print(f"[IMAGE SEARCH] [Fallback Openverse Error]: {type(e).__name__}: {e}", flush=True)
+
+    # 3. Attempt Wikipedia Pageimages
+    try:
+        with httpx.Client(timeout=5.0, headers=headers) as client:
+            params = {
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": f"{clean_q} Philippines",
+                "gsrlimit": str(count),
+                "prop": "pageimages",
+                "piprop": "thumbnail|original",
+                "pithumbsize": "600",
+                "format": "json"
+            }
+            r = client.get("https://en.wikipedia.org/w/api.php", params=params)
+            if r.status_code == 200:
+                pages = r.json().get("query", {}).get("pages", {})
+                for pid, p in pages.items():
+                    thumb = p.get("thumbnail", {}).get("source")
+                    img = p.get("original", {}).get("source") or thumb
+                    title = p.get("title") or clean_q
+                    page_url = f"https://en.wikipedia.org/?curid={pid}"
+                    if thumb and img:
+                        results.append({
+                            "id": f"wiki-page-{pid}",
+                            "title": title,
+                            "thumbnailUrl": thumb,
+                            "imageUrl": img,
+                            "sourceUrl": page_url,
+                            "domain": "en.wikipedia.org"
+                        })
+                if results:
+                    print(f"[IMAGE SEARCH] [Fallback Wikipedia Pages] Found {len(results)} items", flush=True)
+                    return results[:count]
+    except Exception as e:
+        print(f"[IMAGE SEARCH] [Fallback Wikipedia Error]: {type(e).__name__}: {e}", flush=True)
+
+    return results
+
+
 @app.get("/api/search-event-images", tags=["Image Search"])
 @app.get("/api/v1/search-event-images", tags=["Image Search"])
 @app.get("/api/media/search", tags=["Image Search"])
@@ -1103,67 +1223,71 @@ async def api_search_event_images(
     count: int = Query(12, description="Number of results")
 ) -> List[Dict[str, Any]]:
     """
-    Keyless photojournalism image search pipeline using DuckDuckGo (via ddgs)
-    for disaster ground footage, damage, and flood aftermath.
-    Queries DDGS().images(keywords=f"{q} Philippines damage flood", max_results=12)
-    and returns clean normalized JSON array:
-    [
-      {
-        "id": "...",
-        "title": "...",
-        "thumbnailUrl": "...",
-        "imageUrl": "...",
-        "sourceUrl": "...",
-        "domain": "..."
-      }
-    ]
+    Keyless photojournalism image search pipeline.
+    Attempt 1: DuckDuckGo images (via ddgs).
+    Attempt 2: If DDGS returned empty or threw an error on datacenter IP, query Wikimedia/Openverse fallback.
     """
     clean_q = re.sub(r'\(.*?\)', '', q).strip()
-    keywords = f"{clean_q} Philippines damage flood"
+    keywords = f"{clean_q} aftermath flood damage"
     print(f"\n[IMAGE SEARCH] Incoming query: '{q}' -> Keywords: '{keywords}' | Max: {count}", flush=True)
 
+    results: List[Dict[str, Any]] = []
+
+    # Attempt 1: DuckDuckGo
     def _fetch_ddgs():
         try:
             from ddgs import DDGS  # type: ignore[import-untyped,import-not-found]
         except ImportError:
             from duckduckgo_search import DDGS  # type: ignore[import-untyped,import-not-found]
-        client = DDGS()
+
         try:
-            return client.images(keywords, max_results=count)
+            with DDGS() as ddgs:
+                try:
+                    return list(ddgs.images(keywords, max_results=count))
+                except TypeError:
+                    return list(getattr(ddgs, "images")(query=keywords, max_results=count))
         except TypeError:
-            # Fallback for alternative or legacy DDGS signatures
-            return getattr(client, "images")(query=keywords, max_results=count)
+            client = DDGS()
+            try:
+                return list(client.images(keywords, max_results=count))
+            except TypeError:
+                return list(getattr(client, "images")(query=keywords, max_results=count))
 
     try:
-        raw_items = await asyncio.to_thread(_fetch_ddgs)
-        if not raw_items:
-            print(f"[IMAGE SEARCH] DDGS returned 0 items for '{keywords}'", flush=True)
-            return []
-
-        out: List[Dict[str, Any]] = []
-        for idx, r in enumerate(raw_items):
-            thumb = r.get("thumbnail") or r.get("image") or ""
-            img = r.get("image") or thumb
-            page_url = r.get("url") or img
-            domain = r.get("source") or ""
-            if not domain and page_url:
-                domain = urllib.parse.urlparse(page_url).netloc.replace("www.", "")
-
-            if thumb or img:
-                out.append({
-                    "id": f"ddgs-{idx}",
-                    "title": r.get("title") or clean_q,
-                    "thumbnailUrl": thumb,
-                    "imageUrl": img,
-                    "sourceUrl": page_url,
-                    "domain": domain or "News Wire",
-                })
-
-        print(f"[IMAGE SEARCH] Successfully normalized {len(out)} image items.", flush=True)
-        return out
+        items = await asyncio.to_thread(_fetch_ddgs)
+        if items:
+            for idx, item in enumerate(items):
+                thumb = item.get("thumbnail") or item.get("image") or ""
+                img = item.get("image") or thumb
+                page_url = item.get("url") or img
+                domain = item.get("source") or ""
+                if not domain and page_url:
+                    try:
+                        domain = urllib.parse.urlparse(page_url).netloc.replace("www.", "")
+                    except Exception:
+                        domain = "Web"
+                if thumb or img:
+                    results.append({
+                        "id": item.get("url") or f"ddgs-{idx}",
+                        "title": item.get("title") or clean_q,
+                        "thumbnailUrl": thumb,
+                        "imageUrl": img,
+                        "sourceUrl": page_url,
+                        "domain": domain or "Web"
+                    })
+            print(f"[IMAGE SEARCH] DDGS returned {len(results)} items.", flush=True)
+        else:
+            print(f"[IMAGE SEARCH] DDGS returned empty list for '{keywords}' (likely datacenter rate limit).", flush=True)
     except Exception as e:
-        print(f"[IMAGE SEARCH] DDGS Error for query '{q}': {e}", flush=True)
-        return []
+        print(f"[DDGS Error in Prod]: {e}", flush=True)
+
+    # Attempt 2: If DDGS returned empty or threw an error on datacenter IP, query Wikimedia/Openverse fallback
+    if not results:
+        print(f"[IMAGE SEARCH] Initiating Wikimedia/Openverse fallback for '{clean_q}'...", flush=True)
+        results = await asyncio.to_thread(fallback_openverse_search, clean_q, count)
+        print(f"[IMAGE SEARCH] Fallback returned {len(results)} image(s) for '{clean_q}'.", flush=True)
+
+    return results
 
 
 
