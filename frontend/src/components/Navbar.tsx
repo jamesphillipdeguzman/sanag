@@ -48,8 +48,8 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
   const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     onSelectTab?.('overview');
-    if (window.location.hash !== '#overview') {
-      window.history.pushState(null, '', '#overview');
+    if (typeof window !== 'undefined' && window.location.hash !== '#overview') {
+      window.history.replaceState(null, '', '#overview');
     }
     if (hasConnectionError || isOffline || isWaking) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -65,8 +65,8 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
   const handleTabClick = (e: React.MouseEvent, link: NavTabItem) => {
     e.preventDefault();
     onSelectTab?.(link.id);
-    if (window.location.hash !== link.href) {
-      window.history.pushState(null, '', link.href);
+    if (typeof window !== 'undefined' && window.location.hash !== link.href) {
+      window.history.replaceState(null, '', link.href);
     }
     setMobileOpen(false);
   };

@@ -1564,31 +1564,57 @@ function LeafletMap({
   // Smoothly center/fly map to active hazard coordinates whenever active event updates
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !activeEventId) return;
+    // Only attempt camera animation if map is ready, event ID exists, and Map tab is actively visible
+    if (!map || !activeEventId || !isActiveTab) return;
 
-    // Check if matching alert in gdacsAlerts
-    const matchingAlert = gdacsAlerts?.find(
-      (a) =>
-        activeEventId === a.id ||
-        activeEventId === `gdacs-${a.event_id}` ||
-        activeEventId === String(a.event_id)
-    );
-
-    let lat = matchingAlert?.latitude ?? matchingAlert?.coordinates?.[0];
-    let lng = matchingAlert?.longitude ?? matchingAlert?.coordinates?.[1];
-
-    if ((lat == null || lng == null) && activeEvent) {
-      lat = activeEvent.latitude ?? activeEvent.coordinates?.[0];
-      lng = activeEvent.longitude ?? activeEvent.coordinates?.[1];
+    // Check if the map container element has valid rendered dimensions
+    const container = mapElement.current;
+    if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
+      return;
     }
 
-    if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
-      map.flyTo([lat, lng], Math.max(map.getZoom(), 8), {
-        animate: true,
-        duration: 1.2,
-      });
+    try {
+      // Check if matching alert in gdacsAlerts
+      const matchingAlert = gdacsAlerts?.find(
+        (a) =>
+          String(activeEventId) === String(a.id) ||
+          String(activeEventId) === `gdacs-${a.event_id}` ||
+          String(activeEventId) === String(a.event_id)
+      );
+
+      let lat = matchingAlert?.latitude ?? matchingAlert?.coordinates?.[0];
+      let lng = matchingAlert?.longitude ?? matchingAlert?.coordinates?.[1];
+
+      if ((lat == null || lng == null) && activeEvent) {
+        lat = activeEvent.latitude ?? activeEvent.coordinates?.[0];
+        lng = activeEvent.longitude ?? activeEvent.coordinates?.[1];
+      }
+
+      // Defensive validation: ensure coordinates are valid, finite numbers
+      if (
+        lat != null &&
+        lng != null &&
+        typeof lat === 'number' &&
+        typeof lng === 'number' &&
+        !isNaN(lat) &&
+        !isNaN(lng) &&
+        isFinite(lat) &&
+        isFinite(lng)
+      ) {
+        const rawZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
+        const currentZoom = typeof rawZoom === 'number' && isFinite(rawZoom) ? rawZoom : 8;
+        const targetZoom = Math.max(currentZoom, 8);
+
+        map.flyTo([lat, lng], targetZoom, {
+          animate: true,
+          duration: 1.2,
+        });
+      }
+    } catch (err) {
+      // Suppress any silent Leaflet canvas/tile animation exceptions
+      console.warn('[PanayMap] Suppressed camera flyTo exception during event transition:', err);
     }
-  }, [activeEventId, activeEvent, gdacsAlerts]);
+  }, [activeEventId, activeEvent, gdacsAlerts, isActiveTab]);
 
   return (
     <div

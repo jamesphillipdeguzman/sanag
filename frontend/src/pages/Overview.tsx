@@ -5,10 +5,11 @@ import { formatAffectedPopulation } from '@/data/mockData';
 import GdacsAlertBanner from '@/components/GdacsAlertBanner';
 import WeatherForecast from '@/components/WeatherForecast';
 import AiBriefingCard from '@/components/AiBriefingCard';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 interface OverviewProps {
   municipalities: Municipality[];
-  activeEvent: DisasterEvent;
+  activeEvent?: DisasterEvent | null;
   events: DisasterEvent[];
   onSelectEvent: (id: string) => void;
   onDismissEvent?: () => void;
@@ -79,8 +80,8 @@ export default function Overview({
     if (unrestored.length > 0) {
       return unrestored.reduce((sum, m) => sum + (m.population || 0), 0);
     }
-    return activeEvent.affectedPopulation || 0;
-  }, [panayMunicipalities, activeEvent.affectedPopulation]);
+    return activeEvent?.affectedPopulation || 0;
+  }, [panayMunicipalities, activeEvent?.affectedPopulation]);
 
   return (
     <section id="overview" className="relative pb-8 overflow-hidden animate-fade-in">
@@ -159,7 +160,7 @@ export default function Overview({
             onRefresh={onRefreshGdacs}
             onImport={onSimulateGdacs}
             importingId={importingGdacsId}
-            activeEventId={activeEvent.id}
+            activeEventId={activeEvent?.id}
             importedEventIds={importedEventIds}
             onSelectEvent={onSelectEvent}
             events={events}
@@ -168,7 +169,9 @@ export default function Overview({
 
         {/* Executive AI Situational Briefing (Gemini 2.0 Flash) */}
         <div className="mb-8 animate-fade-in-up" style={{ animationDelay: '0.06s' }}>
-          <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
+          <ErrorBoundary name="AI Executive Briefing" resetKey={activeEvent?.id}>
+            <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
+          </ErrorBoundary>
         </div>
 
         {/* Quick-Jump Exploration Cards */}

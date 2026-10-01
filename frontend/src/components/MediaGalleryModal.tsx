@@ -78,6 +78,21 @@ export default function MediaGalleryModal({
     }
   }, [isOpen, eventName, buildDefaultQuery, performSearch]);
 
+  // Manage body overflow and touchAction styles cleanly when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    const originalTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+
+    return () => {
+      document.body.style.overflow = originalOverflow || '';
+      document.body.style.touchAction = originalTouchAction || '';
+    };
+  }, [isOpen]);
+
   // Handle keyboard navigation for Lightbox
   useEffect(() => {
     if (!isOpen) return;

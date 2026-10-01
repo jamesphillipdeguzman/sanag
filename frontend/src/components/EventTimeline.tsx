@@ -33,7 +33,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
     });
   }, [events]);
 
-  const active = sortedEvents.find((e) => e.id === activeEventId);
+  const active = sortedEvents.find((e) => String(e.id) === String(activeEventId)) ?? sortedEvents[0] ?? null;
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-lg dark:shadow-xl transition-colors">
@@ -50,13 +50,18 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
 
           <div className="flex gap-3 overflow-x-auto scrollbar-thin py-2 px-1">
             {sortedEvents.map((event) => {
-              const isActive = event.id === activeEventId;
+              const isActive = !!activeEventId && String(event.id) === String(activeEventId);
               const color = getSeverityColor(event.severity);
 
               return (
                 <div key={event.id} className="relative flex-shrink-0 w-44">
                   <button
-                    onClick={() => onSelect(event.id)}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelect(event.id);
+                    }}
                     className={`relative w-full rounded-xl border p-3 text-left transition-all ${
                       isActive
                         ? 'border-ocean-500 bg-ocean-50/80 shadow-md ring-1 ring-ocean-400/50 scale-[1.02] dark:border-white/30 dark:bg-white/10 dark:ring-0'
@@ -69,7 +74,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                         className="flex h-8 w-8 items-center justify-center rounded-lg"
                         style={{ backgroundColor: `${color}20`, color }}
                       >
-                        {typeIcon[event.type]}
+                        {typeIcon[event.type] ?? <Zap className="h-4 w-4" />}
                       </div>
                       <div className="flex-1 min-w-0 pr-4">
                         <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{event.name}</p>
@@ -84,7 +89,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                         {event.severity}
                       </span>
                       <span className="text-[10px] text-slate-600 dark:text-ink-300 font-medium">
-                        {formatAffectedPopulation(event.affectedPopulation)}
+                        {formatAffectedPopulation(event.affectedPopulation ?? 0)}
                       </span>
                     </div>
                   </button>
@@ -93,7 +98,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                   {isActive && onDismiss && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDismiss(); }}
                       title="Dismiss active event"
                       className="absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-md bg-slate-200/80 hover:bg-rose-100 text-slate-500 hover:text-rose-600 dark:bg-white/10 dark:hover:bg-rose-500/25 dark:text-ink-400 dark:hover:text-rose-300 transition-all cursor-pointer"
                     >
@@ -117,7 +122,7 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                   color: getSeverityColor(active.severity),
                 }}
               >
-                {typeIcon[active.type]}
+                {typeIcon[active.type] ?? <Zap className="h-4 w-4" />}
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -127,10 +132,10 @@ export default function EventTimeline({ events, activeEventId, onSelect, onDismi
                 <p className="text-sm text-slate-600 dark:text-ink-300 leading-relaxed">{active.description}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                   <span className="text-slate-500 dark:text-ink-400">
-                    Affected: <span className="font-semibold text-slate-900 dark:text-white">{formatAffectedPopulation(active.affectedPopulation)}</span>
-                    {active.affectedPopulation > 0 && (
+                    Affected: <span className="font-semibold text-slate-900 dark:text-white">{formatAffectedPopulation(active.affectedPopulation ?? 0)}</span>
+                    {(active.affectedPopulation ?? 0) > 0 && (
                       <span className="text-slate-500 dark:text-ink-500 text-[11px] ml-1.5 font-normal">
-                        ({active.affectedPopulation.toLocaleString()} citizens)
+                        ({(active.affectedPopulation ?? 0).toLocaleString()} citizens)
                       </span>
                     )}
                   </span>

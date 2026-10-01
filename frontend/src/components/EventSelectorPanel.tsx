@@ -23,6 +23,7 @@ import type { DisasterEvent, GdacsAlert } from '@/types';
 import { apiFetch } from '@/services/apiService';
 import { getSeverityColor } from '@/data/mockData';
 import MediaGalleryModal from './MediaGalleryModal';
+import ErrorBoundary from './ErrorBoundary';
 import {
   isEventCompatibleWithRegion,
   getRegionDisplayName,
@@ -45,7 +46,7 @@ export interface MediaEventData {
 interface EventSelectorPanelProps {
   /** Curated historical events from the database */
   events: DisasterEvent[];
-  activeEvent: DisasterEvent;
+  activeEvent?: DisasterEvent | null;
   onSelectEvent: (id: string) => void;
   onDismissEvent?: () => void;
   /** Called when user clicks a new GDACS alert card to simulate/import & activate it */
@@ -102,29 +103,29 @@ function gdacsLevelDot(level: string) {
   return                     'bg-emerald-500';
 }
 
-function formatGdacsDate(dateStr?: string) {
-  if (!dateStr) return '—';
+function formatGdacsDate(dateStr?: unknown) {
+  if (!dateStr || typeof dateStr !== 'string') return '—';
   try {
     return new Date(dateStr).toLocaleDateString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
     });
   } catch {
-    return dateStr.slice(0, 10);
+    return String(dateStr).slice(0, 10);
   }
 }
 
-export function formatEventDate(dateStr?: string) {
-  if (!dateStr) return '—';
+export function formatEventDate(dateStr?: unknown) {
+  if (!dateStr || typeof dateStr !== 'string') return '—';
   try {
     const d = new Date(dateStr.length === 10 ? `${dateStr}T00:00:00Z` : dateStr);
-    if (isNaN(d.getTime())) return dateStr.slice(0, 10);
+    if (isNaN(d.getTime())) return String(dateStr).slice(0, 10);
     return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
     });
   } catch {
-    return dateStr.slice(0, 10);
+    return String(dateStr).slice(0, 10);
   }
 }
 
@@ -365,15 +366,17 @@ export default function EventSelectorPanel({
         aria-labelledby="tab-historical"
         hidden={activeTab !== 'historical'}
       >
-        <HistoricalPanel
-          events={events}
-          activeEvent={activeEvent}
-          onSelectEvent={onSelectEvent}
-          onDismissEvent={onDismissEvent}
-          onOpenMedia={setMediaModalEvent}
-          selectedRegionKey={selectedRegionKey}
-          viewMode={viewMode}
-        />
+        <ErrorBoundary name="Historical Event Monitoring" resetKey={activeEvent?.id}>
+          <HistoricalPanel
+            events={events}
+            activeEvent={activeEvent}
+            onSelectEvent={onSelectEvent}
+            onDismissEvent={onDismissEvent}
+            onOpenMedia={setMediaModalEvent}
+            selectedRegionKey={selectedRegionKey}
+            viewMode={viewMode}
+          />
+        </ErrorBoundary>
       </div>
 
       <div
@@ -382,16 +385,18 @@ export default function EventSelectorPanel({
         aria-labelledby="tab-gdacs"
         hidden={activeTab !== 'gdacs'}
       >
-        <GdacsPanel
-          events={events}
-          activeEvent={activeEvent}
-          onSelectEvent={onSelectEvent}
-          onSimulateGdacs={onSimulateGdacs}
-          onOpenMedia={setMediaModalEvent}
-          importingGdacsId={importingGdacsId}
-          importedEventIds={importedEventIds}
-          viewMode={viewMode}
-        />
+        <ErrorBoundary name="Live GDACS Hazards Panel" resetKey={activeEvent?.id}>
+          <GdacsPanel
+            events={events}
+            activeEvent={activeEvent}
+            onSelectEvent={onSelectEvent}
+            onSimulateGdacs={onSimulateGdacs}
+            onOpenMedia={setMediaModalEvent}
+            importingGdacsId={importingGdacsId}
+            importedEventIds={importedEventIds}
+            viewMode={viewMode}
+          />
+        </ErrorBoundary>
       </div>
 
       {/* In-App Media Gallery & Ground Footage Modal */}
@@ -479,7 +484,7 @@ function HistoricalPanel({
   viewMode = 'grid',
 }: {
   events: DisasterEvent[];
-  activeEvent: DisasterEvent;
+  activeEvent?: DisasterEvent | null;
   onSelectEvent: (id: string) => void;
   onDismissEvent?: () => void;
   onOpenMedia: (data: MediaEventData) => void;
@@ -565,7 +570,7 @@ function HistoricalPanel({
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedEvents.map((event) => {
-            const isSelected    = event.id === activeEvent.id;
+            const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
             const severityColor = getSeverityColor(event.severity);
             const typeBadge     = getEventTypeBadge(event.type);
@@ -576,7 +581,9 @@ function HistoricalPanel({
                 <div
                   role="button"
                   tabIndex={isCompatible ? 0 : -1}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (isCompatible) onSelectEvent(event.id);
                   }}
                   onKeyDown={(e) => {
@@ -707,7 +714,7 @@ function HistoricalPanel({
         /* List View: single-column compact rows */
         <div className="flex flex-col gap-2.5">
           {sortedEvents.map((event) => {
-            const isSelected    = event.id === activeEvent.id;
+            const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
             const severityColor = getSeverityColor(event.severity);
             const typeBadge     = getEventTypeBadge(event.type);
@@ -718,7 +725,9 @@ function HistoricalPanel({
                 <div
                   role="button"
                   tabIndex={isCompatible ? 0 : -1}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     if (isCompatible) onSelectEvent(event.id);
                   }}
                   onKeyDown={(e) => {
@@ -852,7 +861,7 @@ function GdacsPanel({
   viewMode = 'grid',
 }: {
   events: DisasterEvent[];
-  activeEvent: DisasterEvent;
+  activeEvent?: DisasterEvent | null;
   onSelectEvent: (id: string) => void;
   onSimulateGdacs?: (alert: GdacsAlert, tempEvent?: DisasterEvent) => void | Promise<void>;
   onOpenMedia?: (data: MediaEventData) => void;
@@ -1013,7 +1022,7 @@ function GdacsPanel({
             const isImporting  = importingGdacsId === alertId;
             const importedId   = resolveImportedId(alert);
             const isImported   = importedId !== null || !!alert.is_imported;
-            const isActiveCard = importedId !== null && importedId === activeEvent?.id;
+            const isActiveCard = importedId !== null && !!activeEvent && String(importedId) === String(activeEvent.id);
 
             return (
               <GdacsAlertCard
@@ -1074,7 +1083,11 @@ function GdacsAlertCard({
       <div
         role="button"
         tabIndex={0}
-        onClick={onCardClick}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onCardClick();
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -1216,7 +1229,11 @@ function GdacsAlertCard({
     <div
       role="button"
       tabIndex={0}
-      onClick={onCardClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onCardClick();
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
