@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Municipality, GdacsAlert } from '@/types';
+import type { Municipality, GdacsAlert, DisasterEvent } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
 import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
@@ -50,6 +50,7 @@ export interface PanayMapProps {
   isLoading?: boolean;
   gdacsAlerts?: GdacsAlert[];
   activeEventId?: string | null;
+  activeEvent?: DisasterEvent | null;
   onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
   selectedRegionKey?: string;
   onRegionChange?: (regionKey: string) => void;
@@ -65,6 +66,7 @@ export interface LeafletMapProps {
   gdacsAlerts?: GdacsAlert[];
   showGdacsMarkers?: boolean;
   activeEventId?: string | null;
+  activeEvent?: DisasterEvent | null;
   onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
   selectedRegionKey?: string;
   onRegionChange?: (key: string) => void;
@@ -143,6 +145,7 @@ export default function PanayMap({
   isLoading = false,
   gdacsAlerts = [],
   activeEventId,
+  activeEvent,
   onSimulateGdacs,
   selectedRegionKey: externalRegionKey,
   onRegionChange: externalOnRegionChange,
@@ -412,6 +415,7 @@ export default function PanayMap({
                   gdacsAlerts={gdacsAlerts}
                   showGdacsMarkers={showGdacsMarkers}
                   activeEventId={activeEventId}
+                  activeEvent={activeEvent}
                   onSimulateGdacs={onSimulateGdacs}
                   selectedRegionKey={currentRegionKey}
                   onRegionChange={handleRegionChange}
@@ -739,6 +743,7 @@ function LeafletMap({
   gdacsAlerts = [],
   showGdacsMarkers = true,
   activeEventId,
+  activeEvent,
   onSimulateGdacs,
   selectedRegionKey = 'panay',
   onRegionChange,
@@ -854,6 +859,13 @@ function LeafletMap({
       }
       if (res.ok) {
         const geojson: GeoJSON.FeatureCollection = await res.json();
+        if (key === 'panay' && geojson.features) {
+          geojson.features = geojson.features.filter((f: GeoJSON.Feature) => {
+            const adm2 = (f.properties?.ADM2_EN || f.properties?.province || '').toLowerCase().trim();
+            const pcode = f.properties?.ADM3_PCODE || f.properties?.psgc_code || '';
+            return adm2 !== 'guimaras' && !pcode.startsWith('PH06079');
+          });
+        }
         regionCacheRef.current.set(key, geojson);
         return geojson;
       }
@@ -1419,9 +1431,42 @@ function LeafletMap({
         maxWidth: 290,
       });
 
+      if (isActive) {
+        marker.openPopup();
+      }
+
       group.addLayer(marker);
     });
   }, [gdacsAlerts, showGdacsMarkers, activeEventId, onSimulateGdacs]);
+
+  // Smoothly center/fly map to active hazard coordinates whenever active event updates
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !activeEventId) return;
+
+    // Check if matching alert in gdacsAlerts
+    const matchingAlert = gdacsAlerts?.find(
+      (a) =>
+        activeEventId === a.id ||
+        activeEventId === `gdacs-${a.event_id}` ||
+        activeEventId === String(a.event_id)
+    );
+
+    let lat = matchingAlert?.latitude ?? matchingAlert?.coordinates?.[0];
+    let lng = matchingAlert?.longitude ?? matchingAlert?.coordinates?.[1];
+
+    if ((lat == null || lng == null) && activeEvent) {
+      lat = activeEvent.latitude ?? activeEvent.coordinates?.[0];
+      lng = activeEvent.longitude ?? activeEvent.coordinates?.[1];
+    }
+
+    if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+      map.flyTo([lat, lng], Math.max(map.getZoom(), 8), {
+        animate: true,
+        duration: 1.2,
+      });
+    }
+  }, [activeEventId, activeEvent, gdacsAlerts]);
 
   return (
     <div

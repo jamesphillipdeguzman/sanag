@@ -41,6 +41,10 @@ export interface DisasterEvent {
     r_t: number;
     status: string;
   }>;
+  latitude?: number | null;
+  longitude?: number | null;
+  coordinates?: [number, number] | null;
+  is_live_simulated?: boolean;
 }
 
 export interface GdacsAlert {

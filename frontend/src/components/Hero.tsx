@@ -10,12 +10,24 @@ interface HeroProps {
 }
 
 export default function Hero({ municipalities, activeEvent, onSelectEvent, events }: HeroProps) {
-  const avgRecovery = municipalities.length > 0
-    ? Math.round(municipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / municipalities.length)
+  const panayMunicipalities = municipalities.filter((m) => {
+    const prov = (m.province || '').toLowerCase().trim();
+    if (prov === 'guimaras') return false;
+    if (['iloilo', 'capiz', 'aklan', 'antique'].includes(prov)) return true;
+    if (m.pcode) {
+      return m.pcode.startsWith('PH06') && !m.pcode.startsWith('PH06079');
+    }
+    return !m.province && !m.region;
+  });
+  const targetMunicipalities = panayMunicipalities.length > 0 ? panayMunicipalities : municipalities;
+  const totalPanayLgus = targetMunicipalities.length > 0 ? targetMunicipalities.length : 93;
+
+  const avgRecovery = targetMunicipalities.length > 0
+    ? Math.round(targetMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / targetMunicipalities.length)
     : 0;
-  const restoredCount = municipalities.filter((m) => m.status === 'restored').length;
-  const criticalCount = municipalities.filter((m) => m.status === 'critical').length;
-  const affectedLGUs = municipalities.filter(
+  const restoredCount = targetMunicipalities.filter((m) => m.status === 'restored').length;
+  const criticalCount = targetMunicipalities.filter((m) => m.status === 'critical').length;
+  const affectedLGUs = targetMunicipalities.filter(
     (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
   );
   const affectedPopulation = affectedLGUs.length > 0
@@ -50,7 +62,7 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
 
             <p className="mt-6 text-lg text-ink-300 leading-relaxed max-w-2xl">
               SANAG computes municipal power recovery indicators across
-              all 93 Panay Island local government units using satellite nightlight
+              all {totalPanayLgus} Panay Island local government units using satellite nightlight
               radiance observations and calibrated monthly baselines.
             </p>
 
@@ -119,7 +131,7 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
               <StatCard
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="Restored"
-                value={`${restoredCount}/${municipalities.length}`}
+                value={`${restoredCount}/${totalPanayLgus}`}
                 accent="text-emerald-500 dark:text-emerald-300"
               />
               <StatCard

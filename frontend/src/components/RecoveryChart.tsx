@@ -198,11 +198,11 @@ export default function RecoveryChart({
           : chosen.date
         : '';
       let eDate = '';
-      if (chosen.endDate && chosen.endDate.length >= 10 && !isNaN(new Date(chosen.endDate).getTime())) {
-        eDate = chosen.endDate.slice(0, 10);
-      } else if (sDate) {
+      if (sDate) {
+        // Automatically set Start date to event's recorded start date,
+        // and End date to exactly 30 days (one month) after start date
         const d = new Date(`${sDate}T00:00:00Z`);
-        d.setUTCDate(d.getUTCDate() + 31);
+        d.setUTCDate(d.getUTCDate() + 30);
         eDate = d.toISOString().slice(0, 10);
       }
       if (sDate && eDate) {
