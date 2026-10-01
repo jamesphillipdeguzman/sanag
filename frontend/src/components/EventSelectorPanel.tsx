@@ -478,7 +478,7 @@ function HistoricalPanel({
                 <div className="flex items-center justify-between text-xs text-slate-500 dark:text-ink-400 mt-1 pt-2 border-t border-slate-100 dark:border-white/5 w-full gap-1">
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3 w-3 text-slate-400 dark:text-ink-400 shrink-0" />
-                    <span className="truncate">{event.date}</span>
+                    <span className="truncate">{event.startDate || event.date}</span>
                   </span>
                   <span
                     className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 ${
@@ -501,6 +501,22 @@ function HistoricalPanel({
                     {event.severity}
                   </span>
                 </div>
+
+                {event.resource_url && (
+                  <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-white/5 flex items-center justify-end">
+                    <a
+                      href={event.resource_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 transition-colors"
+                      title="Watch verified documentary footage or official news coverage"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      <span>Watch Footage</span>
+                    </a>
+                  </div>
+                )}
               </button>
 
               {/* Dismiss X — only on the active card */}

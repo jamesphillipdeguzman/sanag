@@ -11,6 +11,7 @@ import {
   Layers,
   Plus,
   Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { events as defaultMockEvents } from '@/data/mockData';
 import { useTheme } from '@/hooks/useTheme';
@@ -182,10 +183,15 @@ export default function RecoveryChart({
     if (activeEventId && allEvents.some((e) => String(e.id) === String(activeEventId))) {
       return String(activeEventId);
     }
-    const matchByDate = allEvents.find((e) => e.date === startDate || e.date === eventDate);
+    const matchByDate = allEvents.find((e) => e.startDate === startDate || e.date === startDate || e.date === eventDate);
     if (matchByDate) return String(matchByDate.id);
     return allEvents[0]?.id ? String(allEvents[0].id) : '';
   }, [activeEventId, allEvents, eventDate, startDate]);
+
+  // Active event object with full metadata including resource_url
+  const currentEvent = useMemo(() => {
+    return allEvents.find((e) => String(e.id) === String(currentEventId));
+  }, [allEvents, currentEventId]);
 
   // Handle disaster event dropdown selection with automatic start & end date binding
   const handleEventSelect = (selectedId: string) => {
@@ -198,15 +204,13 @@ export default function RecoveryChart({
       onEventChange(selectedId);
     }
     if (chosen && onDateRangeChange) {
-      const sDate = chosen.date
-        ? chosen.date.length >= 10 && !isNaN(new Date(chosen.date).getTime())
-          ? chosen.date.slice(0, 10)
-          : chosen.date
-        : '';
-      let eDate = '';
-      if (sDate) {
-        // Automatically set Start date to event's recorded start date,
-        // and End date to exactly 30 days (one month) after start date
+      const rawStart = chosen.startDate || chosen.date || '';
+      const sDate = rawStart.length >= 10 && !isNaN(new Date(rawStart).getTime())
+        ? rawStart.slice(0, 10)
+        : rawStart;
+      let eDate = chosen.endDate || '';
+      if (!eDate && sDate) {
+        // Fallback: End date to exactly 30 days after start date
         const d = new Date(`${sDate}T00:00:00Z`);
         d.setUTCDate(d.getUTCDate() + 30);
         eDate = d.toISOString().slice(0, 10);
@@ -511,7 +515,7 @@ export default function RecoveryChart({
                       disabled={!isCompatible}
                       className={!isCompatible ? 'text-slate-400 dark:text-ink-600 bg-slate-100 dark:bg-ink-950 font-normal' : 'bg-white dark:bg-ink-950 text-slate-900 dark:text-white py-1 font-medium'}
                     >
-                      {evt.name} ({evt.date ? evt.date.slice(0, 10) : 'N/A'}){!isCompatible ? ` — Incompatible with ${getRegionDisplayName(selectedRegionKey)}` : ''}
+                      {evt.name} ({evt.startDate ? evt.startDate.slice(0, 10) : evt.date ? evt.date.slice(0, 10) : 'N/A'}){!isCompatible ? ` — Incompatible with ${getRegionDisplayName(selectedRegionKey)}` : ''}
                     </option>
                   );
                 })}
@@ -520,7 +524,7 @@ export default function RecoveryChart({
             </div>
           </div>
 
-          {/* Date Range Pickers */}
+          {/* Date Range Pickers & Verified External Footage Link */}
           {onDateRangeChange && (
             <div className="flex items-end gap-2.5 flex-wrap">
               <div>
@@ -554,6 +558,24 @@ export default function RecoveryChart({
                   />
                 </div>
               </div>
+
+              {/* Verified Resource URL External Link */}
+              {currentEvent?.resource_url && (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-transparent select-none">Documentation</label>
+                  <a
+                    id="event-resource-link"
+                    href={currentEvent.resource_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-300/80 dark:border-rose-500/30 text-sm font-semibold shadow-sm transition-all hover:shadow hover:shadow-rose-500/15 active:scale-[0.98] cursor-pointer"
+                    title="Watch verified documentary footage or official news coverage"
+                  >
+                    <ExternalLink className="h-4 w-4 text-rose-500 shrink-0" />
+                    <span>Watch Verified Footage</span>
+                  </a>
+                </div>
+              )}
             </div>
           )}
 

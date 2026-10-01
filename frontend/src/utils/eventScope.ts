@@ -19,7 +19,7 @@ export function isNationwideRegion(regionKey?: string | null): boolean {
 
 /**
  * Checks if an event is strictly localized/exclusive to Panay Island
- * (e.g., Panay Island Grid Collapse, 1990 Panay Earthquake, Panay Fault).
+ * (e.g., Panay Island Grid Collapse).
  */
 export function isPanayExclusiveEvent(event: DisasterEvent): boolean {
   const id = (event.id || '').toLowerCase().trim();
@@ -29,30 +29,26 @@ export function isPanayExclusiveEvent(event: DisasterEvent): boolean {
   // Explicit known Panay-exclusive IDs
   if (
     id === 'panay-blackout-2024' ||
-    id === 'panay-earthquake-1990' ||
-    id === 'gdacs-1568718' ||
     id.startsWith('panay-')
   ) {
     return true;
   }
 
-  // Panay Grid Collapse, Panay Fault, Panay earthquake
+  // Panay Grid Collapse, Panay Blackout
   if (
     name.includes('panay island grid collapse') ||
-    name.includes('panay blackout') ||
-    name.includes('panay fault') ||
-    name.includes('1990 panay earthquake')
+    name.includes('panay blackout')
   ) {
     return true;
   }
 
   // Check if title specifically targets Panay and is not a multi-regional typhoon/monsoon
-  if (name.includes('panay') && !name.includes('philippines') && !id.includes('haiyan') && !id.includes('odette')) {
+  if (name.includes('panay') && !name.includes('philippines') && !id.includes('haiyan') && !id.includes('rai') && !id.includes('odette')) {
     return true;
   }
 
   // Check if description specifies island-wide blackout across Panay
-  if (desc.includes('blackout across panay') || desc.includes('epicentered in culasi, antique')) {
+  if (desc.includes('blackout across panay') || desc.includes('grid collapse across panay')) {
     return true;
   }
 

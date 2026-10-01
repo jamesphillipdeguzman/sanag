@@ -20,17 +20,19 @@ export interface Municipality {
   rank?: number;
 }
 
-export type DisasterType = 'blackout' | 'typhoon' | 'flood' | 'earthquake' | 'disaster';
+export type DisasterType = 'blackout' | 'grid_failure' | 'typhoon' | 'flood' | 'monsoon_flood' | 'earthquake' | 'disaster';
 
 export interface DisasterEvent {
   id: string;
   name: string;
   date: string;
+  startDate?: string;
   endDate: string;
   severity: 'Severe' | 'High' | 'Moderate';
   type: DisasterType;
   affectedPopulation: number;
   description: string;
+  resource_url?: string;
   category?: string;
   alert_level?: string;
   viirs_data_available?: boolean;

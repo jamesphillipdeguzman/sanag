@@ -103,14 +103,19 @@ function applyRecoveryScores(municipalities, records, startDate, endDate) {
 }
 
 function mapApiEvent(event) {
-  const category = (event.category || '').toLowerCase()
-  const type = category.includes('flood')
-    ? 'flood'
-    : category.includes('typhoon') || category.includes('cyclone')
-      ? 'typhoon'
-      : category.includes('earthquake')
-        ? 'earthquake'
-        : 'blackout'
+  const rawCat = (event.category || event.type || '').toLowerCase()
+  let type = 'blackout'
+  if (rawCat.includes('grid') || rawCat === 'grid_failure') {
+    type = 'grid_failure'
+  } else if (rawCat.includes('monsoon') || rawCat === 'monsoon_flood') {
+    type = 'monsoon_flood'
+  } else if (rawCat.includes('flood')) {
+    type = 'monsoon_flood'
+  } else if (rawCat.includes('typhoon') || rawCat.includes('cyclone')) {
+    type = 'typhoon'
+  } else if (rawCat.includes('earthquake')) {
+    type = 'earthquake'
+  }
 
   const mockMatch = mockEvents.find((e) => e.id === String(event.id) || e.name === event.name)
   const affectedPopulation = Number(
@@ -120,22 +125,24 @@ function mapApiEvent(event) {
   const alertLevel = event.alert_level || (event.severity === 'Severe' ? 'Red' : event.severity === 'High' ? 'Orange' : 'Green')
   const severity = event.severity || (alertLevel === 'Red' ? 'Severe' : alertLevel === 'Orange' ? 'High' : 'Moderate')
 
-  const eventDate = event.date || ''
-  const computedEndDate = eventDate ? formatIsoDate(addDays(eventDate, 30)) : ''
+  const eventDate = event.startDate || event.start_date || event.date || ''
+  const computedEndDate = event.endDate || event.end_date || (eventDate ? formatIsoDate(addDays(eventDate, 30)) : '')
 
   return {
     id: String(event.id),
     name: event.name,
     date: eventDate,
+    startDate: eventDate,
     endDate: computedEndDate,
     severity,
-    type,
+    type: event.type || type,
     affectedPopulation,
-    description: event.description ?? 'No description available.',
-    category: event.category,
+    description: event.description ?? mockMatch?.description ?? 'No description available.',
+    category: event.category || event.type,
     alert_level: alertLevel,
     viirs_data_available: event.viirs_data_available ?? true,
     critical_municipalities: event.critical_municipalities ?? [],
+    resource_url: event.resource_url || mockMatch?.resource_url,
   }
 }
 
@@ -224,11 +231,11 @@ function App() {
     setActiveEventId(eventId)
     const targetEvent = events.find((e) => String(e.id) === String(eventId))
     if (targetEvent) {
-      const sDate = formatIsoDate(targetEvent.date)
+      const sDate = formatIsoDate(targetEvent.startDate || targetEvent.date)
       if (sDate) {
         // Automatically set Start date to event's recorded start date,
-        // and End date to exactly 30 days (one month) after start date
-        const eDate = formatIsoDate(addDays(sDate, 30))
+        // and End date to targetEvent.endDate or exactly 30 days after start date
+        const eDate = targetEvent.endDate ? formatIsoDate(targetEvent.endDate) : formatIsoDate(addDays(sDate, 30))
         setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
       }
     }
@@ -677,10 +684,20 @@ function App() {
       })
       .then((payload) => {
         const rawEvents = payload.events.map(mapApiEvent)
-        // Deduplicate events by id or identical name + date
-        const apiEvents = rawEvents.filter((evt, idx, arr) =>
-          idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
-        )
+        // Deduplicate and filter out obsolete/erroneous pre-2012 events
+        const apiEvents = rawEvents.filter((evt, idx, arr) => {
+          const isErroneous =
+            evt.id === 'gdacs-1568718' ||
+            evt.id === 'panay-earthquake-1990' ||
+            evt.id === '19900614' ||
+            evt.id === 'gdacs-19900614' ||
+            evt.id === 'odette' ||
+            evt.name?.includes('1990') ||
+            evt.name?.includes('Panay Fault') ||
+            (evt.name?.includes('Odette') && !evt.name?.includes('Rai'))
+          if (isErroneous) return false
+          return idx === arr.findIndex((e) => e.id === evt.id || (e.name === evt.name && e.date === evt.date))
+        })
         if (apiEvents.length > 0) {
           setEvents(apiEvents)
           // Default to the flagship Panay blackout event which has verified VIIRS satellite data
