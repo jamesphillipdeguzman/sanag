@@ -9,7 +9,7 @@ import EventSelectorPanel from './components/EventSelectorPanel.tsx'
 import GuideGlossary from './components/GuideGlossary.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
-import { apiFetch, setHasLocalFallbackData } from './services/apiService.ts'
+import { apiFetch, setHasLocalFallbackData, safeJsonParse } from './services/apiService.ts'
 import { useServerHealth } from './context/ServerHealthContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import {
@@ -268,8 +268,8 @@ function App() {
     try {
       const res = await apiFetch('/api/v1/gdacs/alerts')
       if (!res.ok) throw new Error(`GDACS request failed: ${res.status}`)
-      const payload = await res.json()
-      if (payload.alerts) {
+      const payload = await safeJsonParse(res)
+      if (payload?.alerts) {
         const sortedAlerts = [...payload.alerts].sort((a, b) => {
           const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0
           const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0
@@ -463,8 +463,8 @@ function App() {
         }),
       }).then(async (res) => {
         if (res.ok) {
-          const result = await res.json()
-          if (result.event) {
+          const result = await safeJsonParse(res)
+          if (result?.event) {
             const mapped = mapApiEvent(result.event)
             setEvents((prev) =>
               prev.map((e) => (e.id === temporaryEvent.id ? { ...e, ...mapped } : e))
@@ -682,7 +682,7 @@ function App() {
       try {
         const res = await apiFetch(`/api/v1/events/${activeEventId}/radiance`)
         if (!res.ok) return null
-        return await res.json()
+        return await safeJsonParse(res)
       } catch {
         return null
       }
@@ -747,7 +747,11 @@ function App() {
     try {
       const response = await apiFetch('/api/v1/events')
       if (!response.ok) throw new Error(`Events request failed: ${response.status}`)
-      const payload = await response.json()
+      const payload = await safeJsonParse(response)
+      if (!payload?.events || !Array.isArray(payload.events)) {
+        console.warn('[App] Events payload incomplete or truncated, preserving cached/mock events')
+        return
+      }
       const rawEvents = payload.events.map(mapApiEvent)
       // Deduplicate and filter out obsolete/erroneous pre-2012 events
       const apiEvents = rawEvents.filter((evt, idx, arr) => {
@@ -790,7 +794,7 @@ function App() {
       const params = new URLSearchParams({ observation_date: sDate })
       const response = await apiFetch(`/api/v1/events/${eventId}/radiance?${params}`, { signal })
       if (!response.ok) return null
-      const payload = await response.json()
+      const payload = await safeJsonParse(response)
       if (payload?.data && payload.data.length > 0) {
         const records = payload.data.map((item) => ({
           ...item,
@@ -823,7 +827,11 @@ function App() {
       const params = new URLSearchParams({ start_date: sDate, end_date: eDate })
       const response = await apiFetch(`/api/v1/recovery-scores?${params}`, { signal })
       if (!response.ok) throw new Error(`Event recovery request failed: ${response.status}`)
-      const payload = await response.json()
+      const payload = await safeJsonParse(response)
+      if (!payload?.data) {
+        console.warn('[App] Recovery scores payload incomplete or truncated')
+        return
+      }
       setRecoveryRecords(payload.data)
       // Derive the latest observation date from returned records so the default
       // end-date tracks real data rather than the static event+30 fallback
@@ -989,8 +997,7 @@ function App() {
         {/* Tab 2: Map (#map) - Maintained mounted in DOM to preserve Leaflet instance & tile cache */}
         <div
           id="map"
-          className={`w-full ${activeTab === 'map' ? 'block animate-fade-in' : 'hidden'}`}
-          style={activeTab !== 'map' ? { display: 'none' } : undefined}
+          className={activeTab === 'map' ? 'h-full w-full' : 'hidden'}
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <PanayMap

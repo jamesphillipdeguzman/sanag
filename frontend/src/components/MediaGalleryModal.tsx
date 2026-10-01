@@ -234,6 +234,15 @@ export default function MediaGalleryModal({
                   alt={currentItem.title}
                   className="max-h-[54vh] w-auto max-w-full object-contain select-none"
                   loading="lazy"
+                  onError={(e) => {
+                    if (e.currentTarget.src !== currentItem.thumbnailUrl && currentItem.thumbnailUrl) {
+                      e.currentTarget.src = currentItem.thumbnailUrl;
+                    } else if (e.currentTarget.src !== currentItem.imageUrl && currentItem.imageUrl) {
+                      e.currentTarget.src = currentItem.imageUrl;
+                    } else {
+                      e.currentTarget.classList.add('hidden');
+                    }
+                  }}
                 />
 
                 {/* Lightbox Navigation Buttons */}
@@ -400,28 +409,39 @@ export default function MediaGalleryModal({
                   className="group relative flex flex-col rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-emerald-500/60 dark:hover:border-emerald-500/50 hover:shadow-lg dark:hover:shadow-emerald-950/20 transition-all overflow-hidden cursor-pointer text-left"
                 >
                   {/* Thumbnail Container */}
-                  <div className="relative aspect-[4/3] bg-slate-950/80 overflow-hidden">
+                  <div className="relative aspect-[4/3] bg-slate-950/80 overflow-hidden flex items-center justify-center">
+                    {/* Fallback styled placeholder when image fails and is hidden */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-slate-500 pointer-events-none select-none">
+                      <ImageIcon className="h-8 w-8 text-slate-600 mb-1" />
+                      <span className="text-[10px] text-slate-400 text-center line-clamp-2">{item.title}</span>
+                    </div>
+
                     <img
                       src={item.thumbnailUrl}
                       alt={item.title}
                       loading="lazy"
                       onError={(e) => {
-                        (e.target as HTMLElement).style.opacity = '0.4';
+                        // Fallback to full image URL or hide if CDN thumbnail fails
+                        if (e.currentTarget.src !== item.imageUrl && item.imageUrl) {
+                          e.currentTarget.src = item.imageUrl;
+                        } else {
+                          e.currentTarget.classList.add('hidden');
+                        }
                       }}
-                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="relative z-1 h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
 
                     {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute inset-0 z-2 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
                     {/* Publisher Domain Tag Pill (Brave / Google Images style) */}
-                    <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white/95 text-[10px] font-semibold tracking-wide backdrop-blur-xs shadow-sm border border-white/10">
+                    <div className="absolute top-2 left-2 z-3 flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/75 text-white/95 text-[10px] font-semibold tracking-wide backdrop-blur-xs shadow-sm border border-white/10">
                       <Globe className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
                       <span className="truncate max-w-[125px]">{item.domain}</span>
                     </div>
 
                     {/* Hover Expand Icon */}
-                    <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
+                    <div className="absolute bottom-2 right-2 z-3 p-1.5 rounded-md bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-xs">
                       <Maximize2 className="h-3.5 w-3.5" />
                     </div>
                   </div>

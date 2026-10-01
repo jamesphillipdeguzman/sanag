@@ -406,7 +406,8 @@ Scenario Data:
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash']
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            models_to_try = [gemini_model]
             
             for model_name in models_to_try:
                 for attempt in range(max_retries):

@@ -1,7 +1,8 @@
 import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -12,6 +13,24 @@ OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 # Centroid for Panay Island
 DEFAULT_LAT = 11.15
 DEFAULT_LON = 122.50
+
+# 30-minute in-memory cache to prevent 429 Too Many Requests on Open-Meteo API
+_FORECAST_CACHE: Dict[Tuple[float, float, int], Tuple[float, Dict[str, Any]]] = {}
+_FORECAST_CACHE_TTL_SECONDS = 30 * 60  # 1800 seconds (30 minutes)
+
+
+def get_cached_weather_forecast(lat: float, lon: float, days: int) -> Optional[Dict[str, Any]]:
+    key = (round(lat, 2), round(lon, 2), days)
+    if key in _FORECAST_CACHE:
+        cached_time, cached_data = _FORECAST_CACHE[key]
+        if time.time() - cached_time < _FORECAST_CACHE_TTL_SECONDS:
+            return cached_data
+    return None
+
+
+def set_cached_weather_forecast(lat: float, lon: float, days: int, data: Dict[str, Any]) -> None:
+    key = (round(lat, 2), round(lon, 2), days)
+    _FORECAST_CACHE[key] = (time.time(), data)
 
 
 def get_fallback_weather_forecast(
@@ -232,6 +251,14 @@ async def fetch_weather_forecast(
     except (ValueError, TypeError):
         safe_lon = DEFAULT_LON
 
+    # Check 30-minute in-memory cache first to avoid 429 Too Many Requests
+    cached_data = get_cached_weather_forecast(safe_lat, safe_lon, safe_days)
+    if cached_data is not None:
+        logger.info(
+            f"Serving 30-minute cached Open-Meteo forecast (lat={safe_lat}, lon={safe_lon}, days={safe_days})"
+        )
+        return cached_data
+
     params = {
         "latitude": safe_lat,
         "longitude": safe_lon,
@@ -252,9 +279,17 @@ async def fetch_weather_forecast(
             response.raise_for_status()
             data = response.json()
             if "daily" in data and isinstance(data["daily"], dict) and "time" in data["daily"]:
+                set_cached_weather_forecast(safe_lat, safe_lon, safe_days, data)
                 return data
             logger.warning("Open-Meteo forecast missing daily array, using fallback")
             return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days)
     except Exception as exc:
-        logger.warning(f"Open-Meteo forecast request failed ({type(exc).__name__}: {exc}). Using high-fidelity Panay weather fallback.")
+        logger.warning(
+            f"Open-Meteo forecast request failed ({type(exc).__name__}: {exc}). Checking stale cache or fallback."
+        )
+        # If rate-limited (429) or connection error, check if any cached data exists regardless of TTL
+        key = (round(safe_lat, 2), round(safe_lon, 2), safe_days)
+        if key in _FORECAST_CACHE:
+            logger.info("Serving stale cached forecast following rate limit / network error")
+            return _FORECAST_CACHE[key][1]
         return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days)

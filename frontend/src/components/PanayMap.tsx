@@ -775,13 +775,36 @@ function LeafletMap({
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
 
-  // Handle map invalidation and size re-calculations when Map tab becomes active or window resizes
+  // Handle map invalidation, size re-calculations, and tile layer preservation when Map tab becomes active or window resizes
   useEffect(() => {
     const handleInvalidate = () => {
       const map = mapRef.current;
       if (map && (map as any)._loaded && (map as any)._panes) {
         try {
-          map.invalidateSize();
+          map.invalidateSize({ pan: false, debounceMoveend: false });
+          // Ensure base tile layer is attached, placed behind vector polygons, and redrawn
+          if (tileLayerRef.current) {
+            if (!map.hasLayer(tileLayerRef.current)) {
+              tileLayerRef.current.addTo(map);
+            }
+            if (typeof (tileLayerRef.current as any).bringToBack === 'function') {
+              (tileLayerRef.current as any).bringToBack();
+            }
+            tileLayerRef.current.redraw();
+          } else {
+            const tileUrl = getBaseTileUrl(isLightRef.current);
+            const newTileLayer = L.tileLayer(tileUrl, {
+              subdomains: 'abcd',
+              maxZoom: 20,
+              attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            });
+            newTileLayer.addTo(map);
+            if (typeof (newTileLayer as any).bringToBack === 'function') {
+              (newTileLayer as any).bringToBack();
+            }
+            tileLayerRef.current = newTileLayer;
+          }
         } catch {}
       }
     };
@@ -790,9 +813,13 @@ function LeafletMap({
     window.addEventListener('resize', handleInvalidate);
 
     if (isActiveTab) {
-      const timer = setTimeout(handleInvalidate, 80);
+      const timer1 = setTimeout(handleInvalidate, 50);
+      const timer2 = setTimeout(handleInvalidate, 150);
+      const timer3 = setTimeout(handleInvalidate, 350);
       return () => {
-        clearTimeout(timer);
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        clearTimeout(timer3);
         window.removeEventListener('sanag:invalidate-map-size', handleInvalidate);
         window.removeEventListener('resize', handleInvalidate);
       };

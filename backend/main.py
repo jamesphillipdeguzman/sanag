@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel
 import os
 import re
@@ -55,6 +56,9 @@ app = FastAPI(
     version="1.1.0",
     lifespan=lifespan
 )
+
+# Enable GZip compression to keep response payloads well below 32KB buffer limits
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Allow production domain and local dev
 allowed_origins = os.getenv(
