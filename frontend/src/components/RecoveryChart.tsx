@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Municipality, DisasterEvent, DisasterType } from '@/types';
 import {
   CalendarDays,
@@ -41,6 +41,24 @@ interface RecoveryRecord {
   r_t: number | null;
 }
 
+interface HoveredPoint {
+  municipalityId: string;
+  name: string;
+  province: string;
+  score: number;
+  x: number;
+  y: number;
+  color: string;
+}
+
+interface HoveredData {
+  date: string;
+  svgX: number;
+  svgY: number;
+  closestIdx: number;
+  points: HoveredPoint[];
+}
+
 export default function RecoveryChart({
   municipalities,
   selectedId,
@@ -60,6 +78,15 @@ export default function RecoveryChart({
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const [viewMode, setViewMode] = useState<ViewMode>('hubs');
+
+  // Interactive hover tracking and point selection state
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
+
+  // Clear hover state on parameter or timeline changes
+  useEffect(() => {
+    setHoveredData(null);
+  }, [viewMode, selectedId, startDate, endDate, activeEventId]);
 
   // Custom events created interactively by the user
   const [localCustomEvents, setLocalCustomEvents] = useState<DisasterEvent[]>([]);
@@ -405,6 +432,207 @@ export default function RecoveryChart({
     return ['#38bdf8', '#34d399', '#fbbf24', '#f43f5e'];
   }, [viewMode]);
 
+  const formatDetailedDate = (date: string) => {
+    try {
+      const d = new Date(`${date}T00:00:00Z`);
+      return d.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      });
+    } catch {
+      return date;
+    }
+  };
+
+  // Interpolate or find exact point on curve for a given targetDate
+  const getInterpolatedPoint = (
+    s: { municipality: Municipality; data: Array<{ date: string; recoveryScore: number }> },
+    targetDate: string
+  ) => {
+    if (!s.data || s.data.length === 0) return null;
+
+    const exact = s.data.find((pt) => pt.date === targetDate);
+    if (exact) {
+      return {
+        date: exact.date,
+        recoveryScore: exact.recoveryScore,
+        x: dateToX(exact.date),
+        y: yScale(exact.recoveryScore),
+      };
+    }
+
+    if (s.data.length === 1) {
+      return {
+        date: s.data[0].date,
+        recoveryScore: s.data[0].recoveryScore,
+        x: dateToX(s.data[0].date),
+        y: yScale(s.data[0].recoveryScore),
+      };
+    }
+
+    const targetTime = new Date(`${targetDate}T00:00:00Z`).getTime();
+    const firstTime = new Date(`${s.data[0].date}T00:00:00Z`).getTime();
+    const lastTime = new Date(`${s.data[s.data.length - 1].date}T00:00:00Z`).getTime();
+
+    if (targetTime <= firstTime) {
+      return {
+        date: s.data[0].date,
+        recoveryScore: s.data[0].recoveryScore,
+        x: dateToX(s.data[0].date),
+        y: yScale(s.data[0].recoveryScore),
+      };
+    }
+    if (targetTime >= lastTime) {
+      const last = s.data[s.data.length - 1];
+      return {
+        date: last.date,
+        recoveryScore: last.recoveryScore,
+        x: dateToX(last.date),
+        y: yScale(last.recoveryScore),
+      };
+    }
+
+    for (let i = 0; i < s.data.length - 1; i++) {
+      const tA = new Date(`${s.data[i].date}T00:00:00Z`).getTime();
+      const tB = new Date(`${s.data[i + 1].date}T00:00:00Z`).getTime();
+      if (targetTime >= tA && targetTime <= tB) {
+        const ratio = tB > tA ? (targetTime - tA) / (tB - tA) : 0;
+        const score = Math.round(
+          s.data[i].recoveryScore + ratio * (s.data[i + 1].recoveryScore - s.data[i].recoveryScore)
+        );
+        return {
+          date: targetDate,
+          recoveryScore: Math.max(0, Math.min(100, score)),
+          x: dateToX(targetDate),
+          y: yScale(score),
+        };
+      }
+    }
+
+    return {
+      date: s.data[0].date,
+      recoveryScore: s.data[0].recoveryScore,
+      x: dateToX(s.data[0].date),
+      y: yScale(s.data[0].recoveryScore),
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!svgRef.current || pointCount === 0 || series.length === 0) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+
+    const svgX = (screenX / rect.width) * W;
+    const svgY = (screenY / rect.height) * H;
+
+    if (svgX < margin.left - 15 || svgX > W - margin.right + 15) {
+      setHoveredData(null);
+      return;
+    }
+
+    const fraction = Math.max(0, Math.min(1, (svgX - margin.left) / innerW));
+    const nearestIndex = Math.min(pointCount - 1, Math.max(0, Math.round(fraction * (pointCount - 1))));
+    const targetDate = fullTimeline[nearestIndex];
+    if (!targetDate) return;
+
+    const targetX = xScale(nearestIndex);
+
+    const points: HoveredPoint[] = series.map((s, idx) => {
+      const pt = getInterpolatedPoint(s, targetDate);
+      const color = lineColors[idx % lineColors.length];
+      return {
+        municipalityId: s.municipality.id,
+        name: s.municipality.name,
+        province: s.municipality.province,
+        score: pt ? pt.recoveryScore : s.municipality.recoveryScore,
+        x: targetX,
+        y: pt ? pt.y : yScale(s.municipality.recoveryScore),
+        color,
+      };
+    });
+
+    let closestIdx = 0;
+    let minDist = Infinity;
+    points.forEach((p, idx) => {
+      const dist = Math.abs(p.y - svgY);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = idx;
+      }
+    });
+
+    setHoveredData({
+      date: targetDate,
+      svgX: targetX,
+      svgY,
+      closestIdx,
+      points,
+    });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (!svgRef.current || pointCount === 0 || series.length === 0 || !e.touches[0]) return;
+    const touch = e.touches[0];
+    const rect = svgRef.current.getBoundingClientRect();
+    const screenX = touch.clientX - rect.left;
+    const screenY = touch.clientY - rect.top;
+
+    const svgX = (screenX / rect.width) * W;
+    const svgY = (screenY / rect.height) * H;
+
+    if (svgX < margin.left - 15 || svgX > W - margin.right + 15) {
+      setHoveredData(null);
+      return;
+    }
+
+    const fraction = Math.max(0, Math.min(1, (svgX - margin.left) / innerW));
+    const nearestIndex = Math.min(pointCount - 1, Math.max(0, Math.round(fraction * (pointCount - 1))));
+    const targetDate = fullTimeline[nearestIndex];
+    if (!targetDate) return;
+
+    const targetX = xScale(nearestIndex);
+
+    const points: HoveredPoint[] = series.map((s, idx) => {
+      const pt = getInterpolatedPoint(s, targetDate);
+      const color = lineColors[idx % lineColors.length];
+      return {
+        municipalityId: s.municipality.id,
+        name: s.municipality.name,
+        province: s.municipality.province,
+        score: pt ? pt.recoveryScore : s.municipality.recoveryScore,
+        x: targetX,
+        y: pt ? pt.y : yScale(s.municipality.recoveryScore),
+        color,
+      };
+    });
+
+    let closestIdx = 0;
+    let minDist = Infinity;
+    points.forEach((p, idx) => {
+      const dist = Math.abs(p.y - svgY);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = idx;
+      }
+    });
+
+    setHoveredData({
+      date: targetDate,
+      svgX: targetX,
+      svgY,
+      closestIdx,
+      points,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredData(null);
+  };
+
   // Dynamic subtitle reflecting active display mode
   const subtitle = useMemo(() => {
     if (selectedId) {
@@ -647,7 +875,16 @@ export default function RecoveryChart({
         ) : (
           /* Chart */
           <div className="relative w-full overflow-x-auto scrollbar-thin">
-            <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: '600px' }}>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${W} ${H}`}
+              className="w-full select-none"
+              style={{ minWidth: '600px', cursor: 'crosshair' }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleMouseLeave}
+            >
               {/* Grid lines */}
               {[0, 25, 50, 75, 100].map((tick) => (
                 <g key={tick}>
@@ -785,7 +1022,168 @@ export default function RecoveryChart({
                   </g>
                 );
               })}
+
+              {/* Interactive Hover Selection Crosshair & Curve Intersecting Markers */}
+              {hoveredData && (
+                <g className="pointer-events-none transition-all duration-100">
+                  {/* Vertical tracking crosshair guideline */}
+                  <line
+                    x1={hoveredData.svgX}
+                    y1={margin.top}
+                    x2={hoveredData.svgX}
+                    y2={margin.top + innerH}
+                    stroke={isLight ? '#0284c7' : '#38bdf8'}
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                    opacity="0.8"
+                  />
+
+                  {/* Date pill indicator at top of vertical guideline */}
+                  <rect
+                    x={hoveredData.svgX - 32}
+                    y={margin.top - 18}
+                    width="64"
+                    height="16"
+                    rx="4"
+                    fill={isLight ? '#0f172a' : '#1e293b'}
+                    stroke={isLight ? '#94a3b8' : '#475569'}
+                    strokeWidth="1"
+                    opacity="0.95"
+                  />
+                  <text
+                    x={hoveredData.svgX}
+                    y={margin.top - 6}
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    style={{ fontSize: '9px', fontWeight: 600 }}
+                  >
+                    {formatDate(hoveredData.date)}
+                  </text>
+
+                  {/* Selection Marker Circles directly intersecting each recovery curve */}
+                  {hoveredData.points.map((pt, idx) => {
+                    const isClosest = idx === hoveredData.closestIdx;
+                    return (
+                      <g key={`marker-${pt.municipalityId}`}>
+                        {/* Outer ambient glow / halo */}
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={isClosest ? 9 : 6.5}
+                          fill={pt.color}
+                          opacity={isClosest ? 0.35 : 0.2}
+                          className="transition-all duration-150"
+                        />
+                        {/* Crisp highlighted selection point indicator */}
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={isClosest ? 5.5 : 4}
+                          fill={pt.color}
+                          stroke={isLight ? '#ffffff' : '#0f172a'}
+                          strokeWidth={isClosest ? 2.5 : 1.5}
+                          style={{
+                            filter: `drop-shadow(0 0 6px ${pt.color})`,
+                          }}
+                        />
+                        {/* Center bright core */}
+                        <circle
+                          cx={pt.x}
+                          cy={pt.y}
+                          r={isClosest ? 2 : 1.5}
+                          fill="#ffffff"
+                        />
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
+
+              {/* Transparent interactive hit overlay across chart plotting area */}
+              <rect
+                x={margin.left}
+                y={margin.top}
+                width={innerW}
+                height={innerH}
+                fill="transparent"
+                style={{ cursor: 'crosshair' }}
+              />
             </svg>
+
+            {/* Detailed Floating Tooltip Box */}
+            {hoveredData && (
+              <div
+                className="absolute pointer-events-none z-30 transition-all duration-75 ease-out"
+                style={{
+                  left: `${(hoveredData.svgX / W) * 100}%`,
+                  top: `${(Math.max(margin.top + 35, Math.min(H - margin.bottom - 45, hoveredData.points[hoveredData.closestIdx]?.y ?? (margin.top + innerH / 2))) / H) * 100}%`,
+                  transform: hoveredData.svgX > W * 0.58
+                    ? 'translate(calc(-100% - 16px), -50%)'
+                    : 'translate(16px, -50%)',
+                }}
+              >
+                <div className="min-w-[210px] max-w-[280px] rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md text-xs">
+                  {/* Tooltip Header: Date & Time Info */}
+                  <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-200 dark:border-white/10">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
+                      <CalendarDays className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
+                      <span>{formatDetailedDate(hoveredData.date)}</span>
+                    </div>
+                    {eventDate && (
+                      <span className="text-[10px] text-slate-500 dark:text-ink-400 font-medium">
+                        {hoveredData.date === eventDate
+                          ? 'Onset'
+                          : hoveredData.date < eventDate
+                          ? 'Pre-event'
+                          : `+${Math.round((new Date(hoveredData.date).getTime() - new Date(eventDate).getTime()) / (1000 * 60 * 60 * 24))}d`}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Intersecting Data Points */}
+                  <div className="flex flex-col gap-1.5">
+                    {hoveredData.points.map((pt, idx) => {
+                      const isClosest = idx === hoveredData.closestIdx;
+                      return (
+                        <div
+                          key={pt.municipalityId}
+                          className={`flex items-center justify-between gap-2 px-2 py-1 rounded-lg transition-colors ${
+                            isClosest
+                              ? 'bg-slate-100 dark:bg-white/10 font-semibold'
+                              : 'text-slate-600 dark:text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm"
+                              style={{ backgroundColor: pt.color }}
+                            />
+                            <div className="truncate">
+                              <span className="text-slate-900 dark:text-white">{pt.name}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-1">
+                                ({pt.province})
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span
+                              className="text-xs font-bold"
+                              style={{ color: pt.color }}
+                            >
+                              {pt.score}%
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                              score
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
