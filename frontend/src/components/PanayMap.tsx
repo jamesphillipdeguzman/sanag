@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert, DisasterEvent } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
-import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon } from 'lucide-react';
+import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -172,6 +172,7 @@ export default function PanayMap({
   const [internalRegionKey, setInternalRegionKey] = useState<string>('panay');
   const [extraMunicipalities, setExtraMunicipalities] = useState<Municipality[]>([]);
   const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
+  const [showScaleRuler, setShowScaleRuler] = useState<boolean>(false);
 
   const currentRegionKey = externalRegionKey ?? internalRegionKey;
   const handleRegionChange = (newKey: string) => {
@@ -400,6 +401,23 @@ export default function PanayMap({
                 </span>
               </button>
 
+              {/* VIIRS 500m Scale Ruler Toggle */}
+              <button
+                type="button"
+                id="viirs-scale-ruler-toggle"
+                onClick={() => setShowScaleRuler((v) => !v)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  showScaleRuler
+                    ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title={showScaleRuler ? 'Hide VIIRS 500m pixel scale ruler' : 'Pin VIIRS 500m pixel scale ruler (also appears on hover)'}
+                aria-pressed={showScaleRuler}
+              >
+                <Ruler className={`h-3.5 w-3.5 ${showScaleRuler ? 'text-sky-500 dark:text-sky-300' : 'text-slate-500 dark:text-ink-400'}`} />
+                <span className="hidden sm:inline">Scale Ruler</span>
+              </button>
+
               {alertsWithCoords.length > 0 && (
                 <button
                   type="button"
@@ -496,6 +514,13 @@ export default function PanayMap({
                   onNightGlowModeChange={handleNightGlowToggle}
                 />
 
+                {/* VIIRS 500m Pixel Scale Ruler Overlay — bottom-right, z below tooltip */}
+                <VIIRSScaleRuler
+                  pinned={showScaleRuler}
+                  nightGlow={nightGlowMode}
+                  mapHovered={!!hoveredId}
+                />
+
                 {isLoading && municipalities.length > 0 && (
                   <div className="absolute top-4 left-4 z-[1001] flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 dark:bg-ink-950/85 border border-ocean-300/80 dark:border-ocean-500/30 text-ocean-700 dark:text-ocean-300 text-xs backdrop-blur-md shadow-lg pointer-events-none animate-pulse">
                     <Loader2 className="w-3 h-3 animate-spin text-ocean-600 dark:text-ocean-300" />
@@ -503,9 +528,9 @@ export default function PanayMap({
                   </div>
                 )}
 
-                {/* Hover tooltip */}
+                {/* Hover tooltip — highest z so it always floats above the scale overlay */}
                 {hovered && !selected && (
-                  <div className="absolute pointer-events-none bottom-4 left-4 z-[1001] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/90 backdrop-blur-md">
+                  <div className="absolute pointer-events-none bottom-4 left-4 z-[1100] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/90 backdrop-blur-md">
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <div className="flex items-center gap-2">
                         <div
@@ -2336,6 +2361,213 @@ function MapLockOverlay({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── VIIRSScaleRuler ─────────────────────────────────────────────────────────
+// Compact dual-axis (L-shaped) VIIRS 500m pixel scale indicator.
+// Floats in the BOTTOM-RIGHT corner of the map canvas so it never overlaps
+// the municipality hover tooltip which is anchored at bottom-left.
+// Appears permanently when `pinned=true`; fades in on any polygon hover otherwise.
+interface VIIRSScaleRulerProps {
+  pinned: boolean;
+  nightGlow?: boolean;
+  /** Pass true when any municipality is being hovered to trigger hover-reveal */
+  mapHovered?: boolean;
+}
+function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false }: VIIRSScaleRulerProps) {
+  const visible = pinned || mapHovered;
+
+  // Theme-adaptive palette
+  const axisColor  = nightGlow ? 'rgba(251,191,36,0.70)' : 'rgba(51,65,85,0.50)';
+  const tickColor  = nightGlow ? 'rgba(251,191,36,0.55)' : 'rgba(51,65,85,0.40)';
+  const labelColor = nightGlow ? 'rgba(251,191,36,0.80)' : 'rgba(51,65,85,0.70)';
+  const noteColor  = nightGlow ? 'rgba(251,191,36,0.45)' : 'rgba(100,116,139,0.65)';
+  const bgColor    = nightGlow ? 'rgba(9,13,24,0.82)'    : 'rgba(255,255,255,0.90)';
+  const borderColor = nightGlow ? 'rgba(255,170,51,0.20)' : 'rgba(15,23,42,0.10)';
+  const shadowVal  = nightGlow
+    ? '0 2px 14px rgba(0,0,0,0.60), 0 0 10px rgba(255,170,51,0.05)'
+    : '0 2px 10px rgba(0,0,0,0.09)';
+
+  // Gradient segments for the horizontal scale bar (matches radiance palette in night mode)
+  const segments = nightGlow
+    ? ['#121722', '#4a2f0a', '#8c531b', '#e08b18', '#ffaa33']
+    : ['#94a3b8', '#64748b', '#475569', '#334155', '#1e293b'];
+
+  const RULER_W = 96;  // px — horizontal arm length
+  const RULER_H = 32;  // px — vertical arm height
+  const TICK_LABELS = ['0', '250', '500m'];
+
+  return (
+    <div
+      aria-label="VIIRS 500m pixel scale indicator"
+      style={{
+        position: 'absolute',
+        bottom: '14px',
+        right: '14px',
+        zIndex: 1001,
+        pointerEvents: 'none',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(5px) scale(0.97)',
+        transition: 'opacity 0.25s ease, transform 0.25s ease',
+      }}
+    >
+      <div
+        style={{
+          padding: '7px 9px 8px 8px',
+          borderRadius: '10px',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          background: bgColor,
+          border: `1px solid ${borderColor}`,
+          boxShadow: shadowVal,
+          display: 'inline-flex',
+          flexDirection: 'column',
+          gap: '5px',
+        }}
+      >
+        {/* ── Header label ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <Ruler style={{ width: 10, height: 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
+          <span style={{
+            fontSize: '9px',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: labelColor,
+            whiteSpace: 'nowrap',
+          }}>
+            500m VIIRS Pixel Scale
+          </span>
+          {pinned && (
+            <span style={{
+              fontSize: '7.5px', fontWeight: 700,
+              padding: '1px 4px', borderRadius: '3px',
+              background: nightGlow ? 'rgba(245,158,11,0.15)' : 'rgba(14,165,233,0.10)',
+              border: nightGlow ? '1px solid rgba(245,158,11,0.32)' : '1px solid rgba(14,165,233,0.28)',
+              color: nightGlow ? '#fcd34d' : '#0284c7',
+              letterSpacing: '0.06em',
+            }}>PINNED</span>
+          )}
+        </div>
+
+        {/* ── Dual-axis L-shaped corner indicator ── */}
+        <div style={{ position: 'relative', width: RULER_W + 8, height: RULER_H + 10 }}>
+
+          {/* Vertical arm (Y-axis) — left edge */}
+          <div style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: '2px',
+            height: RULER_H,
+            background: `linear-gradient(to bottom, ${axisColor}, transparent)`,
+            borderRadius: '2px',
+          }} />
+
+          {/* Horizontal arm (X-axis) — bottom of vertical */}
+          {/* Segmented scale bar */}
+          <div style={{
+            position: 'absolute',
+            left: 0,
+            top: RULER_H - 6,
+            width: RULER_W,
+            height: 6,
+            borderRadius: '0 3px 3px 0',
+            overflow: 'hidden',
+            display: 'flex',
+            border: `1px solid ${nightGlow ? 'rgba(251,191,36,0.18)' : 'rgba(51,65,85,0.13)'}`,
+          }}>
+            {segments.map((c, i) => (
+              <div key={i} style={{ flex: 1, background: c }} />
+            ))}
+          </div>
+
+          {/* Corner dot — origin */}
+          <div style={{
+            position: 'absolute',
+            left: '-2px',
+            top: RULER_H - 8,
+            width: '5px',
+            height: '5px',
+            borderRadius: '50%',
+            background: axisColor,
+          }} />
+
+          {/* X-axis end cap tick */}
+          <div style={{
+            position: 'absolute',
+            left: RULER_W - 1,
+            top: RULER_H - 9,
+            width: '2px',
+            height: '8px',
+            background: axisColor,
+            borderRadius: '1px',
+          }} />
+
+          {/* Mid-point tick (250m) */}
+          <div style={{
+            position: 'absolute',
+            left: Math.floor(RULER_W / 2) - 1,
+            top: RULER_H - 8,
+            width: '1px',
+            height: '5px',
+            background: tickColor,
+          }} />
+
+          {/* X-axis distance labels */}
+          {TICK_LABELS.map((label, i) => {
+            const positions = [0, Math.floor(RULER_W / 2), RULER_W];
+            const aligns: React.CSSProperties['textAlign'][] = ['left', 'center', 'right'];
+            return (
+              <span
+                key={label}
+                style={{
+                  position: 'absolute',
+                  left: i === 0 ? 0 : i === 2 ? undefined : positions[i],
+                  right: i === 2 ? 0 : undefined,
+                  top: RULER_H + 2,
+                  fontSize: '8px',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontWeight: i === 2 ? 700 : 500,
+                  color: labelColor,
+                  textAlign: aligns[i],
+                  lineHeight: 1,
+                  transform: i === 1 ? 'translateX(-50%)' : 'none',
+                }}
+              >
+                {label}
+              </span>
+            );
+          })}
+
+          {/* Y-axis top tick label */}
+          <span style={{
+            position: 'absolute',
+            left: '5px',
+            top: 0,
+            fontSize: '8px',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontWeight: 500,
+            color: tickColor,
+            lineHeight: 1,
+          }}>N↑</span>
+        </div>
+
+        {/* ── Footnote ── */}
+        <span style={{
+          fontSize: '8px',
+          color: noteColor,
+          fontStyle: 'italic',
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          letterSpacing: '0.01em',
+          whiteSpace: 'nowrap',
+        }}>
+          1 DNB pixel ≈ 500m · VIIRS DNB (VNP46A2)
+        </span>
+      </div>
     </div>
   );
 }
