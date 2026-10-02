@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Camera,
@@ -129,6 +130,7 @@ export default function MediaGalleryModal({
   }, [isOpen, selectedIndex, items.length, onClose]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const currentItem = selectedIndex !== null ? items[selectedIndex] : null;
 
@@ -139,24 +141,27 @@ export default function MediaGalleryModal({
     }
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="media-gallery-title"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm overflow-hidden h-[100dvh]"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
+      className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm overflow-hidden h-[100dvh]"
+    >
+      {/* Backdrop touch target */}
+      <div
+        className="fixed inset-0 -z-10 cursor-pointer"
+        onClick={() => {
           if (selectedIndex !== null) {
             setSelectedIndex(null);
           } else {
             onClose();
           }
-        }
-      }}
-    >
+        }}
+      />
+
       <div
-        className="relative w-full sm:max-w-4xl lg:max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-t-2xl sm:rounded-2xl flex flex-col h-[85dvh] max-h-[85dvh] sm:h-auto sm:max-h-[85vh] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
+        className="relative w-full sm:max-w-4xl lg:max-w-5xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-t-2xl sm:rounded-2xl flex flex-col h-[85dvh] max-h-[85dvh] sm:h-auto sm:max-h-[85vh] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
@@ -510,6 +515,9 @@ export default function MediaGalleryModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
+
+export { MediaGalleryModal };
