@@ -1118,15 +1118,16 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
     clean = q.strip()
     clean_q = clean.split('(')[0].strip().replace('"', '') or clean.replace('"', '')
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SanagDisasterMonitor/1.0 (contact@sanag.org)'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SanagDisasterMonitor/1.0 (contact@sanag.org)',
+        'Api-User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)'
     }
 
-    # 1. Attempt Wikimedia Commons search with disaster-anchored queries
+    # 1. Attempt Wikimedia Commons search with disaster-anchored queries & exact phrase matching
     try:
         queries = [
-            f"{clean_q} typhoon disaster damage",
-            f"{clean_q} damage flood",
-            f"{clean_q} aftermath Philippines",
+            f'"{clean_q}"',
+            f'"{clean_q}" damage',
+            f'"{clean_q}" flood aftermath',
             f"{clean_q} Philippines"
         ]
         with httpx.Client(timeout=6.0, headers=headers) as client:
@@ -1140,7 +1141,8 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
                     "prop": "imageinfo",
                     "iiprop": "url|mime",
                     "iiurlwidth": "600",
-                    "format": "json"
+                    "format": "json",
+                    "origin": "*"
                 }
                 r = client.get("https://commons.wikimedia.org/w/api.php", params=params)
                 if r.status_code == 200:

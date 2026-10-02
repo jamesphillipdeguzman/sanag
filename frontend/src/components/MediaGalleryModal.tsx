@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -41,43 +41,89 @@ export default function MediaGalleryModal({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeQuery, setActiveQuery] = useState<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Default query pattern for disaster damage/aftermath photojournalism
   const buildDefaultQuery = useCallback((name: string) => {
     return name.replace(/\(.*?\)/g, '').trim();
   }, []);
 
-  // Fetch real web images based on query
-  const performSearch = useCallback(async (queryToRun: string) => {
-    if (!queryToRun.trim()) return;
+  // Fetch real web images based on query with AbortController cancellation
+  const performSearch = useCallback(async (queryToRun: string, signal?: AbortSignal) => {
+    const cleanQuery = queryToRun.trim();
+    if (!cleanQuery || cleanQuery.length < 2) return;
+
+    // Abort any prior in-flight search request to prevent race conditions
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const combinedSignal = signal || controller.signal;
+
     setLoading(true);
     setError(null);
     setSelectedIndex(null);
-    setActiveQuery(queryToRun);
+    setActiveQuery(cleanQuery);
 
     try {
-      const results = await searchGroundImages(eventName, queryToRun);
-      setItems(results);
-    } catch (err) {
+      const results = await searchGroundImages(eventName, cleanQuery, combinedSignal);
+      if (!combinedSignal.aborted) {
+        setItems(results);
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError' || combinedSignal.aborted) {
+        // Silently ignore superseded or aborted requests
+        return;
+      }
       console.error('Image search failed:', err);
       setError('Unable to load ground imagery at this time. Please check your connection or try another search.');
     } finally {
-      setLoading(false);
+      if (!combinedSignal.aborted) {
+        setLoading(false);
+      }
     }
   }, [eventName]);
 
-  // Reset and search when modal opens or event changes
+  // Reset and search when modal opens or event settles
   useEffect(() => {
     if (isOpen && eventName) {
       const initialQuery = buildDefaultQuery(eventName);
       setSearchQuery(initialQuery);
       performSearch(initialQuery);
     } else {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
       setSelectedIndex(null);
       setItems([]);
       setError(null);
     }
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
   }, [isOpen, eventName, buildDefaultQuery, performSearch]);
+
+  // Debounce search when user types in the search query bar (400ms delay)
+  useEffect(() => {
+    if (!isOpen) return;
+    const query = searchQuery.trim();
+    if (!query || query.length < 3 || query === activeQuery) return;
+
+    const timer = setTimeout(() => {
+      performSearch(query);
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [searchQuery, isOpen, activeQuery, performSearch]);
 
   // Manage body overflow and touchAction styles cleanly when modal opens/closes
   useEffect(() => {
@@ -198,7 +244,7 @@ export default function MediaGalleryModal({
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => performSearch(searchQuery)}
+              onClick={() => performSearch(searchQuery.trim() || buildDefaultQuery(eventName))}
               disabled={loading}
               title="Refresh Image Search"
               className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 cursor-pointer"
@@ -386,7 +432,7 @@ export default function MediaGalleryModal({
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mt-1">{error}</p>
               <button
                 type="button"
-                onClick={() => performSearch(searchQuery)}
+                onClick={() => performSearch(searchQuery.trim() || buildDefaultQuery(eventName))}
                 className="mt-4 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 transition-colors shadow-sm cursor-pointer"
               >
                 Try Again
