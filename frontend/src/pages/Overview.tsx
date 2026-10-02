@@ -6,6 +6,7 @@ import GdacsAlertBanner from '@/components/GdacsAlertBanner';
 import WeatherForecast from '@/components/WeatherForecast';
 import AiBriefingCard from '@/components/AiBriefingCard';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import PanaySilhouetteBackground from '@/components/PanaySilhouetteBackground';
 
 interface OverviewProps {
   municipalities: Municipality[];
@@ -114,36 +115,42 @@ export default function Overview({
             </p>
           </div>
 
-          {/* Header right: Summary Metrics Cluster */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3 shrink-0">
-            <StatCard
-              icon={<Activity className="h-4 w-4" />}
-              label="Avg Recovery"
-              value={`${avgRecovery}%`}
-              accent="text-ocean-500 dark:text-ocean-300"
-              badge="Island-wide"
-            />
-            <StatCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Restored"
-              value={`${restoredCount}/${totalPanayLgus}`}
-              accent="text-emerald-500 dark:text-emerald-300"
-              badge="LGUs >= 90%"
-            />
-            <StatCard
-              icon={<AlertTriangle className="h-4 w-4" />}
-              label="Critical"
-              value={criticalCount.toString()}
-              accent="text-rose-500 dark:text-rose-300"
-              badge="Outages < 30%"
-            />
-            <StatCard
-              icon={<Users className="h-4 w-4" />}
-              label="Affected Pop"
-              value={formatAffectedPopulation(affectedPopulation)}
-              accent="text-amber-500 dark:text-amber-300"
-              badge="Impacted LGUs"
-            />
+          {/* Header right: Summary Metrics Cluster with Panay Island Nightlight Silhouette */}
+          <div className="relative group shrink-0">
+            {/* Very faint silhouette outline of Panay Island with soft golden city-light scatter */}
+            <PanaySilhouetteBackground />
+
+            {/* KPI Cards Grid */}
+            <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3">
+              <StatCard
+                icon={<Activity className="h-4 w-4" />}
+                label="Avg Recovery"
+                value={`${avgRecovery}%`}
+                accent="text-ocean-500 dark:text-ocean-300"
+                badge="Island-wide"
+              />
+              <StatCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="Restored"
+                value={`${restoredCount}/${totalPanayLgus}`}
+                accent="text-emerald-500 dark:text-emerald-300"
+                badge="LGUs >= 90%"
+              />
+              <StatCard
+                icon={<AlertTriangle className="h-4 w-4" />}
+                label="Critical"
+                value={criticalCount.toString()}
+                accent="text-rose-500 dark:text-rose-300"
+                badge="Outages < 30%"
+              />
+              <StatCard
+                icon={<Users className="h-4 w-4" />}
+                label="Affected Pop"
+                value={formatAffectedPopulation(affectedPopulation)}
+                accent="text-amber-500 dark:text-amber-300"
+                badge="Impacted LGUs"
+              />
+            </div>
           </div>
         </div>
 
