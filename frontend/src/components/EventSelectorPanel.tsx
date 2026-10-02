@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Radio,
   Satellite,
+  Search,
   Wind,
   X,
   Zap,
@@ -500,9 +501,37 @@ function HistoricalPanel({
     });
   }, [events]);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter events based on search query (name, type, date, description, severity, category)
+  const filteredEvents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sortedEvents;
+
+    return sortedEvents.filter((evt) => {
+      const name = (evt.name || '').toLowerCase();
+      const type = (evt.type || '').toLowerCase();
+      const desc = (evt.description || '').toLowerCase();
+      const severity = (evt.severity || '').toLowerCase();
+      const category = (evt.category || '').toLowerCase();
+      const rawDate = String(evt.startDate || evt.date || evt.endDate || '').toLowerCase();
+      const formattedDate = formatEventDate(evt.startDate || evt.date).toLowerCase();
+
+      return (
+        name.includes(q) ||
+        type.includes(q) ||
+        desc.includes(q) ||
+        severity.includes(q) ||
+        category.includes(q) ||
+        rawDate.includes(q) ||
+        formattedDate.includes(q)
+      );
+    });
+  }, [sortedEvents, searchQuery]);
+
   const isPanayOrNationwide = isPanayRegion(selectedRegionKey) || isNationwideRegion(selectedRegionKey);
   const regionName = getRegionDisplayName(selectedRegionKey);
-  const incompatibleEvents = sortedEvents.filter((e) => !isEventCompatibleWithRegion(e, selectedRegionKey));
+  const incompatibleEvents = filteredEvents.filter((e) => !isEventCompatibleWithRegion(e, selectedRegionKey));
   const hasIncompatible = !isPanayOrNationwide && incompatibleEvents.length > 0;
 
   return (
@@ -521,38 +550,70 @@ function HistoricalPanel({
       </div>
 
       {/* Event Selector Dropdown Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
-            Event Dropdown:
-          </label>
-          <div className="relative flex-1 max-w-md">
-            <select
-              id="historical-event-select"
-              value={activeEvent?.id || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (!val) return;
-                const chosen = sortedEvents.find((evt) => evt.id === val);
-                if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
-                onSelectEvent(val);
-              }}
-              className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer"
-            >
-              {sortedEvents.map((evt) => {
-                const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
-                return (
-                  <option
-                    key={evt.id}
-                    value={evt.id}
-                    disabled={!isCompatible}
-                    className={!isCompatible ? 'text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
-                  >
-                    {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 min-w-0">
+          {/* Event Dropdown */}
+          <div className="flex items-center gap-2 shrink-0">
+            <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
+              Event Dropdown:
+            </label>
+            <div className="relative min-w-[200px] sm:min-w-[230px]">
+              <select
+                id="historical-event-select"
+                value={filteredEvents.some((evt) => evt.id === activeEvent?.id) ? activeEvent?.id || '' : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const chosen = filteredEvents.find((evt) => evt.id === val) || sortedEvents.find((evt) => evt.id === val);
+                  if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
+                  onSelectEvent(val);
+                }}
+                className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer"
+              >
+                {!filteredEvents.some((evt) => evt.id === activeEvent?.id) && (
+                  <option value="" disabled>
+                    {filteredEvents.length === 0 ? 'No matching events' : 'Choose an event...'}
                   </option>
-                );
-              })}
-            </select>
+                )}
+                {filteredEvents.map((evt) => {
+                  const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
+                  return (
+                    <option
+                      key={evt.id}
+                      value={evt.id}
+                      disabled={!isCompatible}
+                      className={!isCompatible ? 'text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
+                    >
+                      {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {/* Filter Input Field positioned right next to the Event Dropdown */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              id="historical-event-search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search events by name, type, or date..."
+              className="w-full text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                title="Clear search filter"
+                aria-label="Clear search filter"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -566,10 +627,29 @@ function HistoricalPanel({
         )}
       </div>
 
-      {/* Responsive View Mode: Grid (multi-column on >= md, single-column on mobile) vs List (single-column compact rows) */}
-      {viewMode === 'grid' ? (
+      {/* Responsive View Mode: Empty State vs Grid vs List */}
+      {filteredEvents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 text-center">
+          <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
+            <Search className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            No events match &ldquo;{searchQuery}&rdquo;
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+            Try adjusting your search query, or search by disaster type (e.g., typhoon, earthquake) or date.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="mt-3.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer"
+          >
+            Clear Search Filter
+          </button>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {sortedEvents.map((event) => {
+          {filteredEvents.map((event) => {
             const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
             const severityColor = getSeverityColor(event.severity);
@@ -713,7 +793,7 @@ function HistoricalPanel({
       ) : (
         /* List View: single-column compact rows */
         <div className="flex flex-col gap-2.5">
-          {sortedEvents.map((event) => {
+          {filteredEvents.map((event) => {
             const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
             const severityColor = getSeverityColor(event.severity);
