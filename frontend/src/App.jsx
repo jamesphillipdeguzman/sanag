@@ -1014,7 +1014,12 @@ function App() {
         {/* Tab 2: Map (#map) - Maintained mounted in DOM to preserve Leaflet instance & tile cache */}
         <div
           id="map"
-          className={activeTab === 'map' ? 'h-full w-full' : 'hidden'}
+          className={
+            activeTab === 'map'
+              ? 'h-full w-full'
+              : 'fixed -left-[99999px] top-0 w-full pointer-events-none opacity-0 invisible -z-50 overflow-hidden'
+          }
+          aria-hidden={activeTab !== 'map'}
         >
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <ErrorBoundary name="Panay Spatial Map" resetKey={activeEventId}>

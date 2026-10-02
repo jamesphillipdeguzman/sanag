@@ -779,33 +779,56 @@ function LeafletMap({
   useEffect(() => {
     const handleInvalidate = () => {
       const map = mapRef.current;
-      if (map && (map as any)._loaded && (map as any)._panes) {
-        try {
-          map.invalidateSize({ pan: false, debounceMoveend: false });
-          // Ensure base tile layer is attached, placed behind vector polygons, and redrawn
-          if (tileLayerRef.current) {
-            if (!map.hasLayer(tileLayerRef.current)) {
-              tileLayerRef.current.addTo(map);
-            }
-            if (typeof (tileLayerRef.current as any).bringToBack === 'function') {
-              (tileLayerRef.current as any).bringToBack();
-            }
-            tileLayerRef.current.redraw();
-          } else {
-            const tileUrl = getBaseTileUrl(isLightRef.current);
-            const newTileLayer = L.tileLayer(tileUrl, {
-              subdomains: 'abcd',
-              maxZoom: 20,
-              attribution:
-                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            });
-            newTileLayer.addTo(map);
-            if (typeof (newTileLayer as any).bringToBack === 'function') {
-              (newTileLayer as any).bringToBack();
-            }
-            tileLayerRef.current = newTileLayer;
+      const el = mapElement.current;
+      // Guard against zero-dimension layout calls while hidden or during unmount
+      if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+      if (!map || !(map as any)._loaded || !(map as any)._panes) return;
+
+      try {
+        map.invalidateSize({ debounceMoveend: false });
+
+        const currentTileLayer = tileLayerRef.current;
+        const tileUrl = getBaseTileUrl(isLightRef.current);
+        const tilePane = (map as any)._panes?.tilePane;
+
+        const isAttached = Boolean(currentTileLayer && map.hasLayer(currentTileLayer));
+        const containerValid = Boolean(
+          currentTileLayer &&
+          (currentTileLayer as any)._container &&
+          tilePane &&
+          tilePane.contains((currentTileLayer as any)._container)
+        );
+
+        // Check if there are active tile records or tile image elements
+        const hasTileRecords = Boolean(
+          currentTileLayer &&
+          Object.keys((currentTileLayer as any)._tiles || {}).length > 0
+        );
+        const hasTileElements = Boolean(
+          containerValid &&
+          (currentTileLayer as any)._container.getElementsByTagName('img').length > 0
+        );
+
+        // If tile layer was detached, lost its container in tilePane, or has no active tiles, cleanly re-attach
+        if (!isAttached || !containerValid || (!hasTileRecords && !hasTileElements)) {
+          if (currentTileLayer && map.hasLayer(currentTileLayer)) {
+            try {
+              map.removeLayer(currentTileLayer);
+            } catch {}
           }
-        } catch {}
+          tileLayerRef.current = null;
+
+          const newTileLayer = L.tileLayer(tileUrl, {
+            subdomains: 'abcd',
+            maxZoom: 20,
+            attribution:
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+          });
+          newTileLayer.addTo(map);
+          tileLayerRef.current = newTileLayer;
+        }
+      } catch (err) {
+        console.warn('[PanayMap] Error during handleInvalidate:', err);
       }
     };
 
@@ -1625,7 +1648,7 @@ function LeafletMap({
       {/* Static initial class; applyMapLock() mutates classList directly without re-rendering LeafletMap */}
       <div
         ref={mapElement}
-        className={`leaflet-map is-locked ${isActiveTab ? 'is-maximized-height' : ''}`}
+        className="leaflet-map is-locked is-maximized-height"
         aria-label="Philippine municipality recovery map"
       />
 

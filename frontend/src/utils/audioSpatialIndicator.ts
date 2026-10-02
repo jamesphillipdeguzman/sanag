@@ -58,15 +58,60 @@ export class AudioSpatialIndicator {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private bandpassFilter: BiquadFilterNode | null = null;
-  private isEnabled: boolean = false;       // User explicit toggle ON/OFF
+  private isEnabled: boolean = true;       // Enabled by default; active when map hovered
   private isHovered: boolean = false;       // Active pointer hovering on map component
   private currentStatus: EmergencyAudioStatus = 'restored';
   private timerId: number | null = null;
   private subscribers: Set<(active: boolean, status: EmergencyAudioStatus, isHovered: boolean, isPlaying: boolean) => void> = new Set();
+  private unlockEventsBound: boolean = false;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      this.bindAutoplayUnlock();
+    }
+  }
+
+  /**
+   * Binds one-time user interaction listeners to seamlessly resume AudioContext
+   * in compliance with modern browser autoplay policies.
+   */
+  private bindAutoplayUnlock() {
+    if (this.unlockEventsBound || typeof window === 'undefined') return;
+    this.unlockEventsBound = true;
+
+    const unlockHandler = () => {
+      if (!this.ctx) {
+        this.initContext();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') {
+        this.ctx.resume().then(() => {
+          if (this.isEnabled && this.isHovered && this.timerId === null) {
+            this.scheduleNext();
+          }
+          this.notifySubscribers();
+        }).catch(() => {});
+      }
+      if (this.ctx && this.ctx.state === 'running') {
+        cleanup();
+      }
+    };
+
+    const cleanup = () => {
+      ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((eventName) => {
+        window.removeEventListener(eventName, unlockHandler, true);
+      });
+      this.unlockEventsBound = false;
+    };
+
+    ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((eventName) => {
+      window.addEventListener(eventName, unlockHandler, { capture: true, passive: true });
+    });
+  }
 
   private initContext(): boolean {
     if (this.ctx && this.ctx.state !== 'closed') {
       if (this.ctx.state === 'suspended') {
+        this.bindAutoplayUnlock();
         this.ctx.resume().catch(() => {});
       }
       return true;
@@ -80,6 +125,20 @@ export class AudioSpatialIndicator {
       }
 
       this.ctx = new AudioCtxClass();
+
+      this.ctx.onstatechange = () => {
+        if (this.ctx?.state === 'running') {
+          if (this.isEnabled && this.isHovered && this.timerId === null) {
+            this.scheduleNext();
+          }
+        }
+        this.notifySubscribers();
+      };
+
+      if (this.ctx.state === 'suspended') {
+        this.bindAutoplayUnlock();
+        this.ctx.resume().catch(() => {});
+      }
 
       // Bandpass filter centered around natural cricket stridulation frequency (~4.6 kHz)
       this.bandpassFilter = this.ctx.createBiquadFilter();
@@ -187,6 +246,7 @@ export class AudioSpatialIndicator {
     if (!this.initContext()) return;
 
     if (this.ctx && this.ctx.state === 'suspended') {
+      this.bindAutoplayUnlock();
       this.ctx.resume().catch(() => {});
     }
 
