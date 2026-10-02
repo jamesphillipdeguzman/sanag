@@ -912,7 +912,11 @@ function App() {
 
   return (
     <div id="top" className="min-h-screen flex flex-col bg-slate-50 dark:bg-ink-950 text-slate-900 dark:text-slate-100 transition-colors">
-      <Navbar activeTab={activeTab} onSelectTab={handleSelectTab} />
+      <Navbar
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
+        totalLgus={municipalities?.length || 93}
+      />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
       <ServerStatusBanner />

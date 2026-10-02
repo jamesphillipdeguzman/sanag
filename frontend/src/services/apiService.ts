@@ -551,7 +551,7 @@ export async function apiFetchJson<T = unknown>(
  * Performs a health check against GET /api/health (with fallbacks to /api/v1/health and /health).
  * Resets status to ready when online, or updates status to disconnected/waking on error.
  */
-export async function checkServerHealth(): Promise<boolean> {
+export async function checkServerHealth(options?: { silent?: boolean }): Promise<boolean> {
   const endpoints = ['/api/health', '/api/v1/health', '/health'];
 
   for (const endpoint of endpoints) {
@@ -565,26 +565,28 @@ export async function checkServerHealth(): Promise<boolean> {
       if (res.ok) {
         setHasActiveApiResponse(true);
         markBackendWoke();
-        dispatchServerStatus({
-          status: 'ready',
-          attempt: 0,
-          maxRetries: 3,
-          delayMs: 0,
-          statusCode: res.status,
-          message: 'Backend server is online!',
-        });
+        if (!options?.silent) {
+          dispatchServerStatus({
+            status: 'ready',
+            attempt: 0,
+            maxRetries: 3,
+            delayMs: 0,
+            statusCode: res.status,
+            message: 'Backend server is online!',
+          });
 
-        setTimeout(() => {
-          if (currentStatus === 'ready') {
-            dispatchServerStatus({
-              status: 'idle',
-              attempt: 0,
-              maxRetries: 3,
-              delayMs: 0,
-              message: '',
-            });
-          }
-        }, 2500);
+          setTimeout(() => {
+            if (currentStatus === 'ready') {
+              dispatchServerStatus({
+                status: 'idle',
+                attempt: 0,
+                maxRetries: 3,
+                delayMs: 0,
+                message: '',
+              });
+            }
+          }, 2500);
+        }
 
         return true;
       }
@@ -594,24 +596,58 @@ export async function checkServerHealth(): Promise<boolean> {
   }
 
   // All health endpoints failed
-  dispatchServerStatus({
-    status: 'disconnected',
-    attempt: 3,
-    maxRetries: 3,
-    delayMs: 0,
-    statusCode: 504,
-    message: 'Server is waking up (cold start)...',
-    error: 'Backend health check failed',
-  });
+  if (!options?.silent) {
+    dispatchServerStatus({
+      status: 'disconnected',
+      attempt: 3,
+      maxRetries: 3,
+      delayMs: 0,
+      statusCode: 504,
+      message: 'Server is waking up (cold start)...',
+      error: 'Backend health check failed',
+    });
+  }
 
   return false;
 }
 
+export interface PingBackendOptions {
+  silent?: boolean;
+  maxRetries?: number;
+  retryDelayMs?: number;
+}
+
 /**
  * Sends a lightweight, non-blocking ping to the backend health endpoint.
+ * Supports silent background checks as well as active retries with multiple attempts.
  */
-export async function pingBackend(): Promise<boolean> {
-  return checkServerHealth();
+export async function pingBackend(options?: PingBackendOptions): Promise<boolean> {
+  const silent = options?.silent ?? false;
+  const maxRetries = options?.maxRetries ?? 1;
+  const retryDelayMs = options?.retryDelayMs ?? 3000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (!silent && maxRetries > 1 && attempt > 1) {
+      dispatchServerStatus({
+        status: 'waking',
+        attempt,
+        maxRetries,
+        delayMs: retryDelayMs,
+        message: 'Reconnecting to backend server...',
+      });
+    }
+
+    const isHealthy = await checkServerHealth({ silent });
+    if (isHealthy) {
+      return true;
+    }
+
+    if (attempt < maxRetries) {
+      await sleep(retryDelayMs);
+    }
+  }
+
+  return false;
 }
 
 export default apiFetch;
