@@ -63,7 +63,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Allow production domain and local dev
 allowed_origins = os.getenv(
     "ALLOWED_ORIGINS", 
-    "https://sanag-project.netlify.app,http://localhost:5173"
+    "https://sanag.vercel.app,http://localhost:5173"
 ).split(",")
 
 app.add_middleware(

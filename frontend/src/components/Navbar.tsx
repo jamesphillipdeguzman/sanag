@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
-import { useLiveCounter } from '@/hooks/useLiveCounter';
+import { PANAY_GRID_TRANSMISSION_NODES, PANAY_TOTAL_LGUS } from '@/hooks/useLiveCounter';
 import packageInfo from '../../package.json';
 
 export const APP_VERSION = packageInfo?.version || '1.2.0';
@@ -27,12 +27,18 @@ export const navLinks: NavTabItem[] = [
 export interface NavbarProps {
   activeTab?: string;
   onSelectTab?: (tab: TabId) => void;
+  reportingStationsCount?: number;
+  totalLgus?: number;
 }
 
-export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarProps) {
+export default function Navbar({
+  activeTab = 'overview',
+  onSelectTab,
+  reportingStationsCount,
+  totalLgus,
+}: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const liveNodes = useLiveCounter(16, 12, 18);
   const { theme, toggleTheme } = useTheme();
   const {
     isOnline,
@@ -43,6 +49,38 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
     hasConnectionError,
     refetchAll,
   } = useServerHealth();
+
+  const stationsCount = reportingStationsCount ?? PANAY_GRID_TRANSMISSION_NODES;
+  const lgusCount = totalLgus ?? PANAY_TOTAL_LGUS;
+
+  // Determine grounded telemetry status based on genuine API status probe
+  const isServerWakingState = isWaking || (isReconnecting && !isOffline);
+  const isServerOfflineState = isOffline && !isWaking;
+
+  let badgeBorderBg = 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  let badgeLabel = `${stationsCount} Active Stations · ${lgusCount} LGUs`;
+  let badgeMobileLabel = `${stationsCount} Active Stations`;
+  let badgeTooltip = `Panay Grid Telemetry: ${stationsCount} Active Monitoring Stations · ${lgusCount} LGUs Monitored (API Status: Online)`;
+  let hasPingDot = true;
+  let dotPingClass = 'bg-emerald-400 opacity-75';
+  let dotSolidClass = 'bg-emerald-500';
+
+  if (isServerWakingState) {
+    badgeBorderBg = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
+    badgeLabel = `Waking Server · ${lgusCount} LGUs`;
+    badgeMobileLabel = 'Waking Server';
+    badgeTooltip = `Backend cold-start in progress. Monitoring ${lgusCount} LGUs via local cache.`;
+    hasPingDot = true;
+    dotPingClass = 'bg-amber-400 opacity-75';
+    dotSolidClass = 'bg-amber-500';
+  } else if (isServerOfflineState) {
+    badgeBorderBg = 'border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-300';
+    badgeLabel = `Local Cache · ${lgusCount} LGUs`;
+    badgeMobileLabel = 'Local Cache';
+    badgeTooltip = `Backend currently unreachable. Operating on cached local baseline data across ${lgusCount} LGUs.`;
+    hasPingDot = false;
+    dotSolidClass = 'bg-slate-400 dark:bg-slate-500';
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -147,15 +185,17 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
           <div className="hidden md:flex items-center gap-2.5">
             {/* Live Monitoring Activity Counter Pill */}
             <div
-              className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs font-semibold shadow-xs"
-              title="Real-time Panay Island telemetry & monitoring nodes"
+              className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition-colors ${badgeBorderBg}`}
+              title={badgeTooltip}
             >
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                {hasPingDot && (
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
+                )}
+                <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
               </span>
               <span className="whitespace-nowrap font-medium text-[11px] lg:text-xs">
-                {liveNodes} Active Nodes · 93 LGUs
+                {badgeLabel}
               </span>
             </div>
 
@@ -230,14 +270,18 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
           <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
             {/* Mobile Live Activity Pill */}
             <div
-              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold select-none"
-              title="Active monitoring telemetry nodes"
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold select-none transition-colors ${badgeBorderBg}`}
+              title={badgeTooltip}
             >
               <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                {hasPingDot && (
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
+                )}
+                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotSolidClass}`} />
               </span>
-              <span>{liveNodes} Nodes</span>
+              <span>
+                {isServerWakingState ? 'Waking' : isServerOfflineState ? 'Offline' : `${stationsCount} Stations`}
+              </span>
             </div>
 
             {/* Mobile Theme Toggle */}
@@ -293,11 +337,13 @@ export default function Navbar({ activeTab = 'overview', onSelectTab }: NavbarPr
                 <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-ink-300">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                      {hasPingDot && (
+                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
+                      )}
+                      <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
                     </span>
-                    <span className="font-semibold text-slate-900 dark:text-white">{liveNodes} Telemetry Nodes</span>
-                    <span className="text-slate-400 hidden xs:inline">· 93 LGUs</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{badgeMobileLabel}</span>
+                    <span className="text-slate-400 hidden xs:inline">· {lgusCount} LGUs</span>
                   </div>
                   <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 border border-slate-300/60 dark:border-slate-700/50">
                     v{APP_VERSION}
