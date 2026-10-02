@@ -77,6 +77,27 @@ The resulting ratio $R(t)$ is classified into three operational categories:
 7. Displays recovery trends over time.
 8. Allows municipality-to-municipality comparison.
 9. Provides an optional Gemini AI situational briefing.
+10. Explores aftermath photojournalism and ground incident media.
+11. Monitors 14 high-voltage transmission nodes across 93 LGUs with real-time API telemetry.
+
+---
+
+# 📸 Incident Ground Media & Telemetry Infrastructure
+
+### 1. Incident Ground Images & Multi-Source News Coverage
+To complement satellite radiance indices with ground-truth visual verification, SANAG integrates multi-source incident photojournalism:
+- **Ground Images & News Coverage Integration:** Real-time multi-source photojournalism and aftermath image retrieval for active incidents (typhoons, floods, earthquakes, and blackouts).
+- **DuckDuckGo Image Search Fallback:** Configured resilient fallback querying via DuckDuckGo news/image indexing when primary upstream search quotas or credentials are unavailable, with keyword weighting (`-art -painting -wallpaper`) tuned for incident reporting.
+- **Manual Query Refinement & Refresh:** Added manual query input and explicit force-refresh triggers with cache-busting to rotate through alternate ground coverage.
+- **Contextual Disclaimer:** Transparent analyst disclaimer advising manual refresh if automated indexing returns tangential results:
+  > *"Disaster aftermath imagery indexed from news and wire services. If images appear irrelevant or outdated, click the **Refresh** button to pull alternative coverage."*
+
+### 2. Telemetry & Situational Awareness Grid
+- **Panay Island Grid Telemetry:** Replaced synthetic client-side visitor counters with grounded operational metrics reflecting the **14 High-Voltage Transmission Substation nodes** operated across the 4 provinces (Iloilo, Capiz, Aklan, Antique) monitoring all **93 Local Government Units (LGUs)**.
+- **Adaptive Backend Connection Status:** Dynamic probe indicators reflecting Render API state:
+  - `Online` (Emerald pulse): Active real-time grid feeds and healthy API responses.
+  - `Waking Server` (Amber pulse): Visual notification during backend cold starts with countdown tickers.
+  - `Local Cache` (Slate dot): Offline operation utilizing local baseline municipal data across 93 LGUs when the server is unreachable.
 
 ---
 
@@ -251,7 +272,7 @@ This script starts the FastAPI backend on port **8000** and the Vite frontend de
 
 # 🔧 Environment Configuration
 
-Create a `.env` file in the **`backend/`** directory. This file must **never** be committed to Git (it is already listed in `.gitignore`).
+Create a `.env` file in the **`backend/`** directory (see `backend/.env.example`). This file must **never** be committed to Git (it is already listed in `.gitignore`).
 
 ```env
 # ─── backend/.env ─────────────────────────────────────────────────────────────
@@ -262,24 +283,22 @@ Create a `.env` file in the **`backend/`** directory. This file must **never** b
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-Create a `.env` file in the **`frontend/`** directory for frontend-only variables:
+Create a `.env` file in the **`frontend/`** directory for frontend-only variables (see `frontend/.env.example`):
 
 ```env
 # ─── frontend/.env ────────────────────────────────────────────────────────────
 
-# Optional — API key for CARTO raster basemap tiles.
-# Used by the Leaflet map in both light mode (Voyager) and dark mode (Dark Matter).
-# Leave blank to use CARTO's free anonymous tile access (rate-limited).
-# Obtain at: https://carto.com/developers
-VITE_MY_API_KEY=your_carto_api_key_here
+# Optional — Public search provider / CARTO basemap API key for incident media retrieval & map styling.
+# Used by Leaflet map tiles and external incident media retrieval.
+VITE_MY_API_KEY=your_search_provider_or_carto_api_key_here
 ```
 
 ### Variable Reference
 
-| Variable          | Location        | Required | Purpose                                                                                                                                                       |
-| ----------------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GEMINI_API_KEY`  | `backend/.env`  | **Yes**  | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error. |
-| `VITE_MY_API_KEY` | `frontend/.env` | No       | Appended as a query parameter to CARTO tile URLs. If omitted, tiles load from CARTO's anonymous CDN which may be rate-limited under heavy traffic.            |
+| Variable | Description | Type / Scope | Location | Required |
+| :--- | :--- | :--- | :--- | :--- |
+| `GEMINI_API_KEY` | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error. | Secret (Backend) | `backend/.env` | **Yes** |
+| `VITE_MY_API_KEY` | Public search provider API key for incident media retrieval & CARTO basemap tiles. If omitted, falls back to direct DuckDuckGo/Wikimedia indexing and CARTO anonymous CDN. | Config (Client) | `frontend/.env` | No |
 
 > **Security note:** Both `.env` files are in `.gitignore`. Never paste real API keys directly into source files or commit them to the repository.
 
@@ -344,6 +363,14 @@ The FastAPI backend runs at `http://localhost:8000`. All endpoints are also brow
 | ------ | --------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/api/v1/generate-briefing` | `{"event_context": "..."}` or `?event_context=...` | Generates an AI situational briefing using Gemini. Requires `GEMINI_API_KEY`. Also accessible at `/api/generate-briefing` (legacy alias). |
 | `POST` | `/api/v1/executive-summary` | `{"event_context": "..."}`                         | Alias for `/api/v1/generate-briefing`.                                                                                                    |
+
+## Image Search & Incident Media
+
+| Method | Endpoint | Key Query Params | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/search-event-images` | `q`, `count`, `refresh`, `event_type` | Multi-source photojournalism search with DuckDuckGo indexing and Wikimedia/Openverse fallback. |
+| `GET` | `/api/v1/search-event-images` | `q`, `count`, `refresh`, `event_type` | Versioned alias for incident photojournalism search. |
+| `GET` | `/api/media/search` | `q`, `count`, `refresh`, `event_type` | RESTful media search alias. |
 
 ---
 
