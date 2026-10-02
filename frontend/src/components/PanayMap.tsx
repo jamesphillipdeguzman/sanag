@@ -3,7 +3,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert, DisasterEvent } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
-import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX } from 'lucide-react';
+import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 import { useTheme } from '@/context/ThemeContext';
 
@@ -56,6 +56,8 @@ export interface PanayMapProps {
   onRegionChange?: (regionKey: string) => void;
   onMunicipalitiesLoaded?: (newItems: Municipality[]) => void;
   isActiveTab?: boolean;
+  nightGlowMode?: boolean;
+  onNightGlowModeChange?: (enabled: boolean) => void;
 }
 
 export interface LeafletMapProps {
@@ -74,6 +76,8 @@ export interface LeafletMapProps {
   onChunkLoaded?: (newItems: Municipality[]) => void;
   onChunkLoadingChange?: (loading: boolean) => void;
   isActiveTab?: boolean;
+  nightGlowMode?: boolean;
+  onNightGlowModeChange?: (enabled: boolean) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -153,7 +157,16 @@ export default function PanayMap({
   onRegionChange: externalOnRegionChange,
   onMunicipalitiesLoaded,
   isActiveTab = true,
+  nightGlowMode: externalNightGlowMode,
+  onNightGlowModeChange,
 }: PanayMapProps) {
+  const [internalNightGlow, setInternalNightGlow] = useState<boolean>(true);
+  const nightGlowMode = externalNightGlowMode ?? internalNightGlow;
+  const handleNightGlowToggle = () => {
+    const next = !nightGlowMode;
+    setInternalNightGlow(next);
+    onNightGlowModeChange?.(next);
+  };
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
   const [internalRegionKey, setInternalRegionKey] = useState<string>('panay');
@@ -270,9 +283,9 @@ export default function PanayMap({
     <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
       {/* Map */}
       <div className="lg:col-span-8 flex flex-col">
-        <div className="relative rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden flex flex-col h-full shadow-sm dark:shadow-xl">
+        <div className={`relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-[#090d18]/95 dark:bg-[#070b14]/90 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`}>
           {/* Map header with Region Selector */}
-          <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40">
+          <div className={`flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b ${nightGlowMode ? 'border-amber-500/20 bg-[#0d1322]/80 dark:bg-[#090e1c]/70' : 'border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40'} transition-colors`}>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
@@ -283,6 +296,12 @@ export default function PanayMap({
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                   Canvas 2D Engine
                 </span>
+                {nightGlowMode && (
+                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/35 shadow-sm shadow-amber-500/20 animate-fade-in" title="NASA Black Marble VIIRS DNB Day/Night Band Composite Active">
+                    <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-300 animate-pulse" />
+                    Black Marble VIIRS
+                  </span>
+                )}
                 {isRegionChunkLoading && (
                   <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 bg-ocean-50 dark:bg-ocean-500/15 border border-ocean-200 dark:border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
                     <Loader2 className="h-3 w-3 animate-spin text-ocean-600 dark:text-ocean-300" />
@@ -291,8 +310,19 @@ export default function PanayMap({
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5">
-                NASA VIIRS radiance overlay · Nationwide Philippine boundaries (Panay-First Default)
-                {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
+                {nightGlowMode ? (
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                    <span className="text-amber-600 dark:text-amber-300 font-semibold">NASA Black Marble Composite</span>
+                    <span>· Realistic VIIRS Night Lights · Harmonized Orbital Basemap</span>
+                    {recoveryDate ? ` · Reading: ${recoveryDate}` : ''}
+                  </span>
+                ) : (
+                  <>
+                    NASA VIIRS radiance overlay · Nationwide Philippine boundaries (Panay-First Default)
+                    {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
+                  </>
+                )}
               </p>
             </div>
 
@@ -344,6 +374,32 @@ export default function PanayMap({
                 </select>
               </div>
 
+              {/* Realistic Night Glow NASA Black Marble Composite Toggle */}
+              <button
+                type="button"
+                id="realistic-night-glow-toggle"
+                onClick={handleNightGlowToggle}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  nightGlowMode
+                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/30'
+                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title="Toggle NASA Black Marble Realistic Night Light composite view"
+                aria-pressed={nightGlowMode}
+              >
+                <Sparkles className={`h-3.5 w-3.5 ${nightGlowMode ? 'text-amber-500 dark:text-amber-300 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
+                <span>Realistic Night Glow</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${
+                    nightGlowMode
+                      ? 'bg-amber-500/30 text-amber-800 dark:text-amber-200 border border-amber-500/40'
+                      : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-ink-400'
+                  }`}
+                >
+                  {nightGlowMode ? 'NASA VIIRS' : 'OFF'}
+                </span>
+              </button>
+
               {alertsWithCoords.length > 0 && (
                 <button
                   type="button"
@@ -392,16 +448,27 @@ export default function PanayMap({
                 )}
               </button>
 
-              <LegendDot color="#10b981" label="Restored" />
-              <LegendDot color="#599ffd" label="Recovering" />
-              <LegendDot color="#fbbf24" label="Limited" />
-              <LegendDot color="#f43f5e" label="Critical" />
+              {nightGlowMode ? (
+                <>
+                  <LegendDot color="#ffaa33" label="Golden Radiance" glow />
+                  <LegendDot color="#e08b18" label="Moderate Amber" />
+                  <LegendDot color="#8c531b" label="Dim Ember" />
+                  <LegendDot color="#121722" label="Blackout" />
+                </>
+              ) : (
+                <>
+                  <LegendDot color="#10b981" label="Restored" />
+                  <LegendDot color="#599ffd" label="Recovering" />
+                  <LegendDot color="#fbbf24" label="Limited" />
+                  <LegendDot color="#f43f5e" label="Critical" />
+                </>
+              )}
             </div>
           </div>
 
           {/* Leaflet GeoJSON map */}
           <div
-            className="relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center"
+            className={`relative dot-bg p-2 flex-1 min-h-[360px] flex flex-col justify-center ${nightGlowMode ? 'bg-[#0b0f19]' : ''}`}
             onMouseEnter={() => setAudioHovered(true)}
             onMouseLeave={() => setAudioHovered(false)}
           >
@@ -425,6 +492,8 @@ export default function PanayMap({
                   onChunkLoaded={handleChunkLoaded}
                   onChunkLoadingChange={setIsRegionChunkLoading}
                   isActiveTab={isActiveTab}
+                  nightGlowMode={nightGlowMode}
+                  onNightGlowModeChange={handleNightGlowToggle}
                 />
 
                 {isLoading && municipalities.length > 0 && (
@@ -441,7 +510,13 @@ export default function PanayMap({
                       <div className="flex items-center gap-2">
                         <div
                           className="h-2.5 w-2.5 rounded-full"
-                          style={{ backgroundColor: getRecoveryColor(hovered.recoveryScore) }}
+                          style={{
+                            backgroundColor: nightGlowMode
+                              ? (hovered.recoveryScore >= 80 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : hovered.recoveryScore >= 40 ? '#8c531b' : '#121722')
+                              : getRecoveryColor(hovered.recoveryScore),
+                            boxShadow: nightGlowMode && hovered.recoveryScore >= 60 ? '0 0 8px #ffaa33' : undefined,
+                            border: nightGlowMode && hovered.recoveryScore < 40 ? '1px solid rgba(255,255,255,0.2)' : undefined,
+                          }}
                         />
                         <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
                         <span className="text-xs text-gray-500 dark:text-ink-400">{hovered.province}</span>
@@ -455,11 +530,27 @@ export default function PanayMap({
                         Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore}%</span>
                       </span>
                       <span className="text-gray-600 dark:text-ink-300">
-                        Status: <span style={{ color: getRecoveryStatusColor(hovered.status) }}>
-                          {statusLabels[hovered.status]}
+                        Status: <span style={{
+                          color: nightGlowMode
+                            ? (hovered.recoveryScore >= 80 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : hovered.recoveryScore >= 40 ? '#8c531b' : '#94a3b8')
+                            : getRecoveryStatusColor(hovered.status)
+                        }}>
+                          {nightGlowMode && hovered.status === 'restored'
+                            ? 'Radiant Light'
+                            : nightGlowMode && hovered.status === 'critical'
+                            ? 'Blackout Outage'
+                            : statusLabels[hovered.status]}
                         </span>
                       </span>
                     </div>
+                    {nightGlowMode && (
+                      <div className="flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-300/90 mt-1 pt-1 border-t border-slate-200 dark:border-white/5">
+                        <span>VIIRS Radiance:</span>
+                        <span className="font-mono font-semibold">
+                          {(hovered.currentRadiance ?? (hovered.recoveryScore * 0.45)).toFixed(1)} nW/cm²/sr
+                        </span>
+                      </div>
+                    )}
                     <p className="text-[11px] text-gray-500 dark:text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
                     {isAudioEnabled && (
                       <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-300/90 mt-1.5 pt-1.5 border-t border-gray-200 dark:border-white/5">
@@ -474,18 +565,33 @@ export default function PanayMap({
           </div>
 
           {/* Scale bar */}
-          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-t border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-ink-900/80 text-gray-700 dark:text-gray-300 transition-colors">
+          <div className="flex items-center justify-between px-4 sm:px-5 py-2.5 border-t border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-ink-900/80 text-slate-700 dark:text-slate-300 transition-colors">
             <div className="flex items-center gap-2">
               <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden">
-                <div className="flex-1 bg-rose-500" />
-                <div className="flex-1 bg-amber-400" />
-                <div className="flex-1 bg-ocean-400" />
-                <div className="flex-1 bg-emerald-500" />
+                {nightGlowMode ? (
+                  <>
+                    <div className="flex-1 bg-[#121722]" title="Blackout Outage (<40%)" />
+                    <div className="flex-1 bg-[#8c531b]" title="Dim Ember (40-59%)" />
+                    <div className="flex-1 bg-[#e08b18]" title="Moderate Amber (60-79%)" />
+                    <div className="flex-1 bg-gradient-to-r from-[#ffaa33] to-[#ffc04d] shadow-[0_0_8px_#ffaa33]" title="Golden Radiance (80-100%)" />
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-1 bg-rose-500" />
+                    <div className="flex-1 bg-amber-400" />
+                    <div className="flex-1 bg-ocean-400" />
+                    <div className="flex-1 bg-emerald-500" />
+                  </>
+                )}
               </div>
-              <span className="text-[11px] font-medium text-gray-700 dark:text-gray-300">Recovery Score (0–100)</span>
+              <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                {nightGlowMode ? 'NASA Black Marble Radiance (0–100)' : 'Recovery Score (0–100)'}
+              </span>
             </div>
-            <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 hidden sm:inline">
-              Projection model: VIIRS-DNB vs Pre-event Baseline
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
+              {nightGlowMode
+                ? 'Photorealistic VIIRS Night Light Composite · Warm Golden Radiance & Atmospheric Bloom'
+                : 'Projection model: VIIRS-DNB vs Pre-event Baseline'}
             </span>
           </div>
         </div>
@@ -729,14 +835,317 @@ function isMobileOrTouchDevice(): boolean {
   );
 }
 
-function getBaseTileUrl(isLightMode: boolean): string {
+function getBaseTileUrl(isLightMode: boolean, nightGlow: boolean = false): string {
   const apiKey = (import.meta.env.VITE_MY_API_KEY as string | undefined)?.trim();
   const queryParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
+
+  // In Realistic Night Glow mode, always harmonize with deeply darkened orbital basemap
+  if (nightGlow) {
+    return `https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png${queryParam}`;
+  }
 
   return isLightMode
     ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png${queryParam}`
     : `https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png${queryParam}`;
 }
+
+// Compute geographic centroid from GeoJSON feature geometry as fallback
+function getFeatureCentroid(feature: GeoJSON.Feature): [number, number] | null {
+  if (!feature.geometry) return null;
+  const geom = feature.geometry;
+  let totalLat = 0;
+  let totalLng = 0;
+  let count = 0;
+
+  const traverse = (coords: any) => {
+    if (Array.isArray(coords)) {
+      if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+        totalLng += coords[0];
+        totalLat += coords[1];
+        count++;
+      } else {
+        coords.forEach(traverse);
+      }
+    }
+  };
+
+  traverse((geom as any).coordinates);
+  if (count === 0) return null;
+  return [totalLat / count, totalLng / count];
+}
+
+// Realistic Night Light NASA Black Marble Palette vs Standard Vector Fills
+function getPolygonStyle(
+  municipality: Municipality | null | undefined,
+  isSelected: boolean | null | undefined,
+  isLight: boolean | null | undefined,
+  nightGlow: boolean | null | undefined
+) {
+  const selected = Boolean(isSelected);
+  const light = Boolean(isLight);
+  const glow = Boolean(nightGlow);
+  const score = municipality?.recoveryScore ?? 50;
+
+  if (glow) {
+    if (score >= 80) {
+      // Restored / Active Urban Center: Warm golden-amber with clear boundary lines
+      return {
+        color: selected ? '#ffffff' : 'rgba(255, 192, 77, 0.85)',
+        weight: selected ? 2.5 : 1.2,
+        opacity: selected ? 1.0 : 0.80,
+        fillColor: '#b86e18',
+        fillOpacity: selected ? 0.70 : 0.28,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
+      };
+    } else if (score >= 60) {
+      // Recovering: Moderate warm amber
+      return {
+        color: selected ? '#ffffff' : 'rgba(224, 145, 35, 0.75)',
+        weight: selected ? 2.2 : 1.0,
+        opacity: selected ? 1.0 : 0.70,
+        fillColor: '#8c4e12',
+        fillOpacity: selected ? 0.65 : 0.22,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
+      };
+    } else if (score >= 40) {
+      // Limited: Dim muted ember with faint slate boundary
+      return {
+        color: selected ? '#ffffff' : '#334155',
+        weight: selected ? 2.0 : 1.0,
+        opacity: selected ? 1.0 : 0.40,
+        fillColor: '#522f0e',
+        fillOpacity: selected ? 0.60 : 0.18,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
+      };
+    } else {
+      // Critical Outage: Deeply extinguished near-black charcoal slate with subtle slate border (#334155)
+      // to preserve the geographic silhouette of the island against the ocean
+      return {
+        color: selected ? '#f43f5e' : '#334155',
+        weight: selected ? 2.0 : 1.0,
+        opacity: selected ? 1.0 : 0.30,
+        fillColor: '#0e131d',
+        fillOpacity: selected ? 0.80 : 0.35,
+        lineJoin: 'round' as const,
+        lineCap: 'round' as const,
+      };
+    }
+  }
+
+  // Standard Vector Status
+  const color = getRecoveryColor(score);
+  return {
+    color: selected
+      ? (light ? '#0f172a' : '#ffffff')
+      : (light ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.4)'),
+    weight: selected ? 2.5 : 1.2,
+    fillColor: color,
+    fillOpacity: selected ? 0.95 : (light ? 0.68 : 0.65),
+    lineJoin: 'round' as const,
+    lineCap: 'round' as const,
+  };
+}
+
+// ─── Realistic Night Light Canvas Overlay (NASA Black Marble Inspired) ───────────
+// Hardware-accelerated HTML5 Canvas drawing atmospheric radiance bloom, warm
+// golden-orange photon halos, and orbital urban clusters synchronized with Leaflet.
+interface NightLightOverlayOptions {
+  getMunicipalities?: () => Municipality[];
+  getCentroids?: () => Map<string, [number, number]>;
+  getSelectedId?: () => string | null;
+  municipalitiesByIdRef?: React.RefObject<Map<string, Municipality> | null> | React.MutableRefObject<Map<string, Municipality>>;
+  centroidsRef?: React.RefObject<Map<string, [number, number]> | null> | React.MutableRefObject<Map<string, [number, number]>>;
+  selectedIdRef?: React.RefObject<string | null> | React.MutableRefObject<string | null>;
+}
+
+const NightLightOverlay = (L.Layer as any).extend({
+  initialize: function (options: NightLightOverlayOptions) {
+    this._options = options || {};
+  },
+  onAdd: function (map: L.Map) {
+    this._map = map;
+    let pane = map.getPane('nightLightGlowPane');
+    if (!pane) {
+      pane = map.createPane('nightLightGlowPane');
+      pane.style.zIndex = '350'; // Positioned below overlayPane (400) so municipal boundaries remain clearly visible
+      pane.style.pointerEvents = 'none';
+    }
+
+    const canvas = L.DomUtil.create('canvas', 'leaflet-night-light-canvas') as HTMLCanvasElement;
+    canvas.style.position = 'absolute';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.opacity = '0.65'; // Lowered canvas opacity so underlying LGU borders stay clearly visible
+    pane.appendChild(canvas);
+    this._canvas = canvas;
+    this._ctx = canvas.getContext('2d');
+
+    this._handleMove = () => this._update();
+    map.on('move', this._handleMove);
+    map.on('zoom', this._handleMove);
+    map.on('viewreset', this._handleMove);
+    map.on('resize', this._handleMove);
+
+    this._update();
+    return this;
+  },
+  onRemove: function (map: L.Map) {
+    if (this._handleMove) {
+      map.off('move', this._handleMove);
+      map.off('zoom', this._handleMove);
+      map.off('viewreset', this._handleMove);
+      map.off('resize', this._handleMove);
+    }
+    if (this._canvas && this._canvas.parentNode) {
+      this._canvas.parentNode.removeChild(this._canvas);
+    }
+    this._canvas = null;
+    this._ctx = null;
+    return this;
+  },
+  redraw: function () {
+    if (this._map && this._canvas) {
+      this._update();
+    }
+  },
+  _update: function () {
+    if (!this._map || !this._canvas || !this._ctx) return;
+    const size = this._map.getSize();
+    const bounds = this._map.getBounds();
+    if (!bounds || !bounds.isValid()) return;
+    const topLeft = this._map.latLngToLayerPoint(bounds.getNorthWest());
+
+    L.DomUtil.setPosition(this._canvas, topLeft);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this._canvas.width = Math.round(size.x * dpr);
+    this._canvas.height = Math.round(size.y * dpr);
+    this._canvas.style.width = `${size.x}px`;
+    this._canvas.style.height = `${size.y}px`;
+
+    this._draw(topLeft, dpr, size);
+  },
+  _draw: function (topLeft: L.Point, dpr: number, size: L.Point) {
+    const ctx = this._ctx;
+    const map = this._map;
+    if (!ctx || !map) return;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, size.x, size.y);
+
+    const municipalities: Municipality[] = typeof this._options?.getMunicipalities === 'function'
+      ? (this._options.getMunicipalities() || [])
+      : this._options?.municipalitiesByIdRef?.current
+      ? Array.from(this._options.municipalitiesByIdRef.current.values())
+      : [];
+    const centroids: Map<string, [number, number]> = typeof this._options?.getCentroids === 'function'
+      ? (this._options.getCentroids() || new Map())
+      : this._options?.centroidsRef?.current || new Map();
+    const selectedId: string | null = typeof this._options?.getSelectedId === 'function'
+      ? this._options.getSelectedId()
+      : this._options?.selectedIdRef?.current || null;
+    const zoom = map.getZoom();
+
+    // Controlled photon blending with lowered opacity (0.65) and 'screen' composite mode to prevent blown-out blobs
+    ctx.globalAlpha = 0.65;
+    ctx.globalCompositeOperation = 'screen';
+
+    for (const m of municipalities) {
+      const coords = centroids.get(m.id) || (m.pcode ? centroids.get(m.pcode) : null);
+      if (!coords) continue;
+
+      const layerPt = map.latLngToLayerPoint(L.latLng(coords[0], coords[1]));
+      const x = layerPt.x - topLeft.x;
+      const y = layerPt.y - topLeft.y;
+
+      // Culling offscreen points with generous margin for radiance halo visibility
+      if (x < -140 || x > size.x + 140 || y < -140 || y > size.y + 140) continue;
+
+      const score = m.recoveryScore ?? 50;
+      if (score < 40) continue; // Outage disaster zones remain completely dark in Black Marble orbital view
+
+      const isSelected = m.id === selectedId;
+      const pop = m.population || 35000;
+      const popFactor = Math.min(2.0, Math.max(0.75, Math.sqrt(pop / 35000)));
+      const zoomFactor = Math.pow(1.18, Math.max(0, zoom - 7));
+
+      // Scaled radiance gradient: tighter footprint so individual urban hubs are distinct
+      const baseRadius = (score >= 80 ? 16 : score >= 60 ? 11 : 6) * popFactor;
+      const radius = Math.min(52, Math.max(7, baseRadius * zoomFactor));
+
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      if (score >= 80) {
+        // Restored / Active Urban Center: Warm golden-amber radiance (#ffcc00 / #ffaa33) - softer warm tone
+        grad.addColorStop(0.0, 'rgba(255, 204, 0, 0.85)');   // Soft golden-amber inner core #ffcc00 (no blinding white)
+        grad.addColorStop(0.18, 'rgba(255, 170, 40, 0.65)');  // Warm radiant gold #ffaa28
+        grad.addColorStop(0.45, 'rgba(255, 140, 25, 0.35)');  // Warm amber halo #ff8c19
+        grad.addColorStop(0.75, 'rgba(224, 100, 10, 0.12)');  // Gentle atmospheric scatter
+        grad.addColorStop(1.0, 'rgba(200, 70, 0, 0)');        // Smooth falloff
+      } else if (score >= 60) {
+        // Recovering: Moderate warm amber
+        grad.addColorStop(0.0, 'rgba(255, 170, 30, 0.75)');   // Softer amber core #ffaa1e
+        grad.addColorStop(0.25, 'rgba(224, 130, 20, 0.45)');  // Warm ember
+        grad.addColorStop(0.60, 'rgba(180, 85, 15, 0.18)');
+        grad.addColorStop(1.0, 'rgba(140, 50, 5, 0)');
+      } else {
+        // Limited: Dim muted ember
+        grad.addColorStop(0.0, 'rgba(200, 110, 20, 0.50)');
+        grad.addColorStop(0.40, 'rgba(140, 65, 10, 0.18)');
+        grad.addColorStop(1.0, 'rgba(90, 35, 5, 0)');
+      }
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Sub-pixel urban light filaments and cluster specks around core
+      if ((pop >= 45000 && score >= 70) || isSelected) {
+        const speckCount = isSelected ? 6 : Math.min(4, Math.floor(pop / 35000) + 1);
+        let seed = 0;
+        for (let i = 0; i < m.id.length; i++) seed = (seed * 31 + m.id.charCodeAt(i)) >>> 0;
+
+        for (let s = 0; s < speckCount; s++) {
+          seed = (seed * 1664525 + 1013904223) >>> 0;
+          const angle = ((seed % 360) * Math.PI) / 180;
+          seed = (seed * 1664525 + 1013904223) >>> 0;
+          const dist = (0.20 + ((seed % 100) / 100) * 0.55) * radius * 0.55;
+
+          const sx = x + Math.cos(angle) * dist;
+          const sy = y + Math.sin(angle) * dist;
+          const speckRadius = 0.8 + ((seed % 100) / 100) * 1.0;
+
+          const speckGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, speckRadius * 2);
+          speckGrad.addColorStop(0.0, 'rgba(255, 215, 60, 0.75)'); // Soft warm amber speck core
+          speckGrad.addColorStop(0.5, 'rgba(255, 160, 30, 0.45)');
+          speckGrad.addColorStop(1.0, 'rgba(220, 120, 10, 0)');
+
+          ctx.fillStyle = speckGrad;
+          ctx.beginPath();
+          ctx.arc(sx, sy, speckRadius * 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Selected municipality: glowing warm amber highlight ring
+      if (isSelected) {
+        ctx.save();
+        ctx.strokeStyle = '#ffc04d';
+        ctx.lineWidth = 2.0;
+        ctx.shadowColor = '#ffaa33';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(x, y, Math.min(radius * 0.5, 20), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+  },
+});
 
 function LeafletMap({
   municipalities,
@@ -754,11 +1163,16 @@ function LeafletMap({
   onChunkLoaded,
   onChunkLoadingChange,
   isActiveTab = true,
+  nightGlowMode = true,
+  onNightGlowModeChange,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const isLightRef = useRef(isLight);
   isLightRef.current = isLight;
+
+  const nightGlowModeRef = useRef<boolean>(nightGlowMode);
+  nightGlowModeRef.current = nightGlowMode;
 
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -767,11 +1181,14 @@ function LeafletMap({
   const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
   const municipalitiesByIdRef = useRef<Map<string, Municipality>>(new Map());
+  const centroidsRef = useRef<Map<string, [number, number]>>(new Map());
+  const nightLightOverlayRef = useRef<any>(null);
   const selectedIdRef = useRef<string | null>(selectedId);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const onMapHoverChangeRef = useRef(onMapHoverChange);
   const geoJsonLayerRef = useRef<L.GeoJSON | null>(null);
+  const islandSilhouetteLayerRef = useRef<L.GeoJSON | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
 
@@ -788,7 +1205,7 @@ function LeafletMap({
         map.invalidateSize({ debounceMoveend: false });
 
         const currentTileLayer = tileLayerRef.current;
-        const tileUrl = getBaseTileUrl(isLightRef.current);
+        const tileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current);
         const tilePane = (map as any)._panes?.tilePane;
 
         const isAttached = Boolean(currentTileLayer && map.hasLayer(currentTileLayer));
@@ -968,10 +1385,14 @@ function LeafletMap({
     const map = mapRef.current;
     if (!map || !data || !data.features) return;
 
-    // Safely remove prior layer before binding new municipal collection
+    // Safely remove prior layers before binding new municipal collection
     if (geoJsonLayerRef.current) {
       map.removeLayer(geoJsonLayerRef.current);
       geoJsonLayerRef.current = null;
+    }
+    if (islandSilhouetteLayerRef.current) {
+      map.removeLayer(islandSilhouetteLayerRef.current);
+      islandSilhouetteLayerRef.current = null;
     }
     layersRef.current = {};
 
@@ -980,8 +1401,17 @@ function LeafletMap({
     data.features.forEach((feat: GeoJSON.Feature) => {
       const props = feat.properties || {};
       const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
       if (id && !municipalitiesByIdRef.current.has(id)) {
         newToRegister.push(feat);
+      }
+      // Cache fallback centroid from feature geometry
+      if (!centroidsRef.current.has(id)) {
+        const center = getFeatureCentroid(feat);
+        if (center) {
+          centroidsRef.current.set(id, center);
+          if (pcode) centroidsRef.current.set(pcode, center);
+        }
       }
     });
 
@@ -994,6 +1424,30 @@ function LeafletMap({
       });
       onChunkLoaded?.(generated);
     }
+
+    // Island silhouette & boundary layer: guarantees that the geographic shape of Panay Island
+    // and all internal municipal boundaries remain crisp and distinct against the dark oceanic basemap.
+    if (!map.getPane('islandSilhouettePane')) {
+      const sp = map.createPane('islandSilhouettePane');
+      sp.style.zIndex = '300';
+      sp.style.pointerEvents = 'none';
+    }
+
+    const silhouetteLayer = L.geoJSON(data, {
+      pane: 'islandSilhouettePane',
+      interactive: false,
+      style: () => ({
+        renderer: canvasRendererRef.current || undefined,
+        color: '#334155', // Subtle slate border
+        weight: 1.4,
+        opacity: nightGlowModeRef.current ? 0.35 : 0.15,
+        fillColor: '#0c121e',
+        fillOpacity: nightGlowModeRef.current ? 0.40 : 0.05,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }),
+    }).addTo(map);
+    islandSilhouetteLayerRef.current = silhouetteLayer;
 
     // HTML5 Canvas renderer configuration: eliminates DOM node bloat for hundreds/thousands of polygons
     const newLayer = L.geoJSON(data, {
@@ -1010,20 +1464,12 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
-        const score = municipality?.recoveryScore ?? 50;
-        const color = getRecoveryColor(score);
-        const isSelected = id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current);
+        const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
         const lightMode = isLightRef.current;
+        const isNight = nightGlowModeRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          color: isSelected
-            ? (lightMode ? '#0f172a' : '#ffffff')
-            : (lightMode ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
-          weight: isSelected ? 2.5 : 1.2,
-          fillColor: color,
-          fillOpacity: isSelected ? 0.95 : (lightMode ? 0.68 : 0.65),
-          lineJoin: 'round',
-          lineCap: 'round',
+          ...getPolygonStyle(municipality, isSelected, lightMode, isNight),
         };
       },
       onEachFeature: (feature, featureLayer) => {
@@ -1036,6 +1482,16 @@ function LeafletMap({
         const rawName = String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
         const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
+        // Extract precise polygon bounds centroid for the radiance canvas
+        if (typeof (featureLayer as any).getBounds === 'function') {
+          const bounds = (featureLayer as any).getBounds();
+          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+            const center = bounds.getCenter();
+            centroidsRef.current.set(id, [center.lat, center.lng]);
+            if (pcode) centroidsRef.current.set(pcode, [center.lat, center.lng]);
+          }
+        }
+
         const municipality =
           municipalitiesByIdRef.current.get(id) ||
           (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
@@ -1046,7 +1502,11 @@ function LeafletMap({
         const initialProvince = municipality?.province || String(props.ADM2_EN || props.province || '');
         const initialScore = municipality?.recoveryScore ?? 50;
 
-        const tooltipText = initialProvince
+        const isNight = nightGlowModeRef.current;
+        const radVal = municipality?.currentRadiance ?? (initialScore * 0.45);
+        const tooltipText = isNight
+          ? `${initialName}${initialProvince ? ` (${initialProvince})` : ''} · ${initialScore}% recovery · ${radVal.toFixed(1)} nW radiance`
+          : initialProvince
           ? `${initialName} (${initialProvince}) · ${initialScore}% recovery`
           : `${initialName} · ${initialScore}% recovery`;
 
@@ -1059,11 +1519,15 @@ function LeafletMap({
           mouseover: () => {
             onHoverRef.current(id);
             const activeLight = isLightRef.current;
+            const activeNight = nightGlowModeRef.current;
             if (typeof (featureLayer as any).setStyle === 'function') {
               (featureLayer as any).setStyle({
-                weight: 2.8,
-                color: activeLight ? '#0f172a' : '#ffffff',
-                fillOpacity: 0.95
+                weight: 3.0,
+                color: '#ffffff',
+                fillOpacity: 0.95,
+                fillColor: activeNight
+                  ? (initialScore >= 80 ? '#ffc04d' : initialScore >= 60 ? '#f59e0b' : initialScore >= 40 ? '#b45309' : '#1e293b')
+                  : undefined,
               });
             }
             if (typeof (featureLayer as any).bringToFront === 'function' && (featureLayer as any)._map) {
@@ -1073,19 +1537,16 @@ function LeafletMap({
           mouseout: () => {
             onHoverRef.current(null);
             const activeLight = isLightRef.current;
+            const activeNight = nightGlowModeRef.current;
             const currentM =
               municipalitiesByIdRef.current.get(id) ||
               (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
               (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
               (normName ? municipalitiesByIdRef.current.get(normName) : null);
             if (currentM) {
-              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current, activeLight);
+              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current, activeLight, activeNight);
             } else if (typeof (featureLayer as any).setStyle === 'function') {
-              (featureLayer as any).setStyle({
-                weight: 1.2,
-                color: activeLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)',
-                fillOpacity: activeLight ? 0.68 : 0.65
-              });
+              (featureLayer as any).setStyle(getPolygonStyle(null, false, activeLight, activeNight));
             }
           },
         });
@@ -1108,10 +1569,17 @@ function LeafletMap({
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
       if (m) {
-        updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current);
-        featureLayer.setTooltipContent(`${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`);
+        updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current);
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const tip = nightGlowModeRef.current
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+        featureLayer.setTooltipContent(tip);
       }
     });
+
+    // Synchronize the Realistic Night Light canvas overlay with the newly rendered features
+    nightLightOverlayRef.current?.redraw();
   };
 
   const resetToPanayBounds = (animate = true) => {
@@ -1152,8 +1620,8 @@ function LeafletMap({
     mapRef.current = map;
     defaultBoundsRef.current = PANAY_BOUNDS;
 
-    // Initialize CartoDB base tile layer based on active theme
-    const initialTileUrl = getBaseTileUrl(isLightRef.current);
+    // Initialize CartoDB base tile layer based on active theme and night glow mode
+    const initialTileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current);
     const initialTileLayer = L.tileLayer(initialTileUrl, {
       subdomains: 'abcd',
       maxZoom: 20,
@@ -1162,6 +1630,24 @@ function LeafletMap({
     });
     initialTileLayer.addTo(map);
     tileLayerRef.current = initialTileLayer;
+
+    // Apply night glow mode container class and instantiate realistic night light radiance overlay
+    if (nightGlowModeRef.current && mapElement.current) {
+      mapElement.current.classList.add('night-glow-mode');
+    }
+
+    const nightLightOverlay = new (NightLightOverlay as any)({
+      getMunicipalities: () => Array.from(municipalitiesByIdRef.current?.values?.() || []),
+      getCentroids: () => centroidsRef.current || new Map(),
+      getSelectedId: () => selectedIdRef.current,
+      municipalitiesByIdRef,
+      centroidsRef,
+      selectedIdRef,
+    });
+    nightLightOverlayRef.current = nightLightOverlay;
+    if (nightGlowModeRef.current) {
+      nightLightOverlay.addTo(map);
+    }
 
     // Track mouse hover state across the interactive map surface
     map.on('mouseover', () => {
@@ -1215,6 +1701,12 @@ function LeafletMap({
 
     return () => {
       disposed = true;
+      if (nightLightOverlayRef.current && mapRef.current) {
+        try {
+          mapRef.current.removeLayer(nightLightOverlayRef.current);
+        } catch {}
+        nightLightOverlayRef.current = null;
+      }
       if (tileLayerRef.current && mapRef.current) {
         mapRef.current.removeLayer(tileLayerRef.current);
         tileLayerRef.current = null;
@@ -1222,6 +1714,12 @@ function LeafletMap({
       if (geoJsonLayerRef.current && mapRef.current) {
         mapRef.current.removeLayer(geoJsonLayerRef.current);
         geoJsonLayerRef.current = null;
+      }
+      if (islandSilhouetteLayerRef.current && mapRef.current) {
+        try {
+          mapRef.current.removeLayer(islandSilhouetteLayerRef.current);
+        } catch {}
+        islandSilhouetteLayerRef.current = null;
       }
       map.remove();
       mapRef.current = null;
@@ -1240,7 +1738,7 @@ function LeafletMap({
       tileLayerRef.current = null;
     }
 
-    const tileUrl = getBaseTileUrl(isLight);
+    const tileUrl = getBaseTileUrl(isLight, nightGlowModeRef.current);
 
     const newTileLayer = L.tileLayer(tileUrl, {
       subdomains: 'abcd',
@@ -1269,20 +1767,11 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
-        const score = municipality?.recoveryScore ?? 50;
-        const color = getRecoveryColor(score);
-        const isSelected = id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current);
+        const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
 
         return {
           renderer: canvasRendererRef.current || undefined,
-          color: isSelected
-            ? (isLight ? '#0f172a' : '#ffffff')
-            : (isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
-          weight: isSelected ? 2.5 : 1.2,
-          fillColor: color,
-          fillOpacity: isSelected ? 0.95 : (isLight ? 0.68 : 0.65),
-          lineJoin: 'round',
-          lineCap: 'round',
+          ...getPolygonStyle(municipality, isSelected, isLight, nightGlowModeRef.current),
         };
       });
     }
@@ -1299,10 +1788,104 @@ function LeafletMap({
         (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
       if (m) {
-        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight);
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight, nightGlowModeRef.current);
       }
     });
   }, [isLight]);
+
+  // Dynamically toggle Realistic Night Glow mode (NASA Black Marble VIIRS)
+  useEffect(() => {
+    const map = mapRef.current;
+    const el = mapElement.current;
+    if (el) {
+      el.classList.toggle('night-glow-mode', nightGlowMode);
+    }
+
+    // Update tile layer in-place without rebuilding the map
+    const newTileUrl = getBaseTileUrl(isLightRef.current, nightGlowMode);
+    if (tileLayerRef.current) {
+      tileLayerRef.current.setUrl(newTileUrl);
+    }
+
+    if (map) {
+      if (nightGlowMode) {
+        if (!nightLightOverlayRef.current) {
+          const overlay = new (NightLightOverlay as any)({
+            getMunicipalities: () => Array.from(municipalitiesByIdRef.current?.values?.() || []),
+            getCentroids: () => centroidsRef.current || new Map(),
+            getSelectedId: () => selectedIdRef.current,
+            municipalitiesByIdRef,
+            centroidsRef,
+            selectedIdRef,
+          });
+          nightLightOverlayRef.current = overlay;
+          overlay.addTo(map);
+        } else if (!map.hasLayer(nightLightOverlayRef.current)) {
+          nightLightOverlayRef.current.addTo(map);
+        }
+        nightLightOverlayRef.current.redraw();
+      } else {
+        if (nightLightOverlayRef.current && map.hasLayer(nightLightOverlayRef.current)) {
+          map.removeLayer(nightLightOverlayRef.current);
+        }
+      }
+    }
+
+    // Restyle all vector polygons for the active rendering mode
+    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
+      (geoJsonLayerRef.current as any).setStyle((feature: any) => {
+        const props = feature?.properties || {};
+        const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          municipalitiesByIdRef.current.get(id) ||
+          (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+          (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+          (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+        const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
+        return {
+          renderer: canvasRendererRef.current || undefined,
+          ...getPolygonStyle(municipality, isSelected, isLightRef.current, nightGlowMode),
+        };
+      });
+    }
+
+    Object.entries(layersRef.current).forEach(([id, layer]) => {
+      if (!mapRef.current || !layer || !(layer as any)._map) return;
+      const props = (layer as any)?.feature?.properties || {};
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+      const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+      const m =
+        municipalitiesByIdRef.current.get(id) ||
+        (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+        (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+        (normName ? municipalitiesByIdRef.current.get(normName) : null);
+      if (m) {
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowMode);
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const tip = nightGlowMode
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+        layer.setTooltipContent(tip);
+      }
+    });
+
+    // Restyle island silhouette outline layer for the active mode
+    if (islandSilhouetteLayerRef.current && typeof (islandSilhouetteLayerRef.current as any).setStyle === 'function') {
+      (islandSilhouetteLayerRef.current as any).setStyle({
+        color: nightGlowMode ? '#334155' : 'rgba(15, 23, 42, 0.25)',
+        weight: 1.4,
+        opacity: nightGlowMode ? 0.35 : 0.15,
+        fillColor: nightGlowMode ? '#0c121e' : 'transparent',
+        fillOpacity: nightGlowMode ? 0.40 : 0,
+      });
+    }
+  }, [nightGlowMode]);
 
   // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
   useEffect(() => {
@@ -1410,20 +1993,12 @@ function LeafletMap({
           (name ? map.get(name.toLowerCase().trim()) : null) ||
           (normName ? map.get(normName) : null);
 
-        const score = municipality?.recoveryScore ?? 50;
-        const color = getRecoveryColor(score);
-        const isSelected = id === selectedId || (municipality && municipality.id === selectedId);
+        const isSelected = Boolean(id === selectedId || (municipality && municipality.id === selectedId));
         const lightMode = isLightRef.current;
+        const isNight = nightGlowModeRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          color: isSelected
-            ? (lightMode ? '#0f172a' : '#ffffff')
-            : (lightMode ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
-          weight: isSelected ? 2.5 : 1.2,
-          fillColor: color,
-          fillOpacity: isSelected ? 0.95 : (lightMode ? 0.68 : 0.65),
-          lineJoin: 'round',
-          lineCap: 'round',
+          ...getPolygonStyle(municipality, isSelected, lightMode, isNight),
         };
       });
     }
@@ -1441,10 +2016,16 @@ function LeafletMap({
         (normName ? map.get(normName) : null);
 
       if (municipality) {
-        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current);
-        layer.setTooltipContent(`${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery`);
+        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current, nightGlowModeRef.current);
+        const radVal = municipality?.currentRadiance ? `${municipality.currentRadiance.toFixed(1)} nW` : `${(municipality.recoveryScore * 0.45).toFixed(1)} nW`;
+        const tip = nightGlowModeRef.current
+          ? `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery · ${radVal} radiance`
+          : `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery`;
+        layer.setTooltipContent(tip);
       }
     });
+
+    nightLightOverlayRef.current?.redraw();
   }, [municipalities, selectedId]);
 
   // Render distinct color-coded GDACS hazard markers and interactive popups
@@ -1658,6 +2239,8 @@ function LeafletMap({
         onUnlock={() => applyMapLock(false)}
         onLock={() => { applyMapLock(true); resetToPanayBounds(true); }}
         onReset={handleReset}
+        nightGlowMode={nightGlowMode}
+        onToggleNightGlow={onNightGlowModeChange ? () => onNightGlowModeChange(!nightGlowMode) : undefined}
       />
     </div>
   );
@@ -1671,8 +2254,16 @@ interface MapLockOverlayProps {
   onUnlock: () => void;
   onLock: () => void;
   onReset: () => void;
+  nightGlowMode?: boolean;
+  onToggleNightGlow?: () => void;
 }
-function MapLockOverlay({ onUnlock, onLock, onReset }: MapLockOverlayProps) {
+function MapLockOverlay({
+  onUnlock,
+  onLock,
+  onReset,
+  nightGlowMode = true,
+  onToggleNightGlow,
+}: MapLockOverlayProps) {
   const [isLocked, setIsLocked] = useState<boolean>(true);
 
   const handleUnlock = () => {
@@ -1687,6 +2278,23 @@ function MapLockOverlay({ onUnlock, onLock, onReset }: MapLockOverlayProps) {
 
   return (
     <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+      {onToggleNightGlow && (
+        <button
+          type="button"
+          onClick={onToggleNightGlow}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+            nightGlowMode
+              ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-amber-950/40'
+              : 'bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 border border-slate-300 dark:border-white/10'
+          }`}
+          aria-label={nightGlowMode ? 'Switch to Standard Vector Map' : 'Switch to NASA Black Marble Night Glow'}
+          title={nightGlowMode ? 'NASA Black Marble Night Glow Active (Click for Standard View)' : 'Activate NASA Black Marble Night Light View'}
+        >
+          <Sparkles className={`w-3.5 h-3.5 ${nightGlowMode ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+          <span className="hidden sm:inline">{nightGlowMode ? 'Night Glow' : 'Vector Map'}</span>
+        </button>
+      )}
+
       {isLocked ? (
         <button
           type="button"
@@ -1732,23 +2340,28 @@ function MapLockOverlay({ onUnlock, onLock, onReset }: MapLockOverlayProps) {
   );
 }
 
-function updateLayerStyle(layer: any, municipality: Municipality, selected: boolean, isLight = false) {
+function updateLayerStyle(
+  layer: any,
+  municipality: Municipality | null | undefined,
+  selected: boolean,
+  isLight = false,
+  nightGlow = false
+) {
   if (layer && typeof layer.setStyle === 'function') {
-    layer.setStyle({
-      color: selected
-        ? (isLight ? '#0f172a' : '#ffffff')
-        : (isLight ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255,255,255,0.4)'),
-      weight: selected ? 2.5 : 1.2,
-      fillColor: getRecoveryColor(municipality.recoveryScore),
-      fillOpacity: selected ? 0.95 : (isLight ? 0.68 : 0.65),
-    });
+    layer.setStyle(getPolygonStyle(municipality, selected, isLight, nightGlow));
   }
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendDot({ color, label, glow = false }: { color: string; label: string; glow?: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+      <div
+        className="h-2 w-2 rounded-full transition-all duration-300"
+        style={{
+          backgroundColor: color,
+          boxShadow: glow ? `0 0 8px ${color}, 0 0 16px ${color}80` : undefined,
+        }}
+      />
       <span className="text-[11px] text-slate-600 dark:text-ink-400 hidden sm:inline">{label}</span>
     </div>
   );

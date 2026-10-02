@@ -473,3 +473,40 @@ html.dark .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button:hover 
   color: #ffffff;
 }
 
+/* ==========================================================================
+   NASA Black Marble Realistic Night Light Mode
+   Harmonized deep orbital slate background (#0b0f19), tile darkening filter,
+   atmospheric drop-shadow bloom, and luminous golden-orange tooltips.
+   ========================================================================== */
+.leaflet-map.night-glow-mode {
+  background-color: #0b0f19 !important;
+}
+
+.leaflet-map.night-glow-mode .leaflet-container {
+  background-color: #0b0f19 !important;
+}
+
+/* Deeply darkened basemap tiles to charcoal slate (#0b0f19) matching orbital photography */
+.leaflet-map.night-glow-mode .leaflet-tile-pane {
+  filter: brightness(0.35) contrast(1.6) saturate(0.2) hue-rotate(205deg);
+  opacity: 0.72;
+  transition: filter 0.4s ease, opacity 0.4s ease;
+}
+
+/* Soft, subtle atmospheric halo around glowing polygons (toned down to keep borders sharp) */
+.leaflet-map.night-glow-mode .leaflet-overlay-pane {
+  filter: drop-shadow(0 0 5px rgba(255, 170, 51, 0.40)) drop-shadow(0 0 12px rgba(255, 140, 30, 0.18));
+  transition: filter 0.4s ease;
+}
+
+.leaflet-map.night-glow-mode .leaflet-night-light-canvas {
+  pointer-events: none;
+}
+
+.leaflet-map.night-glow-mode .leaflet-tooltip {
+  background: rgba(11, 15, 25, 0.94) !important;
+  border: 1px solid rgba(255, 170, 51, 0.45) !important;
+  color: #fff9e6 !important;
+  box-shadow: 0 0 16px rgba(255, 170, 51, 0.25), 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
