@@ -1140,17 +1140,18 @@ def build_search_query(raw_query: str, event_type: Optional[str] = None) -> str:
         or "habagat" in lower
     )
 
+    negative_filters = "-art -painting -wallpaper"
     if is_grid:
-        return f'"{base_name}" (blackout OR "power outage" OR grid OR electricity OR NGCP) Philippines'
+        return f'"{base_name}" (blackout OR "power outage" OR grid OR electricity OR NGCP) Philippines {negative_filters}'
     elif is_quake:
-        return f'"{base_name}" (earthquake OR tremor OR damage OR aftermath OR seismic) Philippines'
+        return f'"{base_name}" (earthquake OR tremor OR damage OR aftermath OR seismic) Philippines {negative_filters}'
     elif is_oil_spill:
-        return f'"{base_name}" ("oil spill" OR cleanup OR coast OR tanker OR environmental) Philippines'
+        return f'"{base_name}" ("oil spill" OR cleanup OR coast OR tanker OR environmental) Philippines {negative_filters}'
     elif is_flood:
-        return f'"{base_name}" (flood OR inundation OR "heavy rain" OR aftermath OR evacuation) Philippines'
+        return f'"{base_name}" (flood OR inundation OR "heavy rain" OR aftermath OR evacuation) Philippines {negative_filters}'
     else:
         # Default typhoon / storm
-        return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines'
+        return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines {negative_filters}'
 
 
 def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str] = None) -> List[Dict[str, Any]]:

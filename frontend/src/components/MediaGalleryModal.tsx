@@ -562,15 +562,17 @@ export default function MediaGalleryModal({
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 p-3 px-4 sm:px-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 flex flex-wrap items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 gap-2">
-          <div className="flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-slate-400" />
-            <span>Disaster aftermath photojournalism indexed from national and international news wires.</span>
+        <div className="flex-shrink-0 p-3 px-4 sm:px-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/90 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-1 min-w-[240px]">
+            <Info className="w-4 h-4 shrink-0 text-slate-400" />
+            <span>
+              Disaster aftermath imagery indexed from news and wire services. If images appear irrelevant or outdated, click the <strong>Refresh</strong> button to pull alternative coverage.
+            </span>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+            className="px-3 py-1 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer shrink-0"
           >
             Close
           </button>
