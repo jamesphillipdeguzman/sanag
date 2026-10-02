@@ -1099,17 +1099,61 @@ def api_generate_briefing(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def build_search_query(raw_query: str) -> str:
+def build_search_query(raw_query: str, event_type: Optional[str] = None) -> str:
     clean = raw_query.strip()
     # Strip common parenthetical aliases if needed (e.g. "Typhoon Phanfone (Ursula)" -> "Typhoon Phanfone")
     base_name = clean.split('(')[0].strip().replace('"', '')
     if not base_name:
         base_name = clean.replace('"', '')
-    # Ensure exact match on name plus strict contextual terms
-    return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines'
+
+    lower = base_name.lower()
+    type_lower = (event_type or "").lower()
+
+    is_grid = (
+        "grid" in type_lower
+        or "blackout" in type_lower
+        or "power" in type_lower
+        or "grid" in lower
+        or "blackout" in lower
+        or "power outage" in lower
+        or "electricity" in lower
+    )
+    is_quake = (
+        "quake" in type_lower
+        or "earthquake" in type_lower
+        or "seismic" in type_lower
+        or "earthquake" in lower
+        or "seismic" in lower
+    )
+    is_oil_spill = (
+        "oil" in type_lower
+        or "spill" in type_lower
+        or "oil spill" in lower
+        or "spill" in lower
+    )
+    is_flood = (
+        "flood" in type_lower
+        or "monsoon" in type_lower
+        or "habagat" in type_lower
+        or "flood" in lower
+        or "monsoon" in lower
+        or "habagat" in lower
+    )
+
+    if is_grid:
+        return f'"{base_name}" (blackout OR "power outage" OR grid OR electricity OR NGCP) Philippines'
+    elif is_quake:
+        return f'"{base_name}" (earthquake OR tremor OR damage OR aftermath OR seismic) Philippines'
+    elif is_oil_spill:
+        return f'"{base_name}" ("oil spill" OR cleanup OR coast OR tanker OR environmental) Philippines'
+    elif is_flood:
+        return f'"{base_name}" (flood OR inundation OR "heavy rain" OR aftermath OR evacuation) Philippines'
+    else:
+        # Default typhoon / storm
+        return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines'
 
 
-def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
+def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Fallback image provider querying Wikimedia Commons and Openverse APIs
     when DuckDuckGo is blocked, throttled, or returns empty on cloud hosting / datacenter IPs.
@@ -1122,14 +1166,81 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
         'Api-User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)'
     }
 
+    lower = clean_q.lower()
+    type_lower = (event_type or "").lower()
+
+    is_grid = (
+        "grid" in type_lower
+        or "blackout" in type_lower
+        or "power" in type_lower
+        or "grid" in lower
+        or "blackout" in lower
+        or "power outage" in lower
+        or "electricity" in lower
+    )
+    is_quake = (
+        "quake" in type_lower
+        or "earthquake" in type_lower
+        or "seismic" in type_lower
+        or "earthquake" in lower
+        or "seismic" in lower
+    )
+    is_oil_spill = (
+        "oil" in type_lower
+        or "spill" in type_lower
+        or "oil spill" in lower
+        or "spill" in lower
+    )
+    is_flood = (
+        "flood" in type_lower
+        or "monsoon" in type_lower
+        or "habagat" in type_lower
+        or "flood" in lower
+        or "monsoon" in lower
+        or "habagat" in lower
+    )
+
     # 1. Attempt Wikimedia Commons search with disaster-anchored queries & exact phrase matching
     try:
-        queries = [
-            f'"{clean_q}"',
-            f'"{clean_q}" damage',
-            f'"{clean_q}" flood aftermath',
-            f"{clean_q} Philippines"
-        ]
+        if is_grid:
+            queries = [
+                f'"{clean_q}"',
+                f'{clean_q} blackout',
+                f'{clean_q} power outage',
+                f'Panay blackout',
+                f'Panay power outage',
+                f'Panay grid',
+                f"{clean_q} Philippines"
+            ]
+        elif is_quake:
+            queries = [
+                f'"{clean_q}"',
+                f'"{clean_q}" earthquake damage',
+                f'"{clean_q}" aftermath',
+                f"{clean_q} Philippines"
+            ]
+        elif is_oil_spill:
+            queries = [
+                f'"{clean_q}"',
+                f'"{clean_q}" oil spill',
+                f'"{clean_q}" aftermath',
+                f"{clean_q} Philippines"
+            ]
+        elif is_flood:
+            queries = [
+                f'"{clean_q}"',
+                f'"{clean_q}" flood aftermath',
+                f'"{clean_q}" flood',
+                f"{clean_q} Philippines"
+            ]
+        else:
+            queries = [
+                f'"{clean_q}"',
+                f'"{clean_q}" damage',
+                f'"{clean_q}" flood aftermath',
+                f"{clean_q} Philippines"
+            ]
+
         with httpx.Client(timeout=6.0, headers=headers) as client:
             for q_try in queries:
                 params = {
@@ -1173,10 +1284,21 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
 
     # 2. Attempt Openverse API search with disaster-anchored context
     try:
+        if is_grid:
+            openverse_q = f"{clean_q} blackout power outage grid Philippines"
+        elif is_quake:
+            openverse_q = f"{clean_q} earthquake damage Philippines"
+        elif is_oil_spill:
+            openverse_q = f"{clean_q} oil spill environmental Philippines"
+        elif is_flood:
+            openverse_q = f"{clean_q} flood aftermath Philippines"
+        else:
+            openverse_q = f"{clean_q} disaster damage flood Philippines"
+
         with httpx.Client(timeout=6.0, headers=headers) as client:
             r = client.get(
                 "https://api.openverse.org/v1/images/",
-                params={"q": f"{clean_q} disaster damage flood Philippines", "page_size": str(count)}
+                params={"q": openverse_q, "page_size": str(count)}
             )
             if r.status_code == 200:
                 items = r.json().get("results", [])
@@ -1200,11 +1322,22 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
 
     # 3. Attempt Wikipedia Pageimages with Philippines disaster context
     try:
+        if is_grid:
+            wiki_search = f"{clean_q} blackout power grid Philippines"
+        elif is_quake:
+            wiki_search = f"{clean_q} earthquake seismic Philippines"
+        elif is_oil_spill:
+            wiki_search = f"{clean_q} oil spill Philippines"
+        elif is_flood:
+            wiki_search = f"{clean_q} flood monsoon Philippines"
+        else:
+            wiki_search = f"{clean_q} typhoon flood disaster Philippines"
+
         with httpx.Client(timeout=5.0, headers=headers) as client:
             params = {
                 "action": "query",
                 "generator": "search",
-                "gsrsearch": f"{clean_q} typhoon flood disaster Philippines",
+                "gsrsearch": wiki_search,
                 "gsrlimit": str(count),
                 "prop": "pageimages",
                 "piprop": "thumbnail|original",
@@ -1237,12 +1370,17 @@ def fallback_openverse_search(q: str, count: int = 12) -> List[Dict[str, Any]]:
     return results
 
 
+_IMAGE_SEARCH_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+
+
 @app.get("/api/search-event-images", tags=["Image Search"])
 @app.get("/api/v1/search-event-images", tags=["Image Search"])
 @app.get("/api/media/search", tags=["Image Search"])
 async def api_search_event_images(
     q: str = Query(..., description="Query for disaster ground images"),
-    count: int = Query(12, description="Number of results")
+    count: int = Query(12, description="Number of results"),
+    refresh: bool = Query(False, description="Bypass cache or force refresh"),
+    event_type: Optional[str] = Query(None, description="Type of disaster or event")
 ) -> List[Dict[str, Any]]:
     """
     Keyless photojournalism image search pipeline.
@@ -1250,8 +1388,14 @@ async def api_search_event_images(
     Attempt 2: If DDGS returned empty or threw an error on datacenter IP, query Wikimedia/Openverse fallback.
     """
     clean_q = q.split('(')[0].replace('"', '').strip() or q.strip()
-    keywords = build_search_query(q)
-    print(f"\n[IMAGE SEARCH] Incoming query: '{q}' -> Hardened query: '{keywords}' | Max: {count}", flush=True)
+    cache_key = f"{clean_q.lower()}_{event_type or ''}_{count}"
+
+    if not refresh and cache_key in _IMAGE_SEARCH_CACHE:
+        print(f"[IMAGE SEARCH] Cache hit for '{cache_key}' ({len(_IMAGE_SEARCH_CACHE[cache_key])} items)", flush=True)
+        return _IMAGE_SEARCH_CACHE[cache_key]
+
+    keywords = build_search_query(q, event_type=event_type)
+    print(f"\n[IMAGE SEARCH] Incoming query: '{q}' (event_type: {event_type}, refresh: {refresh}) -> Hardened query: '{keywords}' | Max: {count}", flush=True)
 
     results: List[Dict[str, Any]] = []
 
@@ -1306,8 +1450,11 @@ async def api_search_event_images(
     # Attempt 2: If DDGS returned empty or threw an error on datacenter IP, query Wikimedia/Openverse fallback
     if not results:
         print(f"[IMAGE SEARCH] Initiating Wikimedia/Openverse fallback for '{clean_q}'...", flush=True)
-        results = await asyncio.to_thread(fallback_openverse_search, clean_q, count)
+        results = await asyncio.to_thread(fallback_openverse_search, clean_q, count, event_type)
         print(f"[IMAGE SEARCH] Fallback returned {len(results)} image(s) for '{clean_q}'.", flush=True)
+
+    if results:
+        _IMAGE_SEARCH_CACHE[cache_key] = results
 
     return results
 
@@ -1315,9 +1462,13 @@ async def api_search_event_images(
 
 @app.get("/api/search-images", tags=["Image Search"])
 @app.get("/api/v1/search-images", tags=["Image Search"])
-async def api_search_images(q: str = Query(..., description="Query for disaster ground images")):
+async def api_search_images(
+    q: str = Query(..., description="Query for disaster ground images"),
+    refresh: bool = Query(False, description="Bypass cache or force refresh"),
+    event_type: Optional[str] = Query(None, description="Type of disaster or event")
+):
     """Legacy compatibility endpoint returning items array."""
-    results = await api_search_event_images(q=q, count=12)
+    results = await api_search_event_images(q=q, count=12, refresh=refresh, event_type=event_type)
     items = [
         {
             "title": r["title"],

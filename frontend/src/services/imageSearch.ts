@@ -9,6 +9,12 @@ export interface GroundImageResult {
   domain: string;
 }
 
+export interface SearchGroundImagesOptions {
+  forceRefresh?: boolean;
+  eventType?: string;
+  limit?: number;
+}
+
 // In-memory cache to make repeated searches and re-opened modals instant
 const imageSearchCache = new Map<string, GroundImageResult[]>();
 
@@ -40,24 +46,90 @@ export function parseEventNames(rawName: string): { base: string; local: string;
  * Strictly adheres to Wikimedia guidelines:
  * - Uses `origin=*` for CORS support in browsers
  * - Passes `Api-User-Agent` header to prevent throttling or silent 403s
+ * - Dynamically adapts search query patterns based on event type (grid failure, flood, typhoon, earthquake)
  * - Filters for genuine image MIME types (excludes SVGs, audio, and pdfs)
  * - Supports request cancellation via AbortSignal
  */
 export async function searchWikimediaCommons(
   searchTerm: string,
   signal?: AbortSignal,
-  limit: number = 16
+  limit: number = 16,
+  eventType?: string
 ): Promise<GroundImageResult[]> {
   const cleanTerm = searchTerm.replace(/\(.*?\)/g, '').trim();
   if (!cleanTerm || cleanTerm.length < 2) return [];
 
-  // Generate structured candidate queries: exact quoted phrase, incident damage, disaster aftermath
-  const queriesToTry = [
-    `"${cleanTerm}"`,
-    `${cleanTerm} damage`,
-    `${cleanTerm} flood aftermath`,
-    `${cleanTerm} Philippines`,
-  ];
+  const lower = cleanTerm.toLowerCase();
+  const typeLower = (eventType || '').toLowerCase();
+
+  const isGrid =
+    typeLower.includes('grid') ||
+    typeLower.includes('blackout') ||
+    lower.includes('grid') ||
+    lower.includes('blackout') ||
+    lower.includes('power outage') ||
+    lower.includes('electricity');
+
+  const isQuake =
+    typeLower.includes('quake') ||
+    typeLower.includes('earthquake') ||
+    lower.includes('earthquake') ||
+    lower.includes('seismic');
+
+  const isOilSpill =
+    typeLower.includes('oil') ||
+    lower.includes('oil spill') ||
+    lower.includes('spill');
+
+  const isFlood =
+    typeLower.includes('flood') ||
+    typeLower.includes('monsoon') ||
+    lower.includes('flood') ||
+    lower.includes('monsoon') ||
+    lower.includes('habagat');
+
+  let queriesToTry: string[];
+
+  if (isGrid) {
+    queriesToTry = [
+      `"${cleanTerm}"`,
+      `${cleanTerm} blackout`,
+      `${cleanTerm} power outage`,
+      `Panay blackout`,
+      `Panay power outage`,
+      `Panay grid`,
+      `${cleanTerm} Philippines`,
+    ];
+  } else if (isQuake) {
+    queriesToTry = [
+      `"${cleanTerm}"`,
+      `${cleanTerm} earthquake damage`,
+      `${cleanTerm} aftermath`,
+      `${cleanTerm} Philippines`,
+    ];
+  } else if (isOilSpill) {
+    queriesToTry = [
+      `"${cleanTerm}"`,
+      `${cleanTerm} oil spill`,
+      `${cleanTerm} aftermath`,
+      `${cleanTerm} Philippines`,
+    ];
+  } else if (isFlood) {
+    queriesToTry = [
+      `"${cleanTerm}"`,
+      `${cleanTerm} flood aftermath`,
+      `${cleanTerm} flood`,
+      `${cleanTerm} Philippines`,
+    ];
+  } else {
+    // Default typhoon / storm
+    queriesToTry = [
+      `"${cleanTerm}"`,
+      `${cleanTerm} damage`,
+      `${cleanTerm} flood aftermath`,
+      `${cleanTerm} Philippines`,
+    ];
+  }
 
   for (const q of queriesToTry) {
     if (signal?.aborted) return [];
@@ -129,27 +201,41 @@ export async function searchWikimediaCommons(
 
 /**
  * Resilient photojournalism ground imagery search pipeline:
- * 1. Checks fast in-memory query cache.
+ * 1. Checks fast in-memory query cache (bypassed if forceRefresh is true).
  * 2. Attempts backend API /api/search-event-images with short timeout (3.5s).
- * 3. Falls back immediately to direct client-side Wikimedia Commons query.
+ * 3. Falls back immediately to direct client-side Wikimedia Commons query tailored to event type.
  * 4. Resolves local PAGASA typhoon aliases (e.g. "Ursula", "Yolanda") if primary query is empty.
  * 5. Caches successful results for instant subsequent lookups.
  */
 export async function searchGroundImages(
   eventName: string,
   customQuery?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: SearchGroundImagesOptions
 ): Promise<GroundImageResult[]> {
   const query = (customQuery || eventName).trim();
   const cleanKey = query.toLowerCase().replace(/\s+/g, ' ');
 
   if (!cleanKey || cleanKey.length < 2) return [];
 
-  if (imageSearchCache.has(cleanKey)) {
+  // When forceRefresh is true, bust the cache for this query
+  if (options?.forceRefresh) {
+    imageSearchCache.delete(cleanKey);
+  } else if (imageSearchCache.has(cleanKey)) {
     return imageSearchCache.get(cleanKey)!;
   }
 
   let results: GroundImageResult[] = [];
+
+  const lower = cleanKey.toLowerCase();
+  const typeLower = (options?.eventType || '').toLowerCase();
+  const isGrid =
+    typeLower.includes('grid') ||
+    typeLower.includes('blackout') ||
+    lower.includes('grid') ||
+    lower.includes('blackout') ||
+    lower.includes('power outage') ||
+    lower.includes('electricity');
 
   // Step 1: Attempt Backend search proxy first (if server is awake and reachable)
   try {
@@ -161,9 +247,14 @@ export async function searchGroundImages(
     const timeoutId = setTimeout(() => timeoutController.abort(), 3500);
 
     try {
-      const res = await apiFetch(`/api/search-event-images?q=${encodeURIComponent(cleanEventName)}`, {
-        signal: timeoutController.signal,
-      });
+      const refreshParam = options?.forceRefresh ? '&refresh=true' : '';
+      const eventTypeParam = options?.eventType ? `&event_type=${encodeURIComponent(options.eventType)}` : '';
+      const res = await apiFetch(
+        `/api/search-event-images?q=${encodeURIComponent(cleanEventName)}${refreshParam}${eventTypeParam}`,
+        {
+          signal: timeoutController.signal,
+        }
+      );
       clearTimeout(timeoutId);
       if (res.ok) {
         const data = await res.json();
@@ -181,21 +272,21 @@ export async function searchGroundImages(
     if (err.name === 'AbortError' && signal?.aborted) throw err;
   }
 
-  // Step 2: Direct client-side Wikimedia Commons fallback
+  // Step 2: Direct client-side Wikimedia Commons fallback tailored to event type
   if (results.length === 0 && !signal?.aborted) {
     try {
-      results = await searchWikimediaCommons(query, signal);
+      results = await searchWikimediaCommons(query, signal, options?.limit || 16, options?.eventType);
     } catch (err: any) {
       if (err.name === 'AbortError') throw err;
     }
   }
 
-  // Step 3: Check local PAGASA storm alias if applicable (e.g. "Typhoon Ursula")
-  if (results.length === 0 && !signal?.aborted) {
+  // Step 3: Check local PAGASA storm alias if applicable (e.g. "Typhoon Ursula") for non-grid incidents
+  if (results.length === 0 && !signal?.aborted && !isGrid) {
     const parsed = parseEventNames(eventName);
     if (parsed.local && parsed.local.toLowerCase() !== query.toLowerCase()) {
       try {
-        results = await searchWikimediaCommons(`Typhoon ${parsed.local}`, signal);
+        results = await searchWikimediaCommons(`Typhoon ${parsed.local}`, signal, options?.limit || 16, options?.eventType);
       } catch (err: any) {
         if (err.name === 'AbortError') throw err;
       }
