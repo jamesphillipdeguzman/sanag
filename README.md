@@ -2,6 +2,13 @@
 
 **Senior Project — Panay Island, Philippines**
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-sanag.vercel.app-10b981?style=for-the-badge&logo=vercel&logoColor=white)](https://sanag.vercel.app/)
+[![Deployment](https://img.shields.io/badge/Production-Live-0284c7?style=for-the-badge)](https://sanag.vercel.app/)
+[![YouTube Demo](https://img.shields.io/badge/Video%20Demo-YouTube-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)
+
+> 🌐 **Live Web Application:** **[https://sanag.vercel.app/](https://sanag.vercel.app/)**  
+> 📺 **Video Demonstration:** **[https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)** *(Replace with your YouTube demo link)*
+
 SANAG is a web-based disaster recovery dashboard that uses **NASA VIIRS nighttime-light satellite data** to analyze how areas of Panay Island are affected by major disasters or power disruptions and how quickly nighttime-light activity returns toward normal.
 
 The project focuses on **Aklan, Antique, Capiz, and Iloilo**.
@@ -952,6 +959,8 @@ The project should prioritize **correct data and a working system over extra fea
 
 # 🎥 Final Video
 
+📺 **Watch Presentation / Demo:** **[https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)** *(Replace with your YouTube demo link)*
+
 Target length: **5–8 minutes**
 
 Suggested structure:
@@ -988,7 +997,7 @@ SANAG is complete when:
 - [ ] Application works end-to-end
 - [ ] No secrets are committed
 - [ ] Documentation is complete
-- [ ] Project is deployed
+- [x] Project is deployed: [https://sanag.vercel.app/](https://sanag.vercel.app/)
 - [ ] Video presentation is recorded
 - [ ] Final submission is ready
 
