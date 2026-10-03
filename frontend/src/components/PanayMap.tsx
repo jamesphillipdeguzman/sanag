@@ -78,6 +78,7 @@ export interface LeafletMapProps {
   isActiveTab?: boolean;
   nightGlowMode?: boolean;
   onNightGlowModeChange?: (enabled: boolean) => void;
+  onZoomChange?: (zoom: number) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -173,6 +174,8 @@ export default function PanayMap({
   const [extraMunicipalities, setExtraMunicipalities] = useState<Municipality[]>([]);
   const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
   const [showScaleRuler, setShowScaleRuler] = useState<boolean>(false);
+  const [showGrid, setShowGrid] = useState<boolean>(false);
+  const [mapZoom, setMapZoom] = useState(8);
 
   const currentRegionKey = externalRegionKey ?? internalRegionKey;
   const handleRegionChange = (newKey: string) => {
@@ -380,22 +383,20 @@ export default function PanayMap({
                 type="button"
                 id="realistic-night-glow-toggle"
                 onClick={handleNightGlowToggle}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  nightGlowMode
-                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/30'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${nightGlowMode
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/30'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 title="Toggle NASA Black Marble Realistic Night Light composite view"
                 aria-pressed={nightGlowMode}
               >
                 <Sparkles className={`h-3.5 w-3.5 ${nightGlowMode ? 'text-amber-500 dark:text-amber-300 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
                 <span>Realistic Night Glow</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${
-                    nightGlowMode
-                      ? 'bg-amber-500/30 text-amber-800 dark:text-amber-200 border border-amber-500/40'
-                      : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-ink-400'
-                  }`}
+                  className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${nightGlowMode
+                    ? 'bg-amber-500/30 text-amber-800 dark:text-amber-200 border border-amber-500/40'
+                    : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-ink-400'
+                    }`}
                 >
                   {nightGlowMode ? 'NASA VIIRS' : 'OFF'}
                 </span>
@@ -406,11 +407,10 @@ export default function PanayMap({
                 type="button"
                 id="viirs-scale-ruler-toggle"
                 onClick={() => setShowScaleRuler((v) => !v)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                  showScaleRuler
-                    ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${showScaleRuler
+                  ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 title={showScaleRuler ? 'Hide VIIRS 500m pixel scale ruler' : 'Pin VIIRS 500m pixel scale ruler (also appears on hover)'}
                 aria-pressed={showScaleRuler}
               >
@@ -512,13 +512,19 @@ export default function PanayMap({
                   isActiveTab={isActiveTab}
                   nightGlowMode={nightGlowMode}
                   onNightGlowModeChange={handleNightGlowToggle}
+                  onZoomChange={setMapZoom}
                 />
 
-                {/* VIIRS 500m Pixel Scale Ruler Overlay — bottom-right, z below tooltip */}
+                {/* 500m VIIRS Spatial Grid Overlay */}
+                {showGrid && <div className="viirs-grid-pane animate-fade-in" />}
+
                 <VIIRSScaleRuler
                   pinned={showScaleRuler}
                   nightGlow={nightGlowMode}
                   mapHovered={!!hoveredId}
+                  showGrid={showGrid}
+                  onToggleGrid={() => setShowGrid((v) => !v)}
+                  zoom={mapZoom}
                 />
 
                 {isLoading && municipalities.length > 0 && (
@@ -563,8 +569,8 @@ export default function PanayMap({
                           {nightGlowMode && hovered.status === 'restored'
                             ? 'Radiant Light'
                             : nightGlowMode && hovered.status === 'critical'
-                            ? 'Blackout Outage'
-                            : statusLabels[hovered.status]}
+                              ? 'Blackout Outage'
+                              : statusLabels[hovered.status]}
                         </span>
                       </span>
                     </div>
@@ -1063,8 +1069,8 @@ const NightLightOverlay = (L.Layer as any).extend({
     const municipalities: Municipality[] = typeof this._options?.getMunicipalities === 'function'
       ? (this._options.getMunicipalities() || [])
       : this._options?.municipalitiesByIdRef?.current
-      ? Array.from(this._options.municipalitiesByIdRef.current.values())
-      : [];
+        ? Array.from(this._options.municipalitiesByIdRef.current.values())
+        : [];
     const centroids: Map<string, [number, number]> = typeof this._options?.getCentroids === 'function'
       ? (this._options.getCentroids() || new Map())
       : this._options?.centroidsRef?.current || new Map();
@@ -1190,6 +1196,7 @@ function LeafletMap({
   isActiveTab = true,
   nightGlowMode = true,
   onNightGlowModeChange,
+  onZoomChange,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
@@ -1256,7 +1263,7 @@ function LeafletMap({
           if (currentTileLayer && map.hasLayer(currentTileLayer)) {
             try {
               map.removeLayer(currentTileLayer);
-            } catch {}
+            } catch { }
           }
           tileLayerRef.current = null;
 
@@ -1532,8 +1539,8 @@ function LeafletMap({
         const tooltipText = isNight
           ? `${initialName}${initialProvince ? ` (${initialProvince})` : ''} · ${initialScore}% recovery · ${radVal.toFixed(1)} nW radiance`
           : initialProvince
-          ? `${initialName} (${initialProvince}) · ${initialScore}% recovery`
-          : `${initialName} · ${initialScore}% recovery`;
+            ? `${initialName} (${initialProvince}) · ${initialScore}% recovery`
+            : `${initialName} · ${initialScore}% recovery`;
 
         featureLayer.bindTooltip(tooltipText, {
           sticky: true,
@@ -1642,6 +1649,27 @@ function LeafletMap({
       doubleClickZoom: !initialLocked,
       boxZoom: !initialLocked,
     });
+
+    const updateGridScale = () => {
+      const currentZoom = map.getZoom();
+
+      // Notify parent component of zoom change
+      if (onZoomChange) onZoomChange(currentZoom);
+
+      const latRad = (11 * Math.PI) / 180;
+      const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, currentZoom);
+      const sizeInPixels = 500 / metersPerPixel;
+
+      const wrapper = map.getContainer().parentElement;
+      if (wrapper) {
+        wrapper.style.setProperty('--grid-pixel-size', `${Math.max(4, sizeInPixels)}px`);
+      }
+    };
+
+    map.on('zoom', updateGridScale);
+    map.on('viewreset', updateGridScale);
+    updateGridScale();
+
     mapRef.current = map;
     defaultBoundsRef.current = PANAY_BOUNDS;
 
@@ -1729,7 +1757,7 @@ function LeafletMap({
       if (nightLightOverlayRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(nightLightOverlayRef.current);
-        } catch {}
+        } catch { }
         nightLightOverlayRef.current = null;
       }
       if (tileLayerRef.current && mapRef.current) {
@@ -1743,7 +1771,7 @@ function LeafletMap({
       if (islandSilhouetteLayerRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(islandSilhouetteLayerRef.current);
-        } catch {}
+        } catch { }
         islandSilhouetteLayerRef.current = null;
       }
       map.remove();
@@ -2307,11 +2335,10 @@ function MapLockOverlay({
         <button
           type="button"
           onClick={onToggleNightGlow}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-            nightGlowMode
-              ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-amber-950/40'
-              : 'bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 border border-slate-300 dark:border-white/10'
-          }`}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${nightGlowMode
+            ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-amber-950/40'
+            : 'bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 border border-slate-300 dark:border-white/10'
+            }`}
           aria-label={nightGlowMode ? 'Switch to Standard Vector Map' : 'Switch to NASA Black Marble Night Glow'}
           title={nightGlowMode ? 'NASA Black Marble Night Glow Active (Click for Standard View)' : 'Activate NASA Black Marble Night Light View'}
         >
@@ -2373,45 +2400,69 @@ function MapLockOverlay({
 interface VIIRSScaleRulerProps {
   pinned: boolean;
   nightGlow?: boolean;
-  /** Pass true when any municipality is being hovered to trigger hover-reveal */
   mapHovered?: boolean;
+  showGrid?: boolean;
+  onToggleGrid?: () => void;
 }
-function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false }: VIIRSScaleRulerProps) {
-  const visible = pinned || mapHovered;
+function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false, showGrid = false, onToggleGrid, zoom = 8 }: VIIRSScaleRulerProps & { zoom?: number }) {
+  const visible = pinned || mapHovered || showGrid;
 
-  // Theme-adaptive palette
-  const axisColor  = nightGlow ? 'rgba(251,191,36,0.70)' : 'rgba(51,65,85,0.50)';
-  const tickColor  = nightGlow ? 'rgba(251,191,36,0.55)' : 'rgba(51,65,85,0.40)';
+  const axisColor = nightGlow ? 'rgba(251,191,36,0.70)' : 'rgba(51,65,85,0.50)';
+  const tickColor = nightGlow ? 'rgba(251,191,36,0.55)' : 'rgba(51,65,85,0.40)';
   const labelColor = nightGlow ? 'rgba(251,191,36,0.80)' : 'rgba(51,65,85,0.70)';
-  const noteColor  = nightGlow ? 'rgba(251,191,36,0.45)' : 'rgba(100,116,139,0.65)';
-  const bgColor    = nightGlow ? 'rgba(9,13,24,0.82)'    : 'rgba(255,255,255,0.90)';
-  const borderColor = nightGlow ? 'rgba(255,170,51,0.20)' : 'rgba(15,23,42,0.10)';
-  const shadowVal  = nightGlow
+  const noteColor = nightGlow ? 'rgba(251,191,36,0.45)' : 'rgba(100,116,139,0.65)';
+  const bgColor = nightGlow ? 'rgba(9,13,24,0.90)' : 'rgba(255,255,255,0.95)';
+  const borderColor = showGrid
+    ? (nightGlow ? 'rgba(245,158,11,0.50)' : 'rgba(14,165,233,0.50)')
+    : (nightGlow ? 'rgba(255,170,51,0.20)' : 'rgba(15,23,42,0.10)');
+  const shadowVal = nightGlow
     ? '0 2px 14px rgba(0,0,0,0.60), 0 0 10px rgba(255,170,51,0.05)'
     : '0 2px 10px rgba(0,0,0,0.09)';
 
-  // Gradient segments for the horizontal scale bar (matches radiance palette in night mode)
   const segments = nightGlow
     ? ['#121722', '#4a2f0a', '#8c531b', '#e08b18', '#ffaa33']
     : ['#94a3b8', '#64748b', '#475569', '#334155', '#1e293b'];
 
-  const RULER_W = 96;  // px — horizontal arm length
-  const RULER_H = 32;  // px — vertical arm height
-  const TICK_LABELS = ['0', '250', '500m'];
+  const RULER_W = 96;
+  const RULER_H = 32;
+
+  // ── Dynamic Ground Distance Calculation based on Zoom & Latitude (~11°N) ──
+  const latRad = (11 * Math.PI) / 180;
+  const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, zoom);
+  const totalMeters = RULER_W * metersPerPixel;
+
+  let maxLabel: string;
+  let midLabel: string;
+
+  if (totalMeters >= 1000) {
+    const totalKm = totalMeters / 1000;
+    maxLabel = `${totalKm >= 10 ? Math.round(totalKm) : totalKm.toFixed(1)}km`;
+    const midKm = totalKm / 2;
+    midLabel = `${midKm >= 10 ? Math.round(midKm) : midKm.toFixed(1)}km`;
+  } else {
+    const roundedMeters = Math.round(totalMeters / 50) * 50;
+    maxLabel = `${Math.max(50, roundedMeters)}m`;
+    midLabel = `${Math.max(25, Math.round(roundedMeters / 2))}m`;
+  }
+
+  const TICK_LABELS = ['0', midLabel, maxLabel];
 
   return (
     <div
-      aria-label="VIIRS 500m pixel scale indicator"
+      onClick={onToggleGrid}
+      aria-label="VIIRS 500m pixel scale indicator and grid toggle"
       style={{
         position: 'absolute',
         bottom: '14px',
         right: '14px',
         zIndex: 1001,
-        pointerEvents: 'none',
+        pointerEvents: 'auto',
+        cursor: 'pointer',
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0) scale(1)' : 'translateY(5px) scale(0.97)',
-        transition: 'opacity 0.25s ease, transform 0.25s ease',
+        transition: 'opacity 0.25s ease, transform 0.25s ease, border-color 0.2s ease',
       }}
+      title="Click to toggle 500m VIIRS pixel spatial grid overlay"
     >
       <div
         style={{
@@ -2427,103 +2478,57 @@ function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false }: VIIR
           gap: '5px',
         }}
       >
-        {/* ── Header label ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <Ruler style={{ width: 10, height: 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
-          <span style={{
-            fontSize: '9px',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase',
-            color: labelColor,
-            whiteSpace: 'nowrap',
-          }}>
-            500m VIIRS Pixel Scale
-          </span>
-          {pinned && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <Ruler style={{ width: 10, height: 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
             <span style={{
-              fontSize: '7.5px', fontWeight: 700,
-              padding: '1px 4px', borderRadius: '3px',
-              background: nightGlow ? 'rgba(245,158,11,0.15)' : 'rgba(14,165,233,0.10)',
-              border: nightGlow ? '1px solid rgba(245,158,11,0.32)' : '1px solid rgba(14,165,233,0.28)',
-              color: nightGlow ? '#fcd34d' : '#0284c7',
+              fontSize: '9px',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontWeight: 700,
               letterSpacing: '0.06em',
-            }}>PINNED</span>
-          )}
+              textTransform: 'uppercase',
+              color: labelColor,
+              whiteSpace: 'nowrap',
+            }}>
+              500m VIIRS Scale
+            </span>
+          </div>
+          <span style={{
+            fontSize: '7.5px', fontWeight: 700,
+            padding: '1px 5px', borderRadius: '4px',
+            background: showGrid ? (nightGlow ? 'rgba(245,158,11,0.30)' : 'rgba(14,165,233,0.20)') : (nightGlow ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
+            border: showGrid ? (nightGlow ? '1px solid rgba(245,158,11,0.60)' : '1px solid rgba(14,165,233,0.50)') : '1px solid transparent',
+            color: showGrid ? (nightGlow ? '#fcd34d' : '#0284c7') : (nightGlow ? 'rgba(255,255,255,0.40)' : 'rgba(100,116,139,0.60)'),
+            letterSpacing: '0.06em',
+          }}>
+            {showGrid ? 'GRID ON' : 'GRID OFF'}
+          </span>
         </div>
 
-        {/* ── Dual-axis L-shaped corner indicator ── */}
         <div style={{ position: 'relative', width: RULER_W + 8, height: RULER_H + 10 }}>
-
-          {/* Vertical arm (Y-axis) — left edge */}
           <div style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: '2px',
-            height: RULER_H,
-            background: `linear-gradient(to bottom, ${axisColor}, transparent)`,
-            borderRadius: '2px',
+            position: 'absolute', left: 0, top: 0, width: '2px', height: RULER_H,
+            background: `linear-gradient(to bottom, ${axisColor}, transparent)`, borderRadius: '2px',
           }} />
-
-          {/* Horizontal arm (X-axis) — bottom of vertical */}
-          {/* Segmented scale bar */}
           <div style={{
-            position: 'absolute',
-            left: 0,
-            top: RULER_H - 6,
-            width: RULER_W,
-            height: 6,
-            borderRadius: '0 3px 3px 0',
-            overflow: 'hidden',
-            display: 'flex',
+            position: 'absolute', left: 0, top: RULER_H - 6, width: RULER_W, height: 6,
+            borderRadius: '0 3px 3px 0', overflow: 'hidden', display: 'flex',
             border: `1px solid ${nightGlow ? 'rgba(251,191,36,0.18)' : 'rgba(51,65,85,0.13)'}`,
           }}>
             {segments.map((c, i) => (
               <div key={i} style={{ flex: 1, background: c }} />
             ))}
           </div>
+          <div style={{ position: 'absolute', left: '-2px', top: RULER_H - 8, width: '5px', height: '5px', borderRadius: '50%', background: axisColor }} />
+          <div style={{ position: 'absolute', left: RULER_W - 1, top: RULER_H - 9, width: '2px', height: '8px', background: axisColor, borderRadius: '1px' }} />
+          <div style={{ position: 'absolute', left: Math.floor(RULER_W / 2) - 1, top: RULER_H - 8, width: '1px', height: '5px', background: tickColor }} />
 
-          {/* Corner dot — origin */}
-          <div style={{
-            position: 'absolute',
-            left: '-2px',
-            top: RULER_H - 8,
-            width: '5px',
-            height: '5px',
-            borderRadius: '50%',
-            background: axisColor,
-          }} />
-
-          {/* X-axis end cap tick */}
-          <div style={{
-            position: 'absolute',
-            left: RULER_W - 1,
-            top: RULER_H - 9,
-            width: '2px',
-            height: '8px',
-            background: axisColor,
-            borderRadius: '1px',
-          }} />
-
-          {/* Mid-point tick (250m) */}
-          <div style={{
-            position: 'absolute',
-            left: Math.floor(RULER_W / 2) - 1,
-            top: RULER_H - 8,
-            width: '1px',
-            height: '5px',
-            background: tickColor,
-          }} />
-
-          {/* X-axis distance labels */}
           {TICK_LABELS.map((label, i) => {
             const positions = [0, Math.floor(RULER_W / 2), RULER_W];
             const aligns: React.CSSProperties['textAlign'][] = ['left', 'center', 'right'];
             return (
               <span
-                key={label}
+                key={i}
                 style={{
                   position: 'absolute',
                   left: i === 0 ? 0 : i === 2 ? undefined : positions[i],
@@ -2543,29 +2548,11 @@ function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false }: VIIR
             );
           })}
 
-          {/* Y-axis top tick label */}
-          <span style={{
-            position: 'absolute',
-            left: '5px',
-            top: 0,
-            fontSize: '8px',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontWeight: 500,
-            color: tickColor,
-            lineHeight: 1,
-          }}>N↑</span>
+          <span style={{ position: 'absolute', left: '5px', top: 0, fontSize: '8px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 500, color: tickColor, lineHeight: 1 }}>N↑</span>
         </div>
 
-        {/* ── Footnote ── */}
-        <span style={{
-          fontSize: '8px',
-          color: noteColor,
-          fontStyle: 'italic',
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-          letterSpacing: '0.01em',
-          whiteSpace: 'nowrap',
-        }}>
-          1 DNB pixel ≈ 500m · VIIRS DNB (VNP46A2)
+        <span style={{ fontSize: '8px', color: noteColor, fontStyle: 'italic', fontFamily: 'ui-sans-serif, system-ui, sans-serif', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
+          1 DNB pixel = 500m · Span: {maxLabel}
         </span>
       </div>
     </div>
@@ -2607,3 +2594,20 @@ function MiniStat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+// ─── True Coordinate-Based VIIRS Grid Layer ──────────────────────────────────
+// Uses Leaflet's native L.GridLayer so the grid lines scale dynamically with map coordinates.
+const ViirsGridLayer = (L.GridLayer as any).extend({
+  createTile: function (coords: { x: number; y: number; z: number }) {
+    const tile = document.createElement('div');
+    tile.className = 'viirs-leaflet-grid-tile';
+    tile.style.outline = '1px solid rgba(255, 204, 0, 0.22)';
+    tile.style.backgroundColor = 'transparent';
+    tile.style.fontSize = '9px';
+    tile.style.fontFamily = 'monospace';
+    tile.style.color = 'rgba(255, 204, 0, 0.4)';
+    tile.style.padding = '2px';
+    tile.innerHTML = `<span>z:${coords.z} x:${coords.x} y:${coords.y}</span>`;
+    return tile;
+  },
+});
