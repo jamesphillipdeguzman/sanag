@@ -116,12 +116,15 @@ export default function Navbar({
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled || mobileOpen
+      className={`fixed top-0 left-0 right-0 z-50 overflow-hidden transition-all duration-300 ${scrolled || mobileOpen
           ? 'bg-white/90 dark:bg-slate-950/85 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
           : 'bg-transparent'
-      }`}
+        }`}
     >
+      {/* Nightlight Header Atmosphere & Gradient Accents */}
+      <div className="absolute -top-12 left-1/4 w-96 h-12 bg-amber-400/[0.03] dark:bg-amber-300/[0.04] blur-2xl rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-amber-400/40 dark:via-amber-300/50 to-transparent pointer-events-none" />
+
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <a
@@ -131,20 +134,18 @@ export default function Navbar({
             title={hasConnectionError || isOffline || isWaking ? 'Server disconnected - Click to reconnect' : 'SANAG - Nightlight Analytics'}
           >
             <div className="relative">
-              <div className={`absolute inset-0 blur-lg transition-opacity ${
-                hasConnectionError || isOffline
+              <div className={`absolute inset-0 blur-lg transition-opacity ${hasConnectionError || isOffline
                   ? 'bg-rose-500 opacity-60 group-hover:opacity-80'
                   : isWaking
-                  ? 'bg-amber-500 opacity-60 group-hover:opacity-80'
-                  : 'bg-ocean-500 opacity-40 group-hover:opacity-60'
-              }`} />
-              <div className={`relative flex h-9 w-9 items-center justify-center rounded-lg shadow-lg transition-all ${
-                hasConnectionError || isOffline
+                    ? 'bg-amber-500 opacity-60 group-hover:opacity-80'
+                    : 'bg-ocean-500 opacity-40 group-hover:opacity-60'
+                }`} />
+              <div className={`relative flex h-9 w-9 items-center justify-center rounded-lg shadow-lg transition-all ${hasConnectionError || isOffline
                   ? 'bg-gradient-to-br from-rose-600 to-amber-600 shadow-rose-500/30'
                   : isWaking
-                  ? 'bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-500/30'
-                  : 'bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-ocean-500/30'
-              }`}>
+                    ? 'bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-500/30'
+                    : 'bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-ocean-500/30'
+                }`}>
                 <Satellite className="h-5 w-5 text-white" />
               </div>
             </div>
@@ -167,11 +168,10 @@ export default function Navbar({
                   key={link.href}
                   href={link.href}
                   onClick={(e) => handleTabClick(e, link)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isActive
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${isActive
                       ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-300 font-bold border border-slate-200/80 dark:border-white/10 shadow-sm shadow-ocean-500/10'
                       : 'text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
-                  }`}
+                    }`}
                 >
                   {isActive && (
                     <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 animate-pulse" />
@@ -228,13 +228,12 @@ export default function Navbar({
               onClick={handleLiveStatusClick}
               disabled={isRefetching}
               title="Click to check connection and refresh active telemetry data"
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all cursor-pointer ${
-                isWaking || (isReconnecting && !isOffline)
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all cursor-pointer ${isWaking || (isReconnecting && !isOffline)
                   ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-600 dark:text-amber-300 shadow-md shadow-amber-500/10'
                   : isOffline
-                  ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-600 dark:text-rose-300 shadow-md shadow-rose-500/10'
-                  : 'bg-gradient-to-r from-ocean-600 to-ocean-500 text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02]'
-              }`}
+                    ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-600 dark:text-rose-300 shadow-md shadow-rose-500/10'
+                    : 'bg-gradient-to-r from-ocean-600 to-ocean-500 text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02]'
+                }`}
             >
               {isWaking || (isReconnecting && !isOffline) ? (
                 <>
@@ -318,11 +317,10 @@ export default function Navbar({
                     key={link.href}
                     href={link.href}
                     onClick={(e) => handleTabClick(e, link)}
-                    className={`px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${
-                      isActive
+                    className={`px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${isActive
                         ? 'bg-ocean-500/15 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
                         : 'text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
-                    }`}
+                      }`}
                   >
                     <span>{link.label}</span>
                     {isActive && (
@@ -356,13 +354,12 @@ export default function Navbar({
                     await handleLiveStatusClick(e);
                     setMobileOpen(false);
                   }}
-                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-                    isWaking || (isReconnecting && !isOffline)
+                  className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${isWaking || (isReconnecting && !isOffline)
                       ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40'
                       : isOffline
-                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40'
-                      : 'bg-ocean-600 text-white'
-                  }`}
+                        ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40'
+                        : 'bg-ocean-600 text-white'
+                    }`}
                 >
                   {isWaking || (isReconnecting && !isOffline) ? (
                     <>

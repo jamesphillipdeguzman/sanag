@@ -94,7 +94,10 @@ export default function Overview({
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ROW 1: Header + Summary Metrics (aligned for standard viewport visibility) */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10 mb-4 animate-fade-in-up">
+        <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10 mb-4 animate-fade-in-up">
+          {/* Subtle nightlight gradient accent line along the bottom border */}
+          <div className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500/30 dark:via-amber-400/40 to-transparent pointer-events-none" />
+
           {/* Header left */}
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
@@ -115,10 +118,22 @@ export default function Overview({
             </p>
           </div>
 
-          {/* Header right: Summary Metrics Cluster with Panay Island Nightlight Silhouette */}
-          <div className="relative group shrink-0">
-            {/* Very faint silhouette outline of Panay Island with soft golden city-light scatter */}
-            <PanaySilhouetteBackground />
+          {/* Header right: Summary Metrics Cluster with Panay Island Nightlight Silhouette & Photon Scatter */}
+          <div className="relative group shrink-0 p-2 sm:p-3 rounded-2xl overflow-hidden">
+            {/* Atmospheric subtle radial ambient glow behind silhouette */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-amber-500/5 via-transparent to-ocean-500/5 rounded-2xl pointer-events-none" />
+
+            {/* Faint Panay Island silhouette outline + scattered photon dots */}
+            <div className="absolute inset-0 opacity-40 dark:opacity-50 pointer-events-none flex items-center justify-center">
+              <PanaySilhouetteBackground />
+            </div>
+
+            {/* Optional subtle CSS twinkling photon dust effect */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              <div className="absolute top-2 left-10 w-1 h-1 bg-amber-300 rounded-full animate-pulse opacity-60" />
+              <div className="absolute bottom-3 right-14 w-1.5 h-1.5 bg-yellow-200 rounded-full animate-ping opacity-40" />
+              <div className="absolute top-1/2 right-1/4 w-1 h-1 bg-amber-400 rounded-full animate-pulse opacity-50" style={{ animationDuration: '3s' }} />
+            </div>
 
             {/* KPI Cards Grid */}
             <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 lg:gap-3">
@@ -278,7 +293,7 @@ function StatCard({
   badge: string;
 }) {
   return (
-    <div className="rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-gray-200 dark:border-white/10 bg-white dark:bg-ink-900/80 text-gray-900 dark:text-white backdrop-blur-md flex flex-col justify-between min-w-[85px] sm:min-w-[105px] shadow-sm dark:shadow-none transition-colors">
+    <div className="rounded-xl px-3 py-2 sm:px-3.5 sm:py-2.5 lg:px-4 lg:py-3 card-hover border border-gray-200 dark:border-white/10 bg-white/90 dark:bg-ink-900/80 text-gray-900 dark:text-white backdrop-blur-md flex flex-col justify-between min-w-[85px] sm:min-w-[105px] shadow-sm dark:shadow-none transition-colors">
       <div className={`flex items-center gap-1.5 mb-1 ${accent}`}>
         {icon}
         <span className="text-[10px] sm:text-[11px] font-semibold text-gray-500 dark:text-ink-400 uppercase tracking-wider truncate">
