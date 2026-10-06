@@ -119,10 +119,10 @@ function MapLoadingSkeleton() {
         </div>
 
         <h4 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-          Calibrating Panay Island Grid
+          Loading Philippine Municipality Boundaries
         </h4>
         <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across 93 LGUs...
+          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across Philippine LGUs...
         </p>
 
         <div className="w-52 h-1.5 bg-slate-200 dark:bg-ink-800/80 rounded-full mt-4 overflow-hidden relative border border-slate-300/50 dark:border-white/5">
@@ -161,7 +161,7 @@ export default function PanayMap({
   nightGlowMode: externalNightGlowMode,
   onNightGlowModeChange,
 }: PanayMapProps) {
-  const [internalNightGlow, setInternalNightGlow] = useState<boolean>(true);
+  const [internalNightGlow, setInternalNightGlow] = useState<boolean>(false);
   const nightGlowMode = externalNightGlowMode ?? internalNightGlow;
   const handleNightGlowToggle = () => {
     const next = !nightGlowMode;
@@ -170,7 +170,7 @@ export default function PanayMap({
   };
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
-  const [internalRegionKey, setInternalRegionKey] = useState<string>('panay');
+  const [internalRegionKey, setInternalRegionKey] = useState<string>('philippines');
   const [extraMunicipalities, setExtraMunicipalities] = useState<Municipality[]>([]);
   const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
   const [showScaleRuler, setShowScaleRuler] = useState<boolean>(false);
@@ -281,20 +281,21 @@ export default function PanayMap({
     (a: GdacsAlert) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
   );
 
-  const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.panay;
+  const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.philippines;
 
   return (
     <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
       {/* Map */}
       <div className="lg:col-span-8 flex flex-col">
-        <div className={`relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-[#090d18]/95 dark:bg-[#070b14]/90 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`}>
+        {/* Keep the panel chrome on the app theme; night glow darkens only the map viewport. */}
+        <div className={`relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-white/95 dark:bg-ink-900/60 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`}>
           {/* Map header with Region Selector */}
-          <div className={`flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b ${nightGlowMode ? 'border-amber-500/20 bg-[#0d1322]/80 dark:bg-[#090e1c]/70' : 'border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40'} transition-colors`}>
+          <div className={`flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-3 border-b ${nightGlowMode ? 'border-amber-500/20 bg-slate-50/80 dark:bg-ink-950/40' : 'border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40'} transition-colors`}>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30">
-                  {currentRegionKey === 'panay' ? 'Panay Default' : activePreset.name}
+                  {currentRegionKey === 'philippines' ? 'Philippines Default' : activePreset.name}
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
@@ -323,7 +324,7 @@ export default function PanayMap({
                   </span>
                 ) : (
                   <>
-                    NASA VIIRS radiance overlay · Nationwide Philippine boundaries (Panay-First Default)
+                    NASA VIIRS radiance overlay · Nationwide Philippine municipality boundaries
                     {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
                   </>
                 )}
@@ -343,14 +344,14 @@ export default function PanayMap({
                   aria-label="Select Philippine Region or Province"
                 >
                   <optgroup label="Primary Scope">
-                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island (Default)</option>
+                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island</option>
                     <option value="iloilo" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Iloilo Province</option>
                     <option value="capiz" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Capiz Province</option>
                     <option value="aklan" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Aklan Province</option>
                     <option value="antique" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Antique Province</option>
                   </optgroup>
                   <optgroup label="Nationwide">
-                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Nationwide Overview (Philippines)</option>
+                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Philippines (Default)</option>
                   </optgroup>
                   <optgroup label="Luzon">
                     <option value="ncr" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">NCR (Metro Manila)</option>
@@ -1189,12 +1190,12 @@ function LeafletMap({
   activeEventId,
   activeEvent,
   onSimulateGdacs,
-  selectedRegionKey = 'panay',
+  selectedRegionKey = 'philippines',
   onRegionChange,
   onChunkLoaded,
   onChunkLoadingChange,
   isActiveTab = true,
-  nightGlowMode = true,
+  nightGlowMode = false,
   onNightGlowModeChange,
   onZoomChange,
 }: LeafletMapProps) {
@@ -1382,13 +1383,14 @@ function LeafletMap({
 
     onChunkLoadingChange?.(true);
     try {
-      const url = key === 'panay' ? '/regions/panay.geojson' : `/regions/${key}.geojson`;
+      const url = key === 'philippines'
+        ? '/philippines_boundaries.geojson'
+        : key === 'panay'
+          ? '/regions/panay.geojson'
+          : `/regions/${key}.geojson`;
       let res = await fetch(url);
       if (!res.ok && key === 'panay') {
         res = await fetch('/panay_municipalities.geojson');
-      }
-      if (!res.ok && key === 'philippines') {
-        res = await fetch('/philippines_boundaries.geojson');
       }
       if (res.ok) {
         const geojson: GeoJSON.FeatureCollection = await res.json();
@@ -1408,8 +1410,7 @@ function LeafletMap({
       onChunkLoadingChange?.(false);
     }
 
-    // Graceful fallback to Panay dataset
-    return regionCacheRef.current.get('panay') || null;
+    return regionCacheRef.current.get(key) || null;
   };
 
   // Function to bind fine-grained municipal features for the active region using HTML5 Canvas
@@ -1614,31 +1615,34 @@ function LeafletMap({
     nightLightOverlayRef.current?.redraw();
   };
 
-  const resetToPanayBounds = (animate = true) => {
+  const resetToNationwideBounds = (animate = true) => {
     const map = mapRef.current;
     if (!map) return;
-    onRegionChange?.('panay');
-    fetchRegionChunk('panay').then((data) => {
-      if (data) renderRegionGeoJson('panay', data);
-      map.setView(PANAY_CENTER, PANAY_ZOOM, { animate });
+    const preset = REGION_PRESETS.philippines;
+    onRegionChange?.('philippines');
+    fetchRegionChunk('philippines').then((data) => {
+      if (data) renderRegionGeoJson('philippines', data);
+      map.setView(preset.center, preset.zoom, { animate });
     });
   };
 
   const handleReset = () => {
-    resetToPanayBounds(true);
+    resetToNationwideBounds(true);
   };
 
-  // Initialize Map with Canvas renderer and Panay Island default fast-load
+  // Initialize the map with nationwide municipality boundaries.
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
+    const initialRegionKey = selectedRegionKey || 'philippines';
+    const initialPreset = REGION_PRESETS[initialRegionKey] || REGION_PRESETS.philippines;
     const initialLocked = true;
     const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 10 });
     canvasRendererRef.current = canvasRenderer;
 
     const map = L.map(mapElement.current, {
-      center: PANAY_CENTER,
-      zoom: PANAY_ZOOM,
+      center: initialPreset.center,
+      zoom: initialPreset.zoom,
       zoomControl: true,
       scrollWheelZoom: false,
       attributionControl: false,
@@ -1671,7 +1675,10 @@ function LeafletMap({
     updateGridScale();
 
     mapRef.current = map;
-    defaultBoundsRef.current = PANAY_BOUNDS;
+    defaultBoundsRef.current = L.latLngBounds([
+      [4.5, 116.5],
+      [21.5, 127.5],
+    ]);
 
     // Initialize CartoDB base tile layer based on active theme and night glow mode
     const initialTileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current);
@@ -1730,23 +1737,11 @@ function LeafletMap({
 
     let disposed = false;
 
-    // Fast-load Panay Island boundaries by default
-    fetchRegionChunk('panay')
+    fetchRegionChunk(initialRegionKey)
       .then((geojson) => {
         if (disposed || mapRef.current !== map || !geojson) return;
-        const targetKey = selectedRegionKey || 'panay';
-        if (targetKey === 'panay') {
-          renderRegionGeoJson('panay', geojson);
-          map.setView(PANAY_CENTER, PANAY_ZOOM);
-        } else {
-          fetchRegionChunk(targetKey).then((chunk) => {
-            if (chunk && !disposed && mapRef.current === map) {
-              renderRegionGeoJson(targetKey, chunk);
-              const preset = REGION_PRESETS[targetKey];
-              if (preset) map.setView(preset.center, preset.zoom);
-            }
-          });
-        }
+        renderRegionGeoJson(initialRegionKey, geojson);
+        map.setView(initialPreset.center, initialPreset.zoom);
       })
       .catch(() => {
         // Ignore aborted or unavailable map data during component cleanup.
@@ -1958,7 +1953,9 @@ function LeafletMap({
       const preset = REGION_PRESETS[selectedRegionKey];
       if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
         try {
-          if (selectedRegionKey === 'panay') {
+          if (selectedRegionKey === 'philippines') {
+            currentMap.setView(preset.center, preset.zoom, { animate: true });
+          } else if (selectedRegionKey === 'panay') {
             currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
           } else {
             currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
@@ -1997,7 +1994,9 @@ function LeafletMap({
         const preset = REGION_PRESETS[targetKey];
         if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
           try {
-            if (targetKey === 'panay') {
+            if (targetKey === 'philippines') {
+              currentMap.setView(preset.center, preset.zoom, { animate: true });
+            } else if (targetKey === 'panay') {
               currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
             } else {
               currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
@@ -2290,7 +2289,7 @@ function LeafletMap({
           never propagate back up into LeafletMap and never touch the tile layer. */}
       <MapLockOverlay
         onUnlock={() => applyMapLock(false)}
-        onLock={() => { applyMapLock(true); resetToPanayBounds(true); }}
+        onLock={() => { applyMapLock(true); resetToNationwideBounds(true); }}
         onReset={handleReset}
         nightGlowMode={nightGlowMode}
         onToggleNightGlow={onNightGlowModeChange ? () => onNightGlowModeChange(!nightGlowMode) : undefined}
@@ -2368,11 +2367,11 @@ function MapLockOverlay({
             type="button"
             onClick={onReset}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/25 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label="Reset map view to Panay Island"
-            title="Re-center on Panay Island (Default)"
+            aria-label="Reset map view to the Philippines"
+            title="Re-center on the Philippines"
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-ink-400" />
-            <span className="hidden sm:inline">Reset Panay</span>
+            <span className="hidden sm:inline">Reset View</span>
             <span className="sm:hidden">Reset</span>
           </button>
 
@@ -2380,8 +2379,8 @@ function MapLockOverlay({
             type="button"
             onClick={handleLock}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-50 dark:bg-ocean-500/20 hover:bg-ocean-100 dark:hover:bg-ocean-500/30 text-ocean-700 dark:text-ocean-200 hover:text-ocean-900 dark:hover:text-white border border-ocean-300 dark:border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label="Lock map viewport and re-center on Panay Island"
-            title="Lock map and re-center on Panay Island"
+            aria-label="Lock map viewport and re-center on the Philippines"
+            title="Lock map and re-center on the Philippines"
           >
             <Lock className="w-3.5 h-3.5 text-ocean-600 dark:text-ocean-300" />
             <span>Lock Map</span>
