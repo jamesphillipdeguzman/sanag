@@ -614,20 +614,6 @@ function App() {
     return found?.resilienceRank ?? null
   }, [municipalitiesWithRank, selectedId])
 
-  // Panay Island LGUs for Panay-focused executive summary & benchmarks by default (strictly Iloilo, Capiz, Aklan, Antique = 93 LGUs)
-  const panayMunicipalities = useMemo(() => {
-    const list = municipalitiesWithRank.filter((m) => {
-      const prov = (m.province || '').toLowerCase().trim()
-      if (prov === 'guimaras') return false
-      if (['iloilo', 'capiz', 'aklan', 'antique'].includes(prov)) return true
-      if (m.pcode) {
-        return m.pcode.startsWith('PH06') && !m.pcode.startsWith('PH06079')
-      }
-      return !m.province && !m.region
-    })
-    return list.length > 0 ? list : municipalitiesWithRank
-  }, [municipalitiesWithRank])
-
   const handleDismissEvent = useCallback(() => {
     setActiveEventId(null)
     setSelectedId(null)
@@ -665,34 +651,17 @@ function App() {
       if (geojsonFeaturesRef.current) {
         return geojsonFeaturesRef.current
       }
-      const filterPanayFeatures = (features) => {
-        if (!Array.isArray(features)) return []
-        return features.filter((f) => {
-          const adm2 = (f.properties?.ADM2_EN || f.properties?.province || '').toLowerCase().trim()
-          const pcode = f.properties?.ADM3_PCODE || f.properties?.psgc_code || ''
-          return adm2 !== 'guimaras' && !pcode.startsWith('PH06079')
-        })
-      }
-
       try {
-        const res = await fetch('/regions/panay.geojson')
-        if (res.ok) {
-          const json = await res.json()
-          if (json.features && json.features.length > 0) {
-            const filtered = filterPanayFeatures(json.features)
-            geojsonFeaturesRef.current = filtered
-            return filtered
-          }
-        }
+        const res = await fetch('/philippines_boundaries.geojson')
+        if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
+        const json = await res.json()
+        const features = Array.isArray(json.features) ? json.features : []
+        geojsonFeaturesRef.current = features
+        return features
       } catch (err) {
-        console.warn('Failed to load Panay region boundaries, trying fallback', err)
+        console.warn('Failed to load nationwide municipality boundaries', err)
+        throw err
       }
-      const res = await fetch('/panay_municipalities.geojson')
-      if (!res.ok) throw new Error(`Boundary map request failed: ${res.status}`)
-      const json = await res.json()
-      const filtered = filterPanayFeatures(json.features || [])
-      geojsonFeaturesRef.current = filtered
-      return filtered
     }
 
     const fetchRadiance = async () => {
