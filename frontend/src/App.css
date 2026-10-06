@@ -207,14 +207,7 @@ html.dark .empty-detail p {
 }
 
 .leaflet-container {
-  background: #0b1220;
   font-family: inherit;
-}
-
-.leaflet-control-zoom a {
-  color: #d8e1ef;
-  background: #111927;
-  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .map-tooltip,
