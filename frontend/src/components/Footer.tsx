@@ -241,7 +241,7 @@ export default function Footer({ onSelectRegion, selectedRegionKey }: FooterProp
                 title="View full Panay Island overview on interactive map"
               >
                 <Compass className="h-3 w-3" />
-                <span>All Panay (93 LGUs)</span>
+                <span>All Panay ({PROVINCES.reduce((acc, p) => acc + (parseInt(p.lgus, 10) || 0), 0) || 95} LGUs)</span>
               </button>
             </div>
 

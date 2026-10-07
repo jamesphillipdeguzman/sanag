@@ -102,7 +102,7 @@ _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
         "startDate": "2024-01-02",
         "endDate": "2024-02-01",
         "description": "Cascading power plant shutdowns leading to total island-wide blackout across Iloilo, Capiz, Aklan, and Antique substations. Verified via multi-day VIIRS radiance drop analysis.",
-        "severity_text": "Total Grid Failure · 93 LGUs Impacted",
+        "severity_text": "Total Grid Failure · 95 LGUs Impacted",
         "country": "Philippines",
         "url": "https://www.gdacs.org",
         "latitude": 10.72,

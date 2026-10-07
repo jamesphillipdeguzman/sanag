@@ -20,7 +20,7 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
     return !m.province && !m.region;
   });
   const targetMunicipalities = panayMunicipalities.length > 0 ? panayMunicipalities : municipalities;
-  const totalPanayLgus = targetMunicipalities.length > 0 ? targetMunicipalities.length : 93;
+  const totalPanayLgus = targetMunicipalities.length > 0 ? targetMunicipalities.length : 95;
 
   const avgRecovery = targetMunicipalities.length > 0
     ? Math.round(targetMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / targetMunicipalities.length)

@@ -552,7 +552,7 @@ html.dark .leaflet-popup.gdacs-leaflet-popup a.leaflet-popup-close-button:hover 
   /* Sits above Leaflet overlay pane (400) and canvas tiles */
   background-image: linear-gradient(to right, rgba(255, 224, 130, 0.22) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 224, 130, 0.22) 1px, transparent 1px);
-  background-size: 48px 48px;
+  background-size: var(--grid-pixel-size, 48px) var(--grid-pixel-size, 48px);
   /* Represents 500m VIIRS pixel spatial scale resolution grid */
 }
 

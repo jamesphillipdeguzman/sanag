@@ -45,7 +45,7 @@ export default function Overview({
   importedEventIds = new Set(),
   onNavigateTab,
 }: OverviewProps) {
-  // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 93 LGUs)
+  // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 95 LGUs)
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
 
   const panayMunicipalities = useMemo(() => {
@@ -61,7 +61,7 @@ export default function Overview({
     return list.length > 0 ? list : municipalities;
   }, [municipalities, PANAY_PROVINCE_SET]);
 
-  const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 93;
+  const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 95;
 
   const avgRecovery = panayMunicipalities.length > 0
     ? Math.round(panayMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / panayMunicipalities.length)

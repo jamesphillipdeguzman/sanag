@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon } from 'lucide-react';
+import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon, Settings } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
+import { useSettings } from '@/context/SettingsContext';
 import { PANAY_GRID_TRANSMISSION_NODES, PANAY_TOTAL_LGUS } from '@/hooks/useLiveCounter';
 import packageInfo from '../../package.json';
 
@@ -40,6 +41,7 @@ export default function Navbar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { openSettings } = useSettings();
   const {
     isOnline,
     isWaking,
@@ -222,6 +224,17 @@ export default function Navbar({
               )}
             </button>
 
+            {/* Preferences & Settings Modal Button */}
+            <button
+              type="button"
+              onClick={openSettings}
+              aria-label="Open SANAG Preferences & Settings"
+              title="Preferences & Settings (Map scope, layers, sensory engine)"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/90 dark:bg-white/5 text-slate-700 dark:text-ink-200 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white shadow-sm transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-ocean-500/40 group"
+            >
+              <Settings className="h-4 w-4 text-slate-600 dark:text-ink-300 group-hover:rotate-45 transition-transform duration-300" />
+            </button>
+
             {/* Live Status Button with dynamic state styling & pulsing indicator */}
             <button
               type="button"
@@ -296,6 +309,17 @@ export default function Navbar({
               ) : (
                 <Moon className="h-4 w-4 text-ocean-600" />
               )}
+            </button>
+
+            {/* Mobile Settings Toggle */}
+            <button
+              type="button"
+              onClick={openSettings}
+              aria-label="Open Settings"
+              title="Preferences & Settings"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100/90 dark:bg-white/5 text-slate-700 dark:text-ink-200 hover:bg-slate-200 dark:hover:bg-white/10"
+            >
+              <Settings className="h-4 w-4 text-slate-600 dark:text-ink-300" />
             </button>
 
             <button

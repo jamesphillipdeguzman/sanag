@@ -95,7 +95,7 @@ const GLOSSARY_ITEMS: GlossaryItem[] = [
     term: 'LGU',
     shortName: 'Local Government Unit',
     category: 'governance',
-    definition: 'Municipalities, component cities, and provincial administrations in the Philippines (e.g., the 93 LGUs of Panay Island across Iloilo, Capiz, Aklan, Antique).',
+    definition: 'Municipalities, component cities, and provincial administrations in the Philippines (e.g., the 95 LGUs of Panay Island across Iloilo, Capiz, Aklan, Antique).',
     details: 'Each LGU possesses a standardized Philippine Standard Geographic Code (PSGC/PCode) that SANAG maps with sub-district GeoJSON polygons to calculate localized recovery rates.',
     tags: ['Administration', 'Municipalities', 'PCode / PSGC'],
   },

@@ -5,10 +5,10 @@ import { checkServerHealth, isBackendMarkedWoke } from '@/services/apiService';
  * Real-world infrastructure baseline for Panay Island power grid monitoring:
  * 14 primary high-voltage transmission substation and grid telemetry nodes
  * operated across the 4 provinces (Iloilo, Capiz, Aklan, Antique)
- * supplying the 93 local government units (LGUs).
+ * supplying the 95 local government units (LGUs).
  */
 export const PANAY_GRID_TRANSMISSION_NODES = 14;
-export const PANAY_TOTAL_LGUS = 93;
+export const PANAY_TOTAL_LGUS = 95;
 
 export interface SystemTelemetryState {
   reportingStationsCount: number;
@@ -32,7 +32,7 @@ export interface UseSystemTelemetryOptions {
 /**
  * Custom hook providing genuine telemetry data grounded in real system metrics:
  * - High-voltage transmission & monitoring stations across Western Visayas
- * - 93 monitored LGUs on Panay Island
+ * - 95 monitored LGUs on Panay Island
  * - Active API status probe (/api/health) with silent background heartbeat
  *
  * Replaces artificial Math.random() jitter with honest, demonstrable system state.

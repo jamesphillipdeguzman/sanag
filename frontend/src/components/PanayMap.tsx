@@ -6,6 +6,7 @@ import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '
 import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 import { useTheme } from '@/context/ThemeContext';
+import { useSettings, type BasemapSource } from '@/context/SettingsContext';
 
 export interface RegionPreset {
   id: string;
@@ -119,10 +120,10 @@ function MapLoadingSkeleton() {
         </div>
 
         <h4 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-          Loading Philippine Municipality Boundaries
+          Loading Panay Island Municipality Boundaries
         </h4>
         <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across Philippine LGUs...
+          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across Panay Island LGUs...
         </p>
 
         <div className="w-52 h-1.5 bg-slate-200 dark:bg-ink-800/80 rounded-full mt-4 overflow-hidden relative border border-slate-300/50 dark:border-white/5">
@@ -161,21 +162,42 @@ export default function PanayMap({
   nightGlowMode: externalNightGlowMode,
   onNightGlowModeChange,
 }: PanayMapProps) {
-  const [internalNightGlow, setInternalNightGlow] = useState<boolean>(false);
+  const { settings, updateSetting } = useSettings();
+  const [internalNightGlow, setInternalNightGlow] = useState<boolean>(() => settings?.defaultNightGlow || false);
   const nightGlowMode = externalNightGlowMode ?? internalNightGlow;
   const handleNightGlowToggle = () => {
     const next = !nightGlowMode;
     setInternalNightGlow(next);
     onNightGlowModeChange?.(next);
+    updateSetting('defaultNightGlow', next);
   };
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [showGdacsMarkers, setShowGdacsMarkers] = useState(true);
-  const [internalRegionKey, setInternalRegionKey] = useState<string>('philippines');
+  const [internalRegionKey, setInternalRegionKey] = useState<string>(() => settings?.defaultRegion || 'panay');
   const [extraMunicipalities, setExtraMunicipalities] = useState<Municipality[]>([]);
   const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
-  const [showScaleRuler, setShowScaleRuler] = useState<boolean>(false);
+  const [showScaleRuler, setShowScaleRuler] = useState<boolean>(() => settings?.showScaleRuler || false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [mapZoom, setMapZoom] = useState(8);
+
+  // Synchronize internal states if user updates preferences in SettingsModal
+  useEffect(() => {
+    if (settings?.defaultRegion && !externalRegionKey) {
+      setInternalRegionKey(settings.defaultRegion);
+    }
+  }, [settings?.defaultRegion, externalRegionKey]);
+
+  useEffect(() => {
+    if (settings?.defaultNightGlow !== undefined && externalNightGlowMode === undefined) {
+      setInternalNightGlow(settings.defaultNightGlow);
+    }
+  }, [settings?.defaultNightGlow, externalNightGlowMode]);
+
+  useEffect(() => {
+    if (settings?.showScaleRuler !== undefined) {
+      setShowScaleRuler(settings.showScaleRuler);
+    }
+  }, [settings?.showScaleRuler]);
 
   const currentRegionKey = externalRegionKey ?? internalRegionKey;
   const handleRegionChange = (newKey: string) => {
@@ -281,7 +303,7 @@ export default function PanayMap({
     (a: GdacsAlert) => (a.latitude != null && a.longitude != null) || (a.coordinates && a.coordinates.length >= 2)
   );
 
-  const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.philippines;
+  const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.panay;
 
   return (
     <div className="grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch">
@@ -295,7 +317,7 @@ export default function PanayMap({
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30">
-                  {currentRegionKey === 'philippines' ? 'Philippines Default' : activePreset.name}
+                  {currentRegionKey === 'panay' ? 'Panay Island (Default)' : activePreset.name}
                 </span>
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
@@ -344,14 +366,14 @@ export default function PanayMap({
                   aria-label="Select Philippine Region or Province"
                 >
                   <optgroup label="Primary Scope">
-                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island</option>
+                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island (Default)</option>
                     <option value="iloilo" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Iloilo Province</option>
                     <option value="capiz" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Capiz Province</option>
                     <option value="aklan" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Aklan Province</option>
                     <option value="antique" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Antique Province</option>
                   </optgroup>
                   <optgroup label="Nationwide">
-                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Philippines (Default)</option>
+                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Nationwide (Philippines)</option>
                   </optgroup>
                   <optgroup label="Luzon">
                     <option value="ncr" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">NCR (Metro Manila)</option>
@@ -407,7 +429,11 @@ export default function PanayMap({
               <button
                 type="button"
                 id="viirs-scale-ruler-toggle"
-                onClick={() => setShowScaleRuler((v) => !v)}
+                onClick={() => {
+                  const next = !showScaleRuler;
+                  setShowScaleRuler(next);
+                  updateSetting('showScaleRuler', next);
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${showScaleRuler
                   ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
@@ -437,7 +463,10 @@ export default function PanayMap({
               <button
                 type="button"
                 id="audio-spatial-indicator-toggle"
-                onClick={() => toggleAudio()}
+                onClick={() => {
+                  toggleAudio();
+                  updateSetting('audioFeedback', !isAudioEnabled);
+                }}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${isAudioEnabled
                   ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
                   : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
@@ -526,6 +555,7 @@ export default function PanayMap({
                   showGrid={showGrid}
                   onToggleGrid={() => setShowGrid((v) => !v)}
                   zoom={mapZoom}
+                  scaleCalibration={settings?.scaleCalibration ?? 1.0}
                 />
 
                 {isLoading && municipalities.length > 0 && (
@@ -847,7 +877,7 @@ export default function PanayMap({
 
             <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-[11px] text-slate-500 dark:text-ink-400 text-center">
               {currentRegionKey === 'panay'
-                ? 'Covers 93 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
+                ? 'Covers 95 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
                 : `Covers fine-grained municipalities in ${activePreset.name}`}
             </div>
           </div>
@@ -867,12 +897,12 @@ function isMobileOrTouchDevice(): boolean {
   );
 }
 
-function getBaseTileUrl(isLightMode: boolean, nightGlow: boolean = false): string {
+function getBaseTileUrl(isLightMode: boolean, nightGlow: boolean = false, basemapSource?: BasemapSource): string {
   const apiKey = (import.meta.env.VITE_MY_API_KEY as string | undefined)?.trim();
   const queryParam = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
 
-  // In Realistic Night Glow mode, always harmonize with deeply darkened orbital basemap
-  if (nightGlow) {
+  // In Realistic Night Glow mode or Black Marble / VIIRS basemap selection, darken orbital base
+  if (basemapSource === 'black-marble' || basemapSource === 'viirs-night-lights' || nightGlow) {
     return `https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png${queryParam}`;
   }
 
@@ -1190,7 +1220,7 @@ function LeafletMap({
   activeEventId,
   activeEvent,
   onSimulateGdacs,
-  selectedRegionKey = 'philippines',
+  selectedRegionKey = 'panay',
   onRegionChange,
   onChunkLoaded,
   onChunkLoadingChange,
@@ -1200,6 +1230,7 @@ function LeafletMap({
   onZoomChange,
 }: LeafletMapProps) {
   const { theme } = useTheme();
+  const { settings } = useSettings();
   const isLight = theme === 'light';
   const isLightRef = useRef(isLight);
   isLightRef.current = isLight;
@@ -1332,7 +1363,8 @@ function LeafletMap({
   // Track lock state imperatively so toggling NEVER causes a LeafletMap re-render.
   // All side-effects (Leaflet handlers + container classList) are applied directly
   // via applyMapLock(), avoiding any React render cycle for the tile layer.
-  const isLockedRef = useRef<boolean>(true);
+  const initialLocked = settings?.defaultInteractionMode === 'locked';
+  const isLockedRef = useRef<boolean>(initialLocked);
 
   // Imperatively enable/disable Leaflet interaction handlers and update the
   // container CSS class. Does NOT call setState, so the tile layer is safe.
@@ -1615,30 +1647,72 @@ function LeafletMap({
     nightLightOverlayRef.current?.redraw();
   };
 
-  const resetToNationwideBounds = (animate = true) => {
+  // Helper to read the active default region setting from localStorage or settings context
+  const getActiveDefaultRegion = (): string => {
+    try {
+      const raw = localStorage.getItem('sanag_dashboard_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.defaultRegion && typeof parsed.defaultRegion === 'string') {
+          return parsed.defaultRegion;
+        }
+      }
+    } catch {
+      // Fallback if localStorage is restricted
+    }
+    return settings?.defaultRegion || 'panay';
+  };
+
+  const resetToDefaultBounds = (animate = true) => {
     const map = mapRef.current;
     if (!map) return;
-    const preset = REGION_PRESETS.philippines;
-    onRegionChange?.('philippines');
-    fetchRegionChunk('philippines').then((data) => {
-      if (data) renderRegionGeoJson('philippines', data);
-      map.setView(preset.center, preset.zoom, { animate });
+
+    // Dynamically retrieve user default region preference from localStorage
+    const targetRegionKey = getActiveDefaultRegion();
+    const preset = REGION_PRESETS[targetRegionKey] || REGION_PRESETS.panay;
+
+    onRegionChange?.(targetRegionKey);
+
+    fetchRegionChunk(targetRegionKey).then((data) => {
+      if (data) renderRegionGeoJson(targetRegionKey, data);
+      const currentMap = mapRef.current;
+      if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) return;
+
+      try {
+        if (targetRegionKey === 'panay') {
+          if (animate) {
+            currentMap.flyTo(PANAY_CENTER, PANAY_ZOOM, { duration: 1.0 });
+          } else {
+            currentMap.setView(PANAY_CENTER, PANAY_ZOOM);
+          }
+        } else if (preset) {
+          if (animate) {
+            currentMap.flyTo(preset.center, preset.zoom, { duration: 1.0 });
+          } else {
+            currentMap.setView(preset.center, preset.zoom);
+          }
+        }
+      } catch {
+        currentMap.setView(preset.center, preset.zoom);
+      }
     });
   };
 
   const handleReset = () => {
-    resetToNationwideBounds(true);
+    resetToDefaultBounds(true);
   };
 
-  // Initialize the map with nationwide municipality boundaries.
+  // Initialize the map with Panay Island municipality boundaries.
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
-    const initialRegionKey = selectedRegionKey || 'philippines';
-    const initialPreset = REGION_PRESETS[initialRegionKey] || REGION_PRESETS.philippines;
-    const initialLocked = true;
-    const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 10 });
-    canvasRendererRef.current = canvasRenderer;
+    const initialRegionKey = selectedRegionKey || settings?.defaultRegion || 'panay';
+    const initialPreset = REGION_PRESETS[initialRegionKey] || REGION_PRESETS.panay;
+    const initialLocked = settings?.defaultInteractionMode === 'locked';
+    const activeRenderer = settings?.renderingEngine === 'svg'
+      ? L.svg({ padding: 0.5 })
+      : L.canvas({ padding: 0.5, tolerance: 10 });
+    canvasRendererRef.current = activeRenderer as any;
 
     const map = L.map(mapElement.current, {
       center: initialPreset.center,
@@ -1646,8 +1720,8 @@ function LeafletMap({
       zoomControl: true,
       scrollWheelZoom: false,
       attributionControl: false,
-      preferCanvas: true,
-      renderer: canvasRenderer,
+      preferCanvas: settings?.renderingEngine !== 'svg',
+      renderer: activeRenderer,
       dragging: !initialLocked,
       touchZoom: !initialLocked,
       doubleClickZoom: !initialLocked,
@@ -1662,15 +1736,17 @@ function LeafletMap({
 
       const latRad = (11 * Math.PI) / 180;
       const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, currentZoom);
-      const sizeInPixels = 500 / metersPerPixel;
+      const calibratedDnb = 500 * (settings?.scaleCalibration || 1.0);
+      const sizeInPixels = calibratedDnb / metersPerPixel;
 
-      const wrapper = map.getContainer().parentElement;
+      const wrapper = map.getContainer()?.parentElement;
       if (wrapper) {
         wrapper.style.setProperty('--grid-pixel-size', `${Math.max(4, sizeInPixels)}px`);
       }
     };
 
     map.on('zoom', updateGridScale);
+    map.on('zoomend', updateGridScale);
     map.on('viewreset', updateGridScale);
     updateGridScale();
 
@@ -1681,7 +1757,7 @@ function LeafletMap({
     ]);
 
     // Initialize CartoDB base tile layer based on active theme and night glow mode
-    const initialTileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current);
+    const initialTileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current, settings?.basemapSource);
     const initialTileLayer = L.tileLayer(initialTileUrl, {
       subdomains: 'abcd',
       maxZoom: 20,
@@ -1786,7 +1862,7 @@ function LeafletMap({
       tileLayerRef.current = null;
     }
 
-    const tileUrl = getBaseTileUrl(isLight, nightGlowModeRef.current);
+    const tileUrl = getBaseTileUrl(isLight, nightGlowModeRef.current, settings?.basemapSource);
 
     const newTileLayer = L.tileLayer(tileUrl, {
       subdomains: 'abcd',
@@ -1839,7 +1915,7 @@ function LeafletMap({
         updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight, nightGlowModeRef.current);
       }
     });
-  }, [isLight]);
+  }, [isLight, settings?.basemapSource]);
 
   // Dynamically toggle Realistic Night Glow mode (NASA Black Marble VIIRS)
   useEffect(() => {
@@ -1850,7 +1926,7 @@ function LeafletMap({
     }
 
     // Update tile layer in-place without rebuilding the map
-    const newTileUrl = getBaseTileUrl(isLightRef.current, nightGlowMode);
+    const newTileUrl = getBaseTileUrl(isLightRef.current, nightGlowMode, settings?.basemapSource);
     if (tileLayerRef.current) {
       tileLayerRef.current.setUrl(newTileUrl);
     }
@@ -1934,6 +2010,26 @@ function LeafletMap({
       });
     }
   }, [nightGlowMode]);
+
+  // Dynamically update spatial grid sizing when VIIRS scale calibration is adjusted
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
+      const latRad = (11 * Math.PI) / 180;
+      const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, currentZoom);
+      const calibratedDnb = 500 * (settings?.scaleCalibration || 1.0);
+      const sizeInPixels = calibratedDnb / metersPerPixel;
+
+      const wrapper = map.getContainer()?.parentElement;
+      if (wrapper) {
+        wrapper.style.setProperty('--grid-pixel-size', `${Math.max(4, sizeInPixels)}px`);
+      }
+    } catch {
+      // safe fallback
+    }
+  }, [settings?.scaleCalibration]);
 
   // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
   useEffect(() => {
@@ -2281,15 +2377,17 @@ function LeafletMap({
       {/* Static initial class; applyMapLock() mutates classList directly without re-rendering LeafletMap */}
       <div
         ref={mapElement}
-        className="leaflet-map is-locked is-maximized-height"
-        aria-label="Philippine municipality recovery map"
+        className={`leaflet-map ${initialLocked ? 'is-locked' : 'is-unlocked'} is-maximized-height`}
+        aria-label="Panay Island municipality recovery map"
       />
 
       {/* Overlay buttons live in their own component so their state changes
           never propagate back up into LeafletMap and never touch the tile layer. */}
       <MapLockOverlay
+        initialLocked={initialLocked}
+        defaultRegionName={REGION_PRESETS[getActiveDefaultRegion()]?.name || 'Default Region'}
         onUnlock={() => applyMapLock(false)}
-        onLock={() => { applyMapLock(true); resetToNationwideBounds(true); }}
+        onLock={() => { applyMapLock(true); resetToDefaultBounds(true); }}
         onReset={handleReset}
         nightGlowMode={nightGlowMode}
         onToggleNightGlow={onNightGlowModeChange ? () => onNightGlowModeChange(!nightGlowMode) : undefined}
@@ -2303,6 +2401,8 @@ function LeafletMap({
 // It owns the visual toggle state; all Leaflet side-effects are handled by the
 // callbacks passed from LeafletMap via applyMapLock().
 interface MapLockOverlayProps {
+  initialLocked?: boolean;
+  defaultRegionName?: string;
   onUnlock: () => void;
   onLock: () => void;
   onReset: () => void;
@@ -2310,13 +2410,19 @@ interface MapLockOverlayProps {
   onToggleNightGlow?: () => void;
 }
 function MapLockOverlay({
+  initialLocked = true,
+  defaultRegionName = 'Default Region',
   onUnlock,
   onLock,
   onReset,
   nightGlowMode = true,
   onToggleNightGlow,
 }: MapLockOverlayProps) {
-  const [isLocked, setIsLocked] = useState<boolean>(true);
+  const [isLocked, setIsLocked] = useState<boolean>(initialLocked);
+
+  useEffect(() => {
+    setIsLocked(initialLocked);
+  }, [initialLocked]);
 
   const handleUnlock = () => {
     setIsLocked(false);
@@ -2367,8 +2473,8 @@ function MapLockOverlay({
             type="button"
             onClick={onReset}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/25 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label="Reset map view to the Philippines"
-            title="Re-center on the Philippines"
+            aria-label={`Reset map view to ${defaultRegionName}`}
+            title={`Re-center on ${defaultRegionName}`}
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-ink-400" />
             <span className="hidden sm:inline">Reset View</span>
@@ -2379,8 +2485,8 @@ function MapLockOverlay({
             type="button"
             onClick={handleLock}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-50 dark:bg-ocean-500/20 hover:bg-ocean-100 dark:hover:bg-ocean-500/30 text-ocean-700 dark:text-ocean-200 hover:text-ocean-900 dark:hover:text-white border border-ocean-300 dark:border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label="Lock map viewport and re-center on the Philippines"
-            title="Lock map and re-center on the Philippines"
+            aria-label={`Lock map viewport and re-center on ${defaultRegionName}`}
+            title={`Lock map and re-center on ${defaultRegionName}`}
           >
             <Lock className="w-3.5 h-3.5 text-ocean-600 dark:text-ocean-300" />
             <span>Lock Map</span>
@@ -2392,80 +2498,139 @@ function MapLockOverlay({
 }
 
 // ─── VIIRSScaleRuler ─────────────────────────────────────────────────────────
-// Compact dual-axis (L-shaped) VIIRS 500m pixel scale indicator.
-// Floats in the BOTTOM-RIGHT corner of the map canvas so it never overlaps
-// the municipality hover tooltip which is anchored at bottom-left.
-// Appears permanently when `pinned=true`; fades in on any polygon hover otherwise.
+// Compact dual-axis NASA VIIRS Day/Night Band (DNB) spatial resolution scale ruler.
+// Strictly faithful to NASA DNB spatial resolution where 1 pixel = 500m nominal.
+// Automatically adjusts its pixel-to-meter ratio accurately across zoom levels,
+// mobile viewports, and custom scale calibration without warping or distortion.
 interface VIIRSScaleRulerProps {
   pinned: boolean;
   nightGlow?: boolean;
   mapHovered?: boolean;
   showGrid?: boolean;
   onToggleGrid?: () => void;
+  zoom?: number;
+  scaleCalibration?: number; // Multiplier: 1.0 = nominal 500m/pixel (1 DNB = 500m)
 }
-function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false, showGrid = false, onToggleGrid, zoom = 8 }: VIIRSScaleRulerProps & { zoom?: number }) {
+
+function VIIRSScaleRuler({
+  pinned,
+  nightGlow = false,
+  mapHovered = false,
+  showGrid = false,
+  onToggleGrid,
+  zoom = 8,
+  scaleCalibration = 1.0,
+}: VIIRSScaleRulerProps) {
   const visible = pinned || mapHovered || showGrid;
+
+  // Track viewport width for responsive mobile layout adaptation
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 640 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const axisColor = nightGlow ? 'rgba(251,191,36,0.70)' : 'rgba(51,65,85,0.50)';
   const tickColor = nightGlow ? 'rgba(251,191,36,0.55)' : 'rgba(51,65,85,0.40)';
   const labelColor = nightGlow ? 'rgba(251,191,36,0.80)' : 'rgba(51,65,85,0.70)';
-  const noteColor = nightGlow ? 'rgba(251,191,36,0.45)' : 'rgba(100,116,139,0.65)';
-  const bgColor = nightGlow ? 'rgba(9,13,24,0.90)' : 'rgba(255,255,255,0.95)';
+  const noteColor = nightGlow ? 'rgba(251,191,36,0.50)' : 'rgba(100,116,139,0.70)';
+  const bgColor = nightGlow ? 'rgba(9,13,24,0.92)' : 'rgba(255,255,255,0.96)';
   const borderColor = showGrid
-    ? (nightGlow ? 'rgba(245,158,11,0.50)' : 'rgba(14,165,233,0.50)')
-    : (nightGlow ? 'rgba(255,170,51,0.20)' : 'rgba(15,23,42,0.10)');
+    ? (nightGlow ? 'rgba(245,158,11,0.55)' : 'rgba(14,165,233,0.55)')
+    : (nightGlow ? 'rgba(255,170,51,0.22)' : 'rgba(15,23,42,0.12)');
   const shadowVal = nightGlow
-    ? '0 2px 14px rgba(0,0,0,0.60), 0 0 10px rgba(255,170,51,0.05)'
-    : '0 2px 10px rgba(0,0,0,0.09)';
+    ? '0 2px 14px rgba(0,0,0,0.65), 0 0 10px rgba(255,170,51,0.08)'
+    : '0 2px 10px rgba(0,0,0,0.10)';
 
-  const segments = nightGlow
-    ? ['#121722', '#4a2f0a', '#8c531b', '#e08b18', '#ffaa33']
-    : ['#94a3b8', '#64748b', '#475569', '#334155', '#1e293b'];
+  // ── NASA VIIRS Day/Night Band (DNB) Spatial Scale Math (1 DNB = 500m Nominal) ──
+  // Calibrated ground meter distance for 1 DNB pixel (default: 500m)
+  const effectiveCalibration = typeof scaleCalibration === 'number' && isFinite(scaleCalibration) && scaleCalibration > 0
+    ? scaleCalibration
+    : 1.0;
+  const calibratedDnbMeters = 500 * effectiveCalibration;
 
-  const RULER_W = 96;
-  const RULER_H = 32;
-
-  // ── Dynamic Ground Distance Calculation based on Zoom & Latitude (~11°N) ──
+  // Web Mercator ground resolution at latitude ~11°N (Panay Island & Western Visayas)
   const latRad = (11 * Math.PI) / 180;
   const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, zoom);
-  const totalMeters = RULER_W * metersPerPixel;
 
+  // Target on-screen pixel width (smaller on mobile to prevent clipping)
+  const targetPx = isMobile ? 80 : 105;
+  const targetMeters = targetPx * metersPerPixel;
+
+  // Standard cartographic round distances in meters
+  const NICE_DISTANCES = [
+    250, 500, 1000, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 30000, 50000, 75000, 100000, 150000, 200000
+  ];
+
+  // Select optimal distance that produces an unwarped bar between min and max pixel constraints
+  let chosenDistance = NICE_DISTANCES[0];
+  let minDiff = Infinity;
+  for (const dist of NICE_DISTANCES) {
+    const px = dist / metersPerPixel;
+    const diff = Math.abs(px - targetPx);
+    if (diff < minDiff && px >= (isMobile ? 55 : 75) && px <= (isMobile ? 105 : 135)) {
+      minDiff = diff;
+      chosenDistance = dist;
+    }
+  }
+
+  // Exact screen width in pixels: mathematically exact, no stretch or warp
+  const RULER_W = Math.max(isMobile ? 60 : 75, Math.round(chosenDistance / metersPerPixel));
+  const RULER_H = isMobile ? 26 : 30;
+
+  // Exact DNB pixel count represented by this distance
+  const totalDnbPixels = chosenDistance / calibratedDnbMeters;
+  const dnbLabel = totalDnbPixels >= 1
+    ? (Number.isInteger(totalDnbPixels) ? `${totalDnbPixels}` : totalDnbPixels.toFixed(1))
+    : totalDnbPixels.toFixed(2);
+
+  // Human-readable metric labels
   let maxLabel: string;
   let midLabel: string;
-
-  if (totalMeters >= 1000) {
-    const totalKm = totalMeters / 1000;
+  if (chosenDistance >= 1000) {
+    const totalKm = chosenDistance / 1000;
     maxLabel = `${totalKm >= 10 ? Math.round(totalKm) : totalKm.toFixed(1)}km`;
     const midKm = totalKm / 2;
     midLabel = `${midKm >= 10 ? Math.round(midKm) : midKm.toFixed(1)}km`;
   } else {
-    const roundedMeters = Math.round(totalMeters / 50) * 50;
-    maxLabel = `${Math.max(50, roundedMeters)}m`;
-    midLabel = `${Math.max(25, Math.round(roundedMeters / 2))}m`;
+    maxLabel = `${chosenDistance}m`;
+    midLabel = `${Math.round(chosenDistance / 2)}m`;
   }
 
   const TICK_LABELS = ['0', midLabel, maxLabel];
 
+  // Alternating dual-color segment fill for clear scale subdivision
+  const segmentFills = nightGlow
+    ? ['#ffaa33', '#4a2f0a', '#ffaa33', '#4a2f0a']
+    : ['#1e293b', '#cbd5e1', '#1e293b', '#cbd5e1'];
+
   return (
     <div
       onClick={onToggleGrid}
-      aria-label="VIIRS 500m pixel scale indicator and grid toggle"
+      aria-label={`VIIRS scale indicator: 1 DNB = ${Math.round(calibratedDnbMeters)}m, total span ${maxLabel}`}
       style={{
         position: 'absolute',
-        bottom: '14px',
-        right: '14px',
+        bottom: isMobile ? '10px' : '14px',
+        right: isMobile ? '10px' : '14px',
         zIndex: 1001,
         pointerEvents: 'auto',
         cursor: 'pointer',
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0) scale(1)' : 'translateY(5px) scale(0.97)',
         transition: 'opacity 0.25s ease, transform 0.25s ease, border-color 0.2s ease',
+        maxWidth: 'calc(100% - 24px)',
       }}
-      title="Click to toggle 500m VIIRS pixel spatial grid overlay"
+      title="Click to toggle 500m VIIRS spatial grid overlay"
     >
       <div
         style={{
-          padding: '7px 9px 8px 8px',
+          padding: isMobile ? '5px 7px 6px 7px' : '7px 9px 8px 8px',
           borderRadius: '10px',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
@@ -2474,50 +2639,74 @@ function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false, showGr
           boxShadow: shadowVal,
           display: 'inline-flex',
           flexDirection: 'column',
-          gap: '5px',
+          gap: isMobile ? '3px' : '5px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <Ruler style={{ width: 10, height: 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <Ruler style={{ width: isMobile ? 9 : 10, height: isMobile ? 9 : 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
             <span style={{
-              fontSize: '9px',
+              fontSize: isMobile ? '8px' : '9px',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               fontWeight: 700,
-              letterSpacing: '0.06em',
+              letterSpacing: '0.05em',
               textTransform: 'uppercase',
               color: labelColor,
               whiteSpace: 'nowrap',
             }}>
-              500m VIIRS Scale
+              {Math.round(calibratedDnbMeters)}m VIIRS Scale
             </span>
           </div>
           <span style={{
-            fontSize: '7.5px', fontWeight: 700,
-            padding: '1px 5px', borderRadius: '4px',
-            background: showGrid ? (nightGlow ? 'rgba(245,158,11,0.30)' : 'rgba(14,165,233,0.20)') : (nightGlow ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
-            border: showGrid ? (nightGlow ? '1px solid rgba(245,158,11,0.60)' : '1px solid rgba(14,165,233,0.50)') : '1px solid transparent',
-            color: showGrid ? (nightGlow ? '#fcd34d' : '#0284c7') : (nightGlow ? 'rgba(255,255,255,0.40)' : 'rgba(100,116,139,0.60)'),
+            fontSize: isMobile ? '7px' : '7.5px',
+            fontWeight: 700,
+            padding: '1px 4px',
+            borderRadius: '4px',
+            background: showGrid
+              ? (nightGlow ? 'rgba(245,158,11,0.30)' : 'rgba(14,165,233,0.20)')
+              : (nightGlow ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
+            border: showGrid
+              ? (nightGlow ? '1px solid rgba(245,158,11,0.60)' : '1px solid rgba(14,165,233,0.50)')
+              : '1px solid transparent',
+            color: showGrid
+              ? (nightGlow ? '#fcd34d' : '#0284c7')
+              : (nightGlow ? 'rgba(255,255,255,0.40)' : 'rgba(100,116,139,0.60)'),
             letterSpacing: '0.06em',
           }}>
             {showGrid ? 'GRID ON' : 'GRID OFF'}
           </span>
         </div>
 
-        <div style={{ position: 'relative', width: RULER_W + 8, height: RULER_H + 10 }}>
+        <div style={{ position: 'relative', width: RULER_W + 8, height: RULER_H + 8 }}>
+          {/* Vertical axis marker */}
           <div style={{
-            position: 'absolute', left: 0, top: 0, width: '2px', height: RULER_H,
-            background: `linear-gradient(to bottom, ${axisColor}, transparent)`, borderRadius: '2px',
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: '2px',
+            height: RULER_H,
+            background: `linear-gradient(to bottom, ${axisColor}, transparent)`,
+            borderRadius: '2px',
           }} />
+
+          {/* Scale bar with alternating segments */}
           <div style={{
-            position: 'absolute', left: 0, top: RULER_H - 6, width: RULER_W, height: 6,
-            borderRadius: '0 3px 3px 0', overflow: 'hidden', display: 'flex',
-            border: `1px solid ${nightGlow ? 'rgba(251,191,36,0.18)' : 'rgba(51,65,85,0.13)'}`,
+            position: 'absolute',
+            left: 0,
+            top: RULER_H - 6,
+            width: RULER_W,
+            height: 6,
+            borderRadius: '0 3px 3px 0',
+            overflow: 'hidden',
+            display: 'flex',
+            border: `1px solid ${nightGlow ? 'rgba(251,191,36,0.25)' : 'rgba(51,65,85,0.20)'}`,
           }}>
-            {segments.map((c, i) => (
+            {segmentFills.map((c, i) => (
               <div key={i} style={{ flex: 1, background: c }} />
             ))}
           </div>
+
+          {/* Origin tick dot and end ticks */}
           <div style={{ position: 'absolute', left: '-2px', top: RULER_H - 8, width: '5px', height: '5px', borderRadius: '50%', background: axisColor }} />
           <div style={{ position: 'absolute', left: RULER_W - 1, top: RULER_H - 9, width: '2px', height: '8px', background: axisColor, borderRadius: '1px' }} />
           <div style={{ position: 'absolute', left: Math.floor(RULER_W / 2) - 1, top: RULER_H - 8, width: '1px', height: '5px', background: tickColor }} />
@@ -2533,7 +2722,7 @@ function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false, showGr
                   left: i === 0 ? 0 : i === 2 ? undefined : positions[i],
                   right: i === 2 ? 0 : undefined,
                   top: RULER_H + 2,
-                  fontSize: '8px',
+                  fontSize: isMobile ? '7.5px' : '8px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                   fontWeight: i === 2 ? 700 : 500,
                   color: labelColor,
@@ -2547,11 +2736,29 @@ function VIIRSScaleRuler({ pinned, nightGlow = false, mapHovered = false, showGr
             );
           })}
 
-          <span style={{ position: 'absolute', left: '5px', top: 0, fontSize: '8px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 500, color: tickColor, lineHeight: 1 }}>N↑</span>
+          <span style={{
+            position: 'absolute',
+            left: '4px',
+            top: 0,
+            fontSize: isMobile ? '7px' : '8px',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            fontWeight: 600,
+            color: tickColor,
+            lineHeight: 1,
+          }}>
+            N↑
+          </span>
         </div>
 
-        <span style={{ fontSize: '8px', color: noteColor, fontStyle: 'italic', fontFamily: 'ui-sans-serif, system-ui, sans-serif', letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-          1 DNB pixel = 500m · Span: {maxLabel}
+        <span style={{
+          fontSize: isMobile ? '7.5px' : '8px',
+          color: noteColor,
+          fontStyle: 'italic',
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          letterSpacing: '0.01em',
+          whiteSpace: 'nowrap',
+        }}>
+          1 DNB = {Math.round(calibratedDnbMeters)}m · {dnbLabel} DNB ({maxLabel})
         </span>
       </div>
     </div>
