@@ -302,10 +302,10 @@ VITE_MY_API_KEY=your_search_provider_or_carto_api_key_here
 
 ### Variable Reference
 
-| Variable | Description | Type / Scope | Location | Required |
-| :--- | :--- | :--- | :--- | :--- |
-| `GEMINI_API_KEY` | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error. | Secret (Backend) | `backend/.env` | **Yes** |
-| `VITE_MY_API_KEY` | Public search provider API key for incident media retrieval & CARTO basemap tiles. If omitted, falls back to direct DuckDuckGo/Wikimedia indexing and CARTO anonymous CDN. | Config (Client) | `frontend/.env` | No |
+| Variable          | Description                                                                                                                                                                | Type / Scope     | Location        | Required |
+| :---------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------- | :-------------- | :------- |
+| `GEMINI_API_KEY`  | Authenticates calls to the Gemini API for AI-generated situational briefings. Without this key the `/api/generate-briefing` endpoint will return a 500 error.              | Secret (Backend) | `backend/.env`  | **Yes**  |
+| `VITE_MY_API_KEY` | Public search provider API key for incident media retrieval & CARTO basemap tiles. If omitted, falls back to direct DuckDuckGo/Wikimedia indexing and CARTO anonymous CDN. | Config (Client)  | `frontend/.env` | No       |
 
 > **Security note:** Both `.env` files are in `.gitignore`. Never paste real API keys directly into source files or commit them to the repository.
 
@@ -373,11 +373,11 @@ The FastAPI backend runs at `http://localhost:8000`. All endpoints are also brow
 
 ## Image Search & Incident Media
 
-| Method | Endpoint | Key Query Params | Description |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/search-event-images` | `q`, `count`, `refresh`, `event_type` | Multi-source photojournalism search with DuckDuckGo indexing and Wikimedia/Openverse fallback. |
-| `GET` | `/api/v1/search-event-images` | `q`, `count`, `refresh`, `event_type` | Versioned alias for incident photojournalism search. |
-| `GET` | `/api/media/search` | `q`, `count`, `refresh`, `event_type` | RESTful media search alias. |
+| Method | Endpoint                      | Key Query Params                      | Description                                                                                    |
+| :----- | :---------------------------- | :------------------------------------ | :--------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/search-event-images`    | `q`, `count`, `refresh`, `event_type` | Multi-source photojournalism search with DuckDuckGo indexing and Wikimedia/Openverse fallback. |
+| `GET`  | `/api/v1/search-event-images` | `q`, `count`, `refresh`, `event_type` | Versioned alias for incident photojournalism search.                                           |
+| `GET`  | `/api/media/search`           | `q`, `count`, `refresh`, `event_type` | RESTful media search alias.                                                                    |
 
 ---
 
@@ -887,6 +887,55 @@ The Recovery Ratio R(t) = Post-Event Light / Baseline Light is a **proxy**, not 
 
 ---
 
+# Usability Defect Log & Final Regression Test Report
+
+## 1. Usability Defects Identified & Resolution Status
+
+| Defect ID  | Component / Area            | Description                                                                                                                              | Severity | Resolution / Fix Applied                                                                                    | Status         |
+| :--------- | :-------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- | :------- | :---------------------------------------------------------------------------------------------------------- | :------------- |
+| **DEF-01** | Landing Page Overview       | Total LGU count showed an erroneous hardcoded/cached value of 112 instead of Panay's jurisdiction count.                                 | Medium   | Corrected municipal aggregation query/constant to reflect verified regional total.                          | **Resolved**   |
+| **DEF-02** | Recovery Tab Analytics      | Disaster selector initially populated only a single municipality (Anini-y) instead of all comparative LGUs.                              | High     | Fixed state initialization and municipality array mapping on event change to render all comparative curves. | **Resolved**   |
+| **DEF-03** | Historical Search & Filters | Search bar query debounce caused intermittent unhandled filter combinations between event type and year.                                 | Medium   | Synchronized multi-criteria filter state (Name, Type, Date range 2013–2025).                                | **Resolved**   |
+| **DEF-04** | Map View & Grid Scale       | Zoom level at high magnification displayed grid boxes matching 250m rather than 1 full 500m DNB pixel without clear visual scale legend. | Low      | Added explicit 500m VIIRS scale widget indicator with DNB dimension reference (1 DNB = 500m).               | **Resolved**   |
+| **DEF-05** | Media Enrichment            | Automated image fetcher occasionally returned unrelated Wikimedia Commons media for specific storm codes.                                | Low      | Documented as known upstream API limitation; added fallback placeholder cards.                              | **Documented** |
+
+---
+
+## 2. Final Regression Testing Checklist
+
+- [x] **Event Selection & Filters:** Verified seamless switching between 2013 (Yolanda), 2024 (Panay Blackout), and 2025 (Typhoon Kammuri).
+- [x] **Live Hazard Integration:** Verified live GDACS feed parsing and alert card rendering (e.g., Antique coastal flooding).
+- [x] **Map Simulation:** Verified *Simulate Event* plots pulsating alert-level circles (Green to Red severity) without breaking layer controls.
+- [x] **Recovery Curve Comparisons:** Confirmed multiple municipalities load simultaneously with Day 0 baseline percentages through full restoration.
+- [x] **Map Scope Toggle:** Confirmed switching between Panay Island default view and Nationwide Philippines view functions smoothly.
+- [x] **API & Database Stability:** Verified FastAPI endpoints respond within expected thresholds against SQLite on Render.
+
+---
+
+## Technical Methodology, Limitations & Future Work
+
+### 1. Cloud-Mask Handling & Satellite Noise
+* **VIIRS DNB Atmospheric Interference:** Nighttime lights (VIIRS Day/Night Band) are vulnerable to dense cloud cover, ephemeral light sources (lightning, fires, gas flares), and lunar illumination cycles.
+* **Filtering Strategy:** SANAG processes quality flags from the VIIRS VNP46A2 / VNP46A1 products, filtering out cloud-contaminated pixels using the mandatory cloud-mask layer. When consecutive cloudy nights obscure post-disaster radiance, interpolations are pegged against cloud-free historical baselines.
+
+### 2. Missing Tile & Data Gaps Handling
+* **Latency & Satellite Swath Coverage:** NASA / NOAA polar-orbiting satellites have daily orbital passes that may occasionally leave spatial swath seams or encounter processing latencies of 24–48 hours before calibrated surface radiance is publicly exposed via Earth Engine APIs.
+* **Fallback & Pipeline Resilience:** In scenarios where target tile bounding boxes return empty rasters or null GeoTIFF footprints, the backend pipeline defaults to pre-ingested baseline SQLite records and alerts the UI with a non-blocking data availability notice.
+
+### 3. Automated Sourcing & Upstream API Constraints
+* **Media Enrichment:** Automated contextual image fetching via third-party APIs (such as Wikimedia Commons) relies on automated keyword matching. For specific regional meteorological designations (PAGASA local names vs. JTWC international identifiers), irrelevant media can occasionally slip through without strict disambiguation keys.
+
+### 4. Validation Findings
+* **Panay Island Grid Collapse (2024):** VIIRS DNB aggregate radiance dropped sharply across major transmission nodes, validating that satellite nightlight anomalies correlate strongly with ground-truth electrical blackouts.
+* **Typhoon Kammuri / Tisoy Baseline:** Analysis accurately reflected spatial divergence in recovery speeds—highlighting isolated, infrastructure-dependent LGUs (e.g., San Remigio at 18% Day 0 baseline) versus faster grid reconnects in transit hubs.
+
+### 5. Future Improvements
+* **Automated Disambiguation Pipeline:** Implement AI/NLP prompt filters or Wikidata Entity ID matching to guarantee 100% relevant Wikimedia media assets.
+* **Near-Real-Time Grid Integration:** Incorporate open telemetry hooks from electric cooperatives (e.g., ILECO, ANTECO, CAPELCO) to calibrate DNB pixel radiance against ground-truth substation feeder meters.
+* **Predictive ML Recovery Curves:** Train survival analysis or time-series regression models on historical storm recovery curves to forecast restoration timetables immediately upon typhoon landfall.
+
+---
+
 # 🔮 Future Improvements & Scalability Roadmap
 
 As SANAG scales from its initial Panay Island baseline into a comprehensive nationwide disaster response and power grid intelligence platform, the following scalable milestones define the development roadmap:
@@ -1015,4 +1064,4 @@ SANAG is complete when:
 
 > *"No man can serve two masters; for either he will hate the one and love the other, or else he will hold to the one and despise the other."*
 > 
-> — **Katherine Cendana** *(3 Nephi 13:24)*
+> — **Katherine Cendana** *(3 Nephi 13:24)*
