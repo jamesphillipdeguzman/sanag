@@ -85,7 +85,7 @@ The resulting ratio $R(t)$ is classified into three operational categories:
 8. Allows municipality-to-municipality comparison.
 9. Provides an optional Gemini AI situational briefing.
 10. Explores aftermath photojournalism and ground incident media.
-11. Monitors 14 high-voltage transmission nodes across 93 LGUs with real-time API telemetry.
+11. Monitors 14 high-voltage transmission nodes across 95 LGUs with real-time API telemetry.
 
 ---
 
@@ -100,11 +100,11 @@ To complement satellite radiance indices with ground-truth visual verification, 
   > *"Disaster aftermath imagery indexed from news and wire services. If images appear irrelevant or outdated, click the **Refresh** button to pull alternative coverage."*
 
 ### 2. Telemetry & Situational Awareness Grid
-- **Panay Island Grid Telemetry:** Replaced synthetic client-side visitor counters with grounded operational metrics reflecting the **14 High-Voltage Transmission Substation nodes** operated across the 4 provinces (Iloilo, Capiz, Aklan, Antique) monitoring all **93 Local Government Units (LGUs)**.
+- **Panay Island Grid Telemetry:** Replaced synthetic client-side visitor counters with grounded operational metrics reflecting the **14 High-Voltage Transmission Substation nodes** operated across the 4 provinces (Iloilo, Capiz, Aklan, Antique) monitoring all **95 Local Government Units (LGUs)**.
 - **Adaptive Backend Connection Status:** Dynamic probe indicators reflecting Render API state:
   - `Online` (Emerald pulse): Active real-time grid feeds and healthy API responses.
   - `Waking Server` (Amber pulse): Visual notification during backend cold starts with countdown tickers.
-  - `Local Cache` (Slate dot): Offline operation utilizing local baseline municipal data across 93 LGUs when the server is unreachable.
+  - `Local Cache` (Slate dot): Offline operation utilizing local baseline municipal data across 95 LGUs when the server is unreachable.
 
 ---
 
@@ -903,7 +903,7 @@ The Recovery Ratio R(t) = Post-Event Light / Baseline Light is a **proxy**, not 
 
 ## 2. Final Regression Testing Checklist
 
-- [x] **Event Selection & Filters:** Verified seamless switching between 2013 (Yolanda), 2024 (Panay Blackout), and 2025 (Typhoon Kammuri).
+- [x] **Event Selection & Filters:** Verified seamless switching between 2013 (Yolanda), 2024 (Panay Blackout), and 2025 (Typhoon Kalmaegi).
 - [x] **Live Hazard Integration:** Verified live GDACS feed parsing and alert card rendering (e.g., Antique coastal flooding).
 - [x] **Map Simulation:** Verified *Simulate Event* plots pulsating alert-level circles (Green to Red severity) without breaking layer controls.
 - [x] **Recovery Curve Comparisons:** Confirmed multiple municipalities load simultaneously with Day 0 baseline percentages through full restoration.
@@ -927,7 +927,7 @@ The Recovery Ratio R(t) = Post-Event Light / Baseline Light is a **proxy**, not 
 
 ### 4. Validation Findings
 * **Panay Island Grid Collapse (2024):** VIIRS DNB aggregate radiance dropped sharply across major transmission nodes, validating that satellite nightlight anomalies correlate strongly with ground-truth electrical blackouts.
-* **Typhoon Kammuri / Tisoy Baseline:** Analysis accurately reflected spatial divergence in recovery speeds—highlighting isolated, infrastructure-dependent LGUs (e.g., San Remigio at 18% Day 0 baseline) versus faster grid reconnects in transit hubs.
+* **Typhoon Kalmaegi / Tino Baseline:** Analysis accurately reflected spatial divergence in recovery speeds—highlighting isolated, infrastructure-dependent LGUs (e.g., San Remigio at 18% Day 0 baseline) versus faster grid reconnects in transit hubs.
 
 ### 5. Future Improvements
 * **Automated Disambiguation Pipeline:** Implement AI/NLP prompt filters or Wikidata Entity ID matching to guarantee 100% relevant Wikimedia media assets.
