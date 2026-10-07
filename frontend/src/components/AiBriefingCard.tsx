@@ -284,7 +284,7 @@ ${benchmarkHeader}: ${benchmarkString}
                   content={
                     isAllRestoredOrNoCritical &&
                     (/\b(critical or warning states?|requiring targeted technical and logistical reinforcement|limited-power states?)\b/i.test(briefingData.summary))
-                      ? `Following the impact of ${event?.name || 'the disaster event'}, satellite nightlight observations confirm that all ${municipalities.length || 93} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
+                      ? `Following the impact of ${event?.name || 'the disaster event'}, satellite nightlight observations confirm that all ${municipalities.length || 95} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
                       : briefingData.summary
                   }
                 />
@@ -797,7 +797,7 @@ function parseBriefingResponse(
   // 1. The top summary paragraph entirely discards words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages.
   // 2. It dynamically outputs a positive, steady-state narrative.
   if (isSteadyState) {
-    const lguCount = totalMunicipalities || 93;
+    const lguCount = totalMunicipalities || 95;
     const eventName = event?.name || 'the disaster event';
     const steadyStateSummary = `Following the impact of ${eventName}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`;
 
@@ -873,7 +873,7 @@ function extractStructuredObject(
 
   if (isCriticalZero) {
     criticalAlerts = STEADY_STATE_CRITICAL_ALERTS;
-    const lguCount = totalMunicipalities || 93;
+    const lguCount = totalMunicipalities || 95;
     const eventName = event?.name || 'the disaster event';
     summary = `Following the impact of ${eventName}, satellite nightlight observations confirm that all ${lguCount} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`;
   }
@@ -902,12 +902,12 @@ function createFallbackBriefing(
   avgScore: number = 50,
   critical: Municipality[] = [],
   restored: Municipality[] = [],
-  totalCount: number = 93,
+  totalCount: number = 95,
   topPerforming: Municipality[] = []
 ): ParsedBriefing {
   const hasCritical = critical.length > 0;
   const isSteadyState = !hasCritical || (restored.length > 0 && restored.length === totalCount);
-  const lguCount = totalCount || 93;
+  const lguCount = totalCount || 95;
   const criticalNames = critical.slice(0, 3).map((m) => `${m.name} (${m.province})`).join(', ');
   const eventName = event?.name || 'the disaster event';
 

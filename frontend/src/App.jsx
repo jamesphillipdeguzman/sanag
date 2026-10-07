@@ -10,8 +10,10 @@ import GuideGlossary from './components/GuideGlossary.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
 import ErrorBoundary from './components/ErrorBoundary.tsx'
+import SettingsModal from './components/SettingsModal.tsx'
 import { apiFetch, setHasLocalFallbackData, safeJsonParse } from './services/apiService.ts'
 import { useServerHealth } from './context/ServerHealthContext.tsx'
+import { useSettings } from './context/SettingsContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
 import {
   isPanayRegion,
@@ -208,8 +210,16 @@ function App() {
   const [recoveryRecords, setRecoveryRecords] = useState([])
   const [isMapLoading, setIsMapLoading] = useState(true)
   const [recoveryDateRange, setRecoveryDateRange] = useState(null)
-  const [selectedRegionKey, setSelectedRegionKey] = useState('panay')
+  const { settings } = useSettings()
+  const [selectedRegionKey, setSelectedRegionKey] = useState(() => settings?.defaultRegion || 'panay')
   const [activeTab, setActiveTab] = useState(getTabFromHash)
+
+  // Synchronize region if default setting changes
+  useEffect(() => {
+    if (settings?.defaultRegion) {
+      setSelectedRegionKey((prev) => (prev !== settings.defaultRegion ? settings.defaultRegion : prev))
+    }
+  }, [settings?.defaultRegion])
 
   // Synchronize tab state with URL hash
   const handleSelectTab = useCallback((tab) => {
@@ -884,7 +894,7 @@ function App() {
       <Navbar
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
-        totalLgus={municipalities?.length || 93}
+        totalLgus={municipalities?.length || 95}
       />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
@@ -1152,6 +1162,7 @@ function App() {
       </main>
 
       <Footer onSelectRegion={handleSelectProvince} selectedRegionKey={selectedRegionKey} />
+      <SettingsModal />
     </div>
   )
 }

@@ -323,13 +323,13 @@ def health_check():
 
 @app.get("/api/v1/municipalities", response_model=MunicipalityResponse, tags=["Municipalities"])
 def get_municipalities(
-    scope: Optional[str] = Query("panay", description="Scope: 'panay' (default, 93 LGUs), 'nationwide', or region code"),
+    scope: Optional[str] = Query("panay", description="Scope: 'panay' (default, 95 LGUs), 'nationwide', or region code"),
     region: Optional[str] = Query(None, description="Optional region code/name filter"),
     province: Optional[str] = Query(None, description="Optional province code/name filter")
 ):
     """
     Returns monitored municipalities with their ADM3_PCODE/PSGC for geospatial binding.
-    Defaults to Panay Island (93 municipalities) to preserve default focused behavior,
+    Defaults to Panay Island (95 municipalities) to preserve default focused behavior,
     while supporting nationwide inspection when scope='nationwide' or region/province is queried.
     """
     try:
@@ -1154,102 +1154,233 @@ def build_search_query(raw_query: str, event_type: Optional[str] = None) -> str:
         return f'"{base_name}" (typhoon OR disaster OR aftermath OR damage OR satellite OR flood) Philippines {negative_filters}'
 
 
-def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
+def generate_wikimedia_queries(raw_query: str, event_type: Optional[str] = None) -> List[str]:
     """
-    Fallback image provider querying Wikimedia Commons and Openverse APIs
-    when DuckDuckGo is blocked, throttled, or returns empty on cloud hosting / datacenter IPs.
+    Generates intelligent, prioritized search queries for Wikimedia Commons.
+    Rather than relying solely on exact full-phrase strings (which frequently return 0 on Commons),
+    this produces the cleaned event name followed by targeted regional and disaster keywords.
+    E.g. "Western Visayas Monsoon Flooding" ->
+      ["Western Visayas Monsoon Flooding", "Western Visayas flood", "Iloilo flood", "Panay flood",
+       "Western Visayas typhoon", "Western Visayas monsoon", "Antique flood", "Visayas flood", "Philippines flood disaster"]
     """
-    results: List[Dict[str, Any]] = []
-    clean = q.strip()
-    clean_q = clean.split('(')[0].strip().replace('"', '') or clean.replace('"', '')
+    clean = raw_query.replace('"', '').strip()
+    match = re.match(r'^(.*?)\s*\((.*?)\)$', clean)
+    base = match.group(1).strip() if match else clean
+    local_alias = match.group(2).strip() if match else ""
+
+    lower = clean.lower()
+    base_lower = base.lower()
+    type_lower = (event_type or "").lower()
+
+    # Disaster type classification
+    is_flood = any(k in lower or k in type_lower for k in ["flood", "monsoon", "habagat", "inundation", "rain", "fl"])
+    is_typhoon = any(k in lower or k in type_lower for k in ["typhoon", "storm", "cyclone", "bagyo", "tc"])
+    is_quake = any(k in lower or k in type_lower for k in ["quake", "earthquake", "seismic", "tremor", "eq"])
+    is_grid = any(k in lower or k in type_lower for k in ["grid", "blackout", "power", "outage", "collapse", "electricity"])
+    is_oil_spill = any(k in lower or k in type_lower for k in ["oil", "spill"])
+    is_volcano = any(k in lower or k in type_lower for k in ["volcano", "eruption", "ashfall", "vo"])
+
+    # Regional detection
+    is_wv = any(k in lower for k in ["western visayas", "panay", "iloilo", "capiz", "antique", "aklan", "guimaras", "negros occidental", "bacolod", "roxas", "kalibo"])
+    is_cv = any(k in lower for k in ["central visayas", "cebu", "bohol", "negros oriental", "dumaguete"])
+    is_ev = any(k in lower for k in ["eastern visayas", "leyte", "samar", "tacloban", "ormoc"])
+    is_bicol = any(k in lower for k in ["bicol", "albay", "camarines", "legazpi", "naga"])
+    is_ncr = any(k in lower for k in ["manila", "marikina", "batangas", "cavite", "laguna", "rizal", "quezon", "calabarzon"])
+    is_nl = any(k in lower for k in ["cagayan", "isabela", "ilocos", "benguet", "baguio", "cordillera"])
+    is_mindanao = any(k in lower for k in ["mindanao", "davao", "agusan", "surigao", "cotabato"])
+
+    # Typhoon name cross-mappings (International <-> PAGASA)
+    typhoon_cross_map = {
+        "gaemi": "Carina", "carina": "Gaemi",
+        "trami": "Kristine", "kristine": "Trami",
+        "nalgae": "Paeng", "paeng": "Nalgae",
+        "megi": "Agaton", "agaton": "Megi",
+        "rai": "Odette", "odette": "Rai",
+        "molave": "Quinta", "quinta": "Molave",
+        "phanfone": "Ursula", "ursula": "Phanfone",
+        "hagupit": "Ruby", "ruby": "Hagupit",
+        "haiyan": "Yolanda", "yolanda": "Haiyan",
+        "fengshen": "Frank", "frank": "Fengshen",
+        "kalmaegi": "Tino", "tino": "Kalmaegi",
+        "ketsana": "Ondoy", "ondoy": "Ketsana",
+        "vamco": "Ulysses", "ulysses": "Vamco",
+        "goni": "Rolly", "rolly": "Goni",
+    }
+
+    queries: List[str] = []
+
+    # 1. Cleaned base name without restrictive quotes
+    if base:
+        queries.append(base)
+    if local_alias and local_alias.lower() != base_lower:
+        queries.append(f"Typhoon {local_alias}")
+        queries.append(f"{base} {local_alias}")
+
+    # Check cross-mapped typhoon names
+    for key, mapped in typhoon_cross_map.items():
+        if key in lower:
+            queries.append(f"Typhoon {mapped}")
+            queries.append(f"Typhoon {mapped} flood")
+            queries.append(f"Typhoon {mapped} damage")
+
+    # 2. Regional and hazard keywords
+    if is_wv or (not any([is_cv, is_ev, is_bicol, is_ncr, is_nl, is_mindanao])):
+        # Default or Western Visayas focus
+        if is_flood:
+            wv_flood_queries = []
+            if "antique" in lower:
+                wv_flood_queries.extend(["Antique flood", "Antique Philippines flood"])
+            if "iloilo" in lower:
+                wv_flood_queries.extend(["Iloilo flood", "Iloilo City flood"])
+            if "capiz" in lower:
+                wv_flood_queries.extend(["Capiz flood", "Roxas City flood"])
+            wv_flood_queries.extend([
+                "Western Visayas flood",
+                "Iloilo flood",
+                "Panay flood",
+                "Western Visayas typhoon",
+                "Western Visayas monsoon",
+                "Antique flood",
+                "Capiz flood",
+                "Visayas flood",
+            ])
+            queries.extend(wv_flood_queries)
+        elif is_typhoon:
+            queries.extend([
+                "Western Visayas typhoon",
+                "Panay typhoon",
+                "Iloilo typhoon",
+                "Visayas typhoon damage",
+                "Typhoon Frank Iloilo",
+            ])
+        elif is_grid:
+            queries.extend([
+                "Panay blackout",
+                "Panay power outage",
+                "Panay grid",
+                "Iloilo blackout",
+                "Visayas power grid",
+            ])
+        elif is_quake:
+            queries.extend([
+                "Panay earthquake",
+                "Western Visayas earthquake",
+                "Iloilo earthquake",
+            ])
+        elif is_oil_spill:
+            queries.extend([
+                "Guimaras oil spill",
+                "Iloilo oil spill",
+                "Western Visayas oil spill",
+            ])
+        else:
+            queries.extend([
+                "Western Visayas disaster",
+                "Iloilo flood",
+                "Panay flood",
+                "Western Visayas typhoon",
+            ])
+
+    if is_cv:
+        if is_quake:
+            queries.extend(["Bohol earthquake", "Cebu earthquake", "Central Visayas earthquake"])
+        elif is_flood:
+            queries.extend(["Cebu flood", "Central Visayas flood"])
+        else:
+            queries.extend(["Cebu typhoon", "Typhoon Odette Cebu", "Central Visayas disaster"])
+
+    if is_ev:
+        if is_flood:
+            queries.extend(["Leyte flood", "Samar flood", "Tacloban flood"])
+        elif is_quake:
+            queries.extend(["Leyte earthquake", "Samar earthquake"])
+        else:
+            queries.extend(["Tacloban typhoon", "Typhoon Haiyan Leyte", "Eastern Visayas typhoon"])
+
+    if is_bicol:
+        if is_flood:
+            queries.extend(["Bicol flood", "Legazpi flood", "Albay flood"])
+        elif is_volcano:
+            queries.extend(["Mayon volcano eruption", "Mayon ashfall Albay"])
+        else:
+            queries.extend(["Albay typhoon", "Bicol typhoon damage", "Legazpi flood"])
+
+    if is_ncr:
+        if is_flood:
+            queries.extend(["Marikina flood", "Metro Manila flood", "Manila flood"])
+        else:
+            queries.extend(["Metro Manila typhoon", "Manila flood typhoon", "Batangas volcano"])
+
+    if is_nl:
+        if is_flood:
+            queries.extend(["Cagayan flood", "Ilocos flood", "Isabela flood"])
+        else:
+            queries.extend(["Cagayan typhoon", "Isabela typhoon", "Baguio landslide"])
+
+    if is_mindanao:
+        if is_quake:
+            queries.extend(["Davao earthquake", "Mindanao earthquake", "Cotabato earthquake"])
+        elif is_flood:
+            queries.extend(["Davao flood", "Agusan flood", "Mindanao flood"])
+        else:
+            queries.extend(["Mindanao typhoon", "Davao typhoon damage"])
+
+    # 3. National context fallbacks
+    if is_flood:
+        queries.extend(["Philippines flood disaster", "Philippines flood aftermath"])
+    elif is_typhoon:
+        queries.extend(["Philippines typhoon damage", "Philippines typhoon disaster"])
+    elif is_quake:
+        queries.extend(["Philippines earthquake damage"])
+    elif is_grid:
+        queries.extend(["Philippines blackout"])
+
+    # Deduplicate while preserving priority order
+    seen = set()
+    deduped = []
+    for q in queries:
+        cleaned_q = q.strip()
+        q_norm = cleaned_q.lower()
+        if cleaned_q and q_norm not in seen:
+            seen.add(q_norm)
+            deduped.append(cleaned_q)
+
+    return deduped
+
+
+def fetch_wikimedia_commons_images(
+    raw_query: str,
+    count: int = 12,
+    event_type: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """
+    Robust image fetcher querying the Wikimedia Commons Action API
+    (https://commons.wikimedia.org/w/api.php?action=query&generator=search).
+    Automatically steps through event-specific and broader regional keywords
+    to ensure regional events (e.g. Western Visayas Monsoon Flooding) return
+    valid ground photos and photojournalistic damage imagery.
+    """
+    queries = generate_wikimedia_queries(raw_query, event_type=event_type)
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SanagDisasterMonitor/1.0 (contact@sanag.org)',
+        'User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)',
         'Api-User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)'
     }
 
-    lower = clean_q.lower()
-    type_lower = (event_type or "").lower()
+    collected: List[Dict[str, Any]] = []
+    seen_ids = set()
+    seen_urls = set()
 
-    is_grid = (
-        "grid" in type_lower
-        or "blackout" in type_lower
-        or "power" in type_lower
-        or "grid" in lower
-        or "blackout" in lower
-        or "power outage" in lower
-        or "electricity" in lower
-    )
-    is_quake = (
-        "quake" in type_lower
-        or "earthquake" in type_lower
-        or "seismic" in type_lower
-        or "earthquake" in lower
-        or "seismic" in lower
-    )
-    is_oil_spill = (
-        "oil" in type_lower
-        or "spill" in type_lower
-        or "oil spill" in lower
-        or "spill" in lower
-    )
-    is_flood = (
-        "flood" in type_lower
-        or "monsoon" in type_lower
-        or "habagat" in type_lower
-        or "flood" in lower
-        or "monsoon" in lower
-        or "habagat" in lower
-    )
+    clean_raw = raw_query.replace('"', '').strip()
 
-    # 1. Attempt Wikimedia Commons search with disaster-anchored queries & exact phrase matching
-    try:
-        if is_grid:
-            queries = [
-                f'"{clean_q}"',
-                f'{clean_q} blackout',
-                f'{clean_q} power outage',
-                f'Panay blackout',
-                f'Panay power outage',
-                f'Panay grid',
-                f"{clean_q} Philippines"
-            ]
-        elif is_quake:
-            queries = [
-                f'"{clean_q}"',
-                f'"{clean_q}" earthquake damage',
-                f'"{clean_q}" aftermath',
-                f"{clean_q} Philippines"
-            ]
-        elif is_oil_spill:
-            queries = [
-                f'"{clean_q}"',
-                f'"{clean_q}" oil spill',
-                f'"{clean_q}" aftermath',
-                f"{clean_q} Philippines"
-            ]
-        elif is_flood:
-            queries = [
-                f'"{clean_q}"',
-                f'"{clean_q}" flood aftermath',
-                f'"{clean_q}" flood',
-                f"{clean_q} Philippines"
-            ]
-        else:
-            queries = [
-                f'"{clean_q}"',
-                f'"{clean_q}" damage',
-                f'"{clean_q}" flood aftermath',
-                f"{clean_q} Philippines"
-            ]
-
-        with httpx.Client(timeout=6.0, headers=headers) as client:
-            for q_try in queries:
+    with httpx.Client(timeout=7.0, headers=headers) as client:
+        for q_try in queries:
+            try:
                 params = {
                     "action": "query",
                     "generator": "search",
                     "gsrsearch": q_try,
-                    "gsrnamespace": "6",
-                    "gsrlimit": str(count),
+                    "gsrnamespace": "6",  # Namespace 6 = File:
+                    "gsrlimit": str(min(count, 20)),
                     "prop": "imageinfo",
                     "iiprop": "url|mime",
                     "iiurlwidth": "600",
@@ -1257,33 +1388,92 @@ def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str]
                     "origin": "*"
                 }
                 r = client.get("https://commons.wikimedia.org/w/api.php", params=params)
-                if r.status_code == 200:
-                    pages = r.json().get("query", {}).get("pages", {})
-                    for pid, p in pages.items():
-                        info = p.get("imageinfo", [{}])[0]
-                        mime = info.get("mime", "")
-                        if not mime.startswith("image/") or "svg" in mime:
-                            continue
-                        thumb = info.get("thumburl") or info.get("url")
-                        img = info.get("url") or thumb
-                        desc = info.get("descriptionurl") or img
-                        title = p.get("title", "").replace("File:", "").strip()
-                        if thumb and img:
-                            results.append({
-                                "id": f"wiki-{pid}",
-                                "title": title,
-                                "thumbnailUrl": thumb,
-                                "imageUrl": img,
-                                "sourceUrl": desc,
-                                "domain": "commons.wikimedia.org"
-                            })
-                    if results:
-                        print(f"[IMAGE SEARCH] [Fallback Wikimedia] Found {len(results)} items for '{q_try}'", flush=True)
-                        return results[:count]
-    except Exception as e:
-        print(f"[IMAGE SEARCH] [Fallback Wikimedia Error]: {type(e).__name__}: {e}", flush=True)
+                if r.status_code != 200:
+                    continue
 
-    # 2. Attempt Openverse API search with disaster-anchored context
+                pages = r.json().get("query", {}).get("pages", {})
+                if not pages or not isinstance(pages, dict):
+                    continue
+
+                query_added = 0
+                for pid, p in pages.items():
+                    info_list = p.get("imageinfo") or []
+                    if not info_list:
+                        continue
+                    info = info_list[0]
+                    mime = (info.get("mime") or "").lower()
+
+                    # Strictly filter for web-compatible image formats, excluding SVG/PDF/audio
+                    if not mime.startswith("image/") or "svg" in mime or "tiff" in mime or "djvu" in mime:
+                        continue
+
+                    thumb = info.get("thumburl") or info.get("url")
+                    img = info.get("url") or thumb
+                    if not thumb or not img:
+                        continue
+
+                    item_id = f"wiki-{pid}"
+                    if item_id in seen_ids or img in seen_urls:
+                        continue
+
+                    raw_title = p.get("title", "")
+                    clean_title = re.sub(r'^File:\s*', '', raw_title, flags=re.IGNORECASE)
+                    clean_title = re.sub(r'\.[a-zA-Z0-9]+$', '', clean_title).replace('_', ' ').strip()
+
+                    desc_url = info.get("descriptionurl") or f"https://commons.wikimedia.org/wiki/File:{urllib.parse.quote(raw_title)}"
+
+                    collected.append({
+                        "id": item_id,
+                        "title": clean_title or clean_raw,
+                        "thumbnailUrl": thumb,
+                        "imageUrl": img,
+                        "sourceUrl": desc_url,
+                        "domain": "commons.wikimedia.org",
+                        "isFallback": (q_try.lower() != clean_raw.lower()),
+                        "queryUsed": q_try
+                    })
+                    seen_ids.add(item_id)
+                    seen_urls.add(img)
+                    query_added += 1
+
+                if query_added > 0:
+                    print(f"[IMAGE SEARCH] [Wikimedia Commons] '{q_try}' returned {query_added} valid photo(s). Total: {len(collected)}", flush=True)
+
+                # Once we have collected enough relevant images, stop
+                if len(collected) >= count:
+                    break
+
+            except Exception as e:
+                print(f"[IMAGE SEARCH] [Wikimedia Commons Error on '{q_try}']: {e}", flush=True)
+
+    return collected[:count]
+
+
+def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Fallback image provider combining Wikimedia Commons, Openverse, and Wikipedia pageimages
+    when DuckDuckGo is blocked, throttled, or returns 0 results for regional disasters.
+    """
+    clean_q = q.split('(')[0].strip().replace('"', '') or q.strip()
+
+    # 1. Primary fallback: Wikimedia Commons with regional expansion
+    results = fetch_wikimedia_commons_images(clean_q, count=count, event_type=event_type)
+    if results:
+        return results
+
+    headers = {
+        'User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)',
+        'Api-User-Agent': 'SanagDisasterMonitor/1.0 (https://sanag.org; contact@sanag.org)'
+    }
+    lower = clean_q.lower()
+    type_lower = (event_type or "").lower()
+
+    is_grid = "grid" in type_lower or "blackout" in type_lower or "grid" in lower or "blackout" in lower
+    is_quake = "quake" in type_lower or "earthquake" in type_lower or "quake" in lower
+    is_oil_spill = "oil" in type_lower or "spill" in lower
+    is_flood = "flood" in type_lower or "monsoon" in lower or "flood" in lower
+
+    # 2. Secondary fallback: Openverse API search with disaster-anchored context
     try:
         if is_grid:
             openverse_q = f"{clean_q} blackout power outage grid Philippines"
@@ -1321,7 +1511,7 @@ def fallback_openverse_search(q: str, count: int = 12, event_type: Optional[str]
     except Exception as e:
         print(f"[IMAGE SEARCH] [Fallback Openverse Error]: {type(e).__name__}: {e}", flush=True)
 
-    # 3. Attempt Wikipedia Pageimages with Philippines disaster context
+    # 3. Tertiary fallback: Wikipedia Pageimages with Philippines disaster context
     try:
         if is_grid:
             wiki_search = f"{clean_q} blackout power grid Philippines"

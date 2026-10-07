@@ -247,7 +247,7 @@ export default function GdacsAlertBanner({
                           }}
                           disabled={isImporting}
                           className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
-                          title="Simulate Event: Confirmed NASA VIIRS radiance data available across 93 LGUs"
+                          title="Simulate Event: Confirmed NASA VIIRS radiance data available across 95 LGUs"
                         >
                           {isImporting ? (
                             <>
