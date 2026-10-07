@@ -47,21 +47,24 @@ export default function Overview({
 }: OverviewProps) {
   // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 95 LGUs)
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
+  const PANAY_PCODE_PREFIXES = useMemo(() => ['ph06004', 'ph06006', 'ph06019', 'ph06030'], []);
 
   const panayMunicipalities = useMemo(() => {
     const list = municipalities.filter((m) => {
       const prov = (m.province || '').toLowerCase().trim();
-      if (prov === 'guimaras') return false;
-      if (PANAY_PROVINCE_SET.has(prov)) return true;
-      if (m.pcode) {
-        return m.pcode.startsWith('PH06') && !m.pcode.startsWith('PH06079');
+      if (prov) {
+        return PANAY_PROVINCE_SET.has(prov);
       }
-      return !m.province && !m.region;
+      if (m.pcode) {
+        const pcodeLower = m.pcode.toLowerCase();
+        return PANAY_PCODE_PREFIXES.some((prefix) => pcodeLower.startsWith(prefix));
+      }
+      return false;
     });
     return list.length > 0 ? list : municipalities;
-  }, [municipalities, PANAY_PROVINCE_SET]);
+  }, [municipalities, PANAY_PROVINCE_SET, PANAY_PCODE_PREFIXES]);
 
-  const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 95;
+  const totalPanayLgus = 95;
 
   const avgRecovery = panayMunicipalities.length > 0
     ? Math.round(panayMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / panayMunicipalities.length)
@@ -106,7 +109,7 @@ export default function Overview({
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
               <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
-                NASA VIIRS Nightlight Analytics · {totalPanayLgus} Panay LGUs
+                NASA VIIRS Nightlight Analytics · 95 Panay LGUs
               </span>
             </div>
 
@@ -114,7 +117,7 @@ export default function Overview({
               Panay Island <span className="gradient-text">Power Recovery Grid</span>
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
-              High-resolution satellite radiance tracking and daily restoration indexes across {totalPanayLgus} LGUs in Iloilo, Capiz, Aklan, and Antique.
+              High-resolution satellite radiance tracking and daily restoration indexes across 95 LGUs in Iloilo, Capiz, Aklan, and Antique.
             </p>
           </div>
 
