@@ -170,7 +170,7 @@ def _parse_event_context(context: str) -> dict:
     if m_cat:
         data["category"] = m_cat.group(1).strip()
 
-    m_tot = re.search(r"(?:Total Municipalities Monitored|Total Monitored|Total Municipalities):\s*(\d+)", text, re.I)
+    m_tot = re.search(r"(?:Total Municipalities Monitored|Total Monitored|Total Municipalities|Total LGUs Monitored|Total LGUs):\s*(\d+)", text, re.I)
     if m_tot:
         data["total_monitored"] = m_tot.group(1).strip()
 
@@ -222,9 +222,9 @@ def generate_fallback_briefing(context: str) -> str:
         critical_num = 0
 
     try:
-        total_num = int(data["total_monitored"]) if data["total_monitored"] is not None and str(data["total_monitored"]).isdigit() else 0
+        total_num = int(data["total_monitored"]) if data["total_monitored"] is not None and str(data["total_monitored"]).isdigit() else 95
     except (ValueError, TypeError):
-        total_num = 0
+        total_num = 95
 
     # 2. Critical Alerts Synthesis: dynamically check for actual deficits (< 60%)
     has_active_critical = critical_num > 0 or (
@@ -241,7 +241,7 @@ def generate_fallback_briefing(context: str) -> str:
     # 1. Executive Summary Synthesis
     if is_steady_state:
         event_name = data["incident_name"] or "the disaster event"
-        lgu_count_str = f"all {total_num} monitored LGUs" if total_num > 0 else (f"all {data['total_monitored']} monitored LGUs" if data.get("total_monitored") else "all 93 monitored LGUs")
+        lgu_count_str = f"all {total_num} monitored LGUs" if total_num > 0 else (f"all {data['total_monitored']} monitored LGUs" if data.get("total_monitored") else "all 95 monitored LGUs")
         summary = (
             f"Following the impact of {event_name}, satellite nightlight observations confirm that "
             f"{lgu_count_str} have achieved benchmark restoration (>= 90%) with zero active outage clusters. "
@@ -258,13 +258,11 @@ def generate_fallback_briefing(context: str) -> str:
         else:
             lead_sentence = "Following active disaster event conditions across the region,"
 
+        effective_total = data["total_monitored"] or str(total_num)
         if data["avg_recovery"]:
-            if data["total_monitored"]:
-                telemetry_sentence = f"satellite nightlight observations report an island-wide average recovery score of **{data['avg_recovery']}** across **{data['total_monitored']}** monitored LGUs."
-            else:
-                telemetry_sentence = f"satellite nightlight observations report an island-wide average recovery score of **{data['avg_recovery']}** across affected jurisdictions."
+            telemetry_sentence = f"satellite nightlight observations report an island-wide average recovery score of **{data['avg_recovery']}** across **{effective_total}** monitored LGUs."
         else:
-            telemetry_sentence = "satellite nightlight telemetry indicates evolving recovery trajectories across monitored municipal jurisdictions."
+            telemetry_sentence = f"satellite nightlight telemetry indicates evolving recovery trajectories across **{effective_total}** monitored LGUs."
 
         if restored_num > 0 and critical_num > 0:
             status_sentence = f"While **{restored_num}** municipalities have achieved near-full recovery (>= 90%), **{critical_num}** jurisdictions remain in critical or warning states (<60%), requiring targeted technical and logistical reinforcement."
@@ -298,7 +296,6 @@ def generate_fallback_briefing(context: str) -> str:
         vulnerable_bullet = "* **Fully Restored Community Lines**: Essential public facilities, hospitals, schools, and municipal water pumping stations operate on steady-state utility power with all community distribution lines fully restored."
 
     # 3. Restoration Benchmarks Synthesis
-    # Strict threshold check: only report >= 90% if restored_num > 0
     if restored_num > 0:
         bench_summary = _clean_lgu_summary(data["top_benchmark"]) if data["top_benchmark"] else ""
         if bench_summary:
@@ -306,7 +303,6 @@ def generate_fallback_briefing(context: str) -> str:
         else:
             benchmarks_bullet = f"* **Provincial Restoration Benchmarks**: **{restored_num}** municipalities have achieved or exceeded the 90% restoration threshold, re-establishing commercial and transit corridors."
     else:
-        # Dynamic fallback when no municipalities have crossed >= 90%
         fallback_hubs = data.get("top_performing") or data.get("top_benchmark")
         if fallback_hubs:
             hubs_summary = _clean_lgu_summary(fallback_hubs)
@@ -320,8 +316,6 @@ def generate_fallback_briefing(context: str) -> str:
         stability_bullet = "* **Grid Stability**: High-voltage transmission backbones remain monitored while secondary distribution line clearance addresses remaining municipal deficits."
 
     # 4. Priority Recommendations Synthesis
-    # When all monitored municipalities achieve benchmark restoration (>= 90%) with 0 active critical deficits,
-    # recommend ongoing telemetry re-assessment, long-term grid stability monitoring, and routine utility reporting
     all_benchmark_restored = (
         not has_active_critical
         and critical_num == 0
@@ -373,7 +367,9 @@ Provide a concise, professional briefing suitable for a disaster response comman
 
 Format your response in clear, well-structured Markdown with the following sections:
 ### Executive Summary
-A 2-3 sentence overview of grid restoration progress. When Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. Instead, it must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 93 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
+A 2-3 sentence overview of grid restoration progress.
+- Note on scope: Panay Island comprises exactly 95 monitored Local Government Units (LGUs)—including 17 in Aklan, 18 in Antique, 17 in Capiz, and 43 in Iloilo (encompassing component and highly urbanized cities like Roxas City and Iloilo City). Always report the monitored scope as 95 LGUs (never 93).
+- When Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. Instead, it must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
 
 ### Critical Alerts
 Bullet points highlighting the most severely affected municipalities, persistent feeder outages, and vulnerable coastal or rural communities. If Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
@@ -386,7 +382,8 @@ Key milestones, municipalities that have reached >= 90% restoration (or if 0 mun
 
 CRITICAL FACTUAL CONSISTENCY RULES:
 - Strictly obey the scenario data numbers and definitions.
-- EXECUTIVE SUMMARY RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. It must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 93 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
+- MONITORED SCOPE: Exactly 95 LGUs across Panay Island. Never state 93 monitored LGUs.
+- EXECUTIVE SUMMARY RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. It must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
 - CRITICAL ALERTS RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Critical Alerts section MUST completely suppress any outage warnings, severe cluster counts, infrastructure bottleneck claims, or vulnerable community deficit texts. NEVER list fully recovered municipalities (scores >= 60% or >= 90%) as having outages, blackouts, or deficits. Instead, the Critical Alerts section MUST render clean, positive steady-state bullet points confirming:
   1. Zero Active Outages: Confirmation that no active outage clusters remain and all monitored LGUs have surpassed baseline recovery.
   2. Stable Grid Voltage: High-voltage transmission corridors and localized distribution feeders report balanced phase loading and steady-state voltage stability.
@@ -428,9 +425,9 @@ Scenario Data:
                             except (ValueError, TypeError):
                                 r_num = 0
                             try:
-                                t_num = int(parsed_ctx["total_monitored"]) if parsed_ctx["total_monitored"] is not None and str(parsed_ctx["total_monitored"]).isdigit() else 0
+                                t_num = int(parsed_ctx["total_monitored"]) if parsed_ctx["total_monitored"] is not None and str(parsed_ctx["total_monitored"]).isdigit() else 95
                             except (ValueError, TypeError):
-                                t_num = 0
+                                t_num = 95
 
                             has_crit = c_num > 0 or (
                                 bool(parsed_ctx["top_critical"]) and not any(kw in parsed_ctx["top_critical"].lower() for kw in ["none", "all monitored", "no active", "0 critical", "zero", "zero active"])
@@ -439,7 +436,7 @@ Scenario Data:
 
                             if is_steady:
                                 ev_name = parsed_ctx["incident_name"] or "the disaster event"
-                                lgu_txt = f"all {t_num} monitored LGUs" if t_num > 0 else (f"all {parsed_ctx['total_monitored']} monitored LGUs" if parsed_ctx.get("total_monitored") else "all 93 monitored LGUs")
+                                lgu_txt = f"all {t_num} monitored LGUs" if t_num > 0 else (f"all {parsed_ctx['total_monitored']} monitored LGUs" if parsed_ctx.get("total_monitored") else "all 95 monitored LGUs")
                                 steady_narrative = (
                                     f"Following the impact of {ev_name}, satellite nightlight observations confirm that "
                                     f"{lgu_txt} have achieved benchmark restoration (>= 90%) with zero active outage clusters. "
@@ -452,6 +449,9 @@ Scenario Data:
                                         f"\\1{steady_narrative}\n\n",
                                         text_resp
                                     )
+                            else:
+                                # Clean any legacy hallucination where Gemini states 93 monitored LGUs
+                                text_resp = re.sub(r"\b93\s+monitored\s+LGUs\b", "95 monitored LGUs", text_resp, flags=re.IGNORECASE)
                             return text_resp
                     except Exception as err:
                         print(f"Model {model_name} failed: {err}")
