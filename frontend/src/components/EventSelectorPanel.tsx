@@ -550,8 +550,9 @@ function HistoricalPanel({
       </div>
 
       {/* Event Selector Dropdown Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+        {/* Primary Control Cluster: Event Dropdown & Search Input */}
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
           {/* Event Dropdown */}
           <div className="flex items-center gap-2 shrink-0">
             <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
@@ -592,8 +593,8 @@ function HistoricalPanel({
             </div>
           </div>
 
-          {/* Filter Input Field positioned right next to the Event Dropdown */}
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+          {/* Search Input Field with distinct flexible sizing */}
+          <div className="relative flex-1 min-w-[200px] max-w-xs sm:max-w-sm">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
             <input
               type="text"
@@ -617,10 +618,11 @@ function HistoricalPanel({
           </div>
         </div>
 
+        {/* Informational Warning Banner: neatly stacked or side-by-side without overlap */}
         {hasIncompatible && (
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg shrink-0">
+          <div className="flex items-center gap-2 text-[11px] font-medium text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/25 px-3 py-1.5 rounded-lg w-full md:w-auto md:max-w-md xl:max-w-lg shrink-0">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-            <span>
+            <span className="leading-snug">
               <strong>{regionName} active:</strong> {incompatibleEvents.length} Panay-exclusive incident{incompatibleEvents.length > 1 ? 's' : ''} disabled to prevent geographic mismatch.
             </span>
           </div>

@@ -1,46 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert, DisasterEvent } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
-import { Compass, Globe, Lock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler } from 'lucide-react';
+import { Compass, Globe, Lock, Unlock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 import { useTheme } from '@/context/ThemeContext';
 import { useSettings, type BasemapSource } from '@/context/SettingsContext';
+import GisHierarchyReference from '@/components/GisHierarchyReference';
+import {
+  findRegionByCoordinates,
+  REGIONAL_CHUNKS,
+  REGION_PRESETS,
+  getAllRegisteredRegions,
+  type RegionChunkMeta,
+  type RegionPreset,
+} from '@/utils/regionLookup';
+import {
+  computeDistanceDecaySimulation,
+  getFeatureColor as getSimFeatureColor,
+  type SimulationRecord,
+  type ActiveSimulationMap,
+} from '@/services/simulation';
 
-export interface RegionPreset {
-  id: string;
-  name: string;
-  center: [number, number];
-  zoom: number;
-  islandGroup: 'Panay' | 'Nationwide' | 'Luzon' | 'Visayas' | 'Mindanao';
-}
-
-export const REGION_PRESETS: Record<string, RegionPreset> = {
-  panay: { id: 'panay', name: 'Panay Island (Default)', center: [11.0, 122.5], zoom: 8, islandGroup: 'Panay' },
-  iloilo: { id: 'iloilo', name: 'Iloilo Province', center: [11.0050, 122.5373], zoom: 9, islandGroup: 'Panay' },
-  capiz: { id: 'capiz', name: 'Capiz Province', center: [11.4500, 122.7000], zoom: 9, islandGroup: 'Panay' },
-  aklan: { id: 'aklan', name: 'Aklan Province', center: [11.6000, 122.3000], zoom: 9, islandGroup: 'Panay' },
-  antique: { id: 'antique', name: 'Antique Province', center: [11.1500, 122.1000], zoom: 9, islandGroup: 'Panay' },
-  philippines: { id: 'philippines', name: 'Nationwide (Philippines)', center: [12.8797, 121.7740], zoom: 6, islandGroup: 'Nationwide' },
-  ncr: { id: 'ncr', name: 'NCR (Metro Manila)', center: [14.5995, 121.0364], zoom: 11, islandGroup: 'Luzon' },
-  r3: { id: 'r3', name: 'Region III (Central Luzon)', center: [15.4828, 120.7120], zoom: 8, islandGroup: 'Luzon' },
-  r4a: { id: 'r4a', name: 'Region IV-A (CALABARZON)', center: [14.1008, 121.0794], zoom: 8, islandGroup: 'Luzon' },
-  r5: { id: 'r5', name: 'Region V (Bicol Region)', center: [13.4210, 123.4136], zoom: 8, islandGroup: 'Luzon' },
-  r1: { id: 'r1', name: 'Region I (Ilocos Region)', center: [16.8906, 120.5739], zoom: 8, islandGroup: 'Luzon' },
-  r2: { id: 'r2', name: 'Region II (Cagayan Valley)', center: [17.6132, 121.7270], zoom: 8, islandGroup: 'Luzon' },
-  car: { id: 'car', name: 'CAR (Cordillera)', center: [17.0754, 121.0028], zoom: 8, islandGroup: 'Luzon' },
-  r4b: { id: 'r4b', name: 'MIMAROPA (Region IV-B)', center: [12.0000, 120.0000], zoom: 7, islandGroup: 'Luzon' },
-  r7: { id: 'r7', name: 'Region VII (Central Visayas / Cebu)', center: [10.3157, 123.8854], zoom: 9, islandGroup: 'Visayas' },
-  r8: { id: 'r8', name: 'Region VIII (Eastern Visayas / Leyte)', center: [11.2443, 125.0039], zoom: 8, islandGroup: 'Visayas' },
-  r6_negros: { id: 'r6_negros', name: 'Region VI (Negros Occidental)', center: [10.6765, 122.9509], zoom: 8, islandGroup: 'Visayas' },
-  r11: { id: 'r11', name: 'Region XI (Davao Region)', center: [7.1907, 125.4504], zoom: 8, islandGroup: 'Mindanao' },
-  r10: { id: 'r10', name: 'Region X (Northern Mindanao)', center: [8.4542, 124.6319], zoom: 8, islandGroup: 'Mindanao' },
-  r9: { id: 'r9', name: 'Region IX (Zamboanga Peninsula)', center: [7.8385, 122.7560], zoom: 8, islandGroup: 'Mindanao' },
-  r12: { id: 'r12', name: 'Region XII (SOCCSKSARGEN)', center: [6.5064, 124.8480], zoom: 8, islandGroup: 'Mindanao' },
-  r13: { id: 'r13', name: 'Region XIII (Caraga)', center: [8.9511, 125.5288], zoom: 8, islandGroup: 'Mindanao' },
-  barmm: { id: 'barmm', name: 'BARMM (Bangsamoro)', center: [7.2047, 124.2384], zoom: 8, islandGroup: 'Mindanao' },
-};
 
 export interface PanayMapProps {
   municipalities: Municipality[];
@@ -80,6 +62,7 @@ export interface LeafletMapProps {
   nightGlowMode?: boolean;
   onNightGlowModeChange?: (enabled: boolean) => void;
   onZoomChange?: (zoom: number) => void;
+  onFeaturesInViewChange?: (hasFeatures: boolean) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -179,6 +162,7 @@ export default function PanayMap({
   const [showScaleRuler, setShowScaleRuler] = useState<boolean>(() => settings?.showScaleRuler || false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [mapZoom, setMapZoom] = useState(8);
+  const [hasRenderedFeatures, setHasRenderedFeatures] = useState<boolean>(true);
 
   // Synchronize internal states if user updates preferences in SettingsModal
   useEffect(() => {
@@ -236,6 +220,129 @@ export default function PanayMap({
     });
     return map;
   }, [allMunicipalities]);
+
+  // Dynamically resolve municipalities belonging to the active regional chunk
+  const activeRegionMunicipalities: Municipality[] = useMemo(() => {
+    if (currentRegionKey === 'panay' || ['iloilo', 'capiz', 'aklan', 'antique'].includes(currentRegionKey)) {
+      const panayProvs = ['Iloilo', 'Capiz', 'Aklan', 'Antique'];
+      const filtered = allMunicipalities.filter((m) =>
+        panayProvs.includes(m.province) ||
+        (m.region && (m.region.includes('Western Visayas') || m.region.includes('Region VI')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'panay_guimaras' || currentRegionKey === 'r6_negros') {
+      const filtered = allMunicipalities.filter((m) =>
+        (m.pcode && m.pcode.startsWith('PH06')) ||
+        (m.region && (m.region.includes('Western Visayas') || m.region.includes('Region VI'))) ||
+        ['Iloilo', 'Capiz', 'Aklan', 'Antique', 'Guimaras', 'Negros Occidental'].includes(m.province)
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'mindanao_south' || ['r11', 'r12'].includes(currentRegionKey)) {
+      const mindanaoProvs = [
+        'Sarangani', 'South Cotabato', 'Davao del Sur', 'Davao Occidental',
+        'Davao del Norte', 'Davao de Oro', 'Davao Oriental', 'Sultan Kudarat', 'Cotabato', 'North Cotabato'
+      ];
+      const filtered = allMunicipalities.filter((m) =>
+        mindanaoProvs.includes(m.province) ||
+        (m.pcode && (m.pcode.startsWith('PH11') || m.pcode.startsWith('PH12'))) ||
+        (m.region && (m.region.includes('XI') || m.region.includes('XII') || m.region.includes('Davao') || m.region.includes('SOCCSKSARGEN')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'central_visayas' || currentRegionKey === 'cebu_bohol' || currentRegionKey === 'r7') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Cebu', 'Bohol', 'Siquijor', 'Negros Oriental'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH07')) ||
+        (m.region && m.region.includes('VII'))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Leyte', 'Southern Leyte', 'Biliran', 'Samar', 'Eastern Samar', 'Northern Samar'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH08')) ||
+        (m.region && (m.region.includes('VIII') || m.region.includes('Eastern Visayas')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'ncr') {
+      const filtered = allMunicipalities.filter((m) =>
+        m.province === 'Metro Manila' ||
+        (m.pcode && m.pcode.startsWith('PH13')) ||
+        (m.region && m.region.includes('NCR'))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'car') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Benguet', 'Abra', 'Apayao', 'Ifugao', 'Kalinga', 'Mountain Province'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH14')) ||
+        (m.region && (m.region.includes('CAR') || m.region.includes('Cordillera')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'ilocos_cagayan' || currentRegionKey === 'r1' || currentRegionKey === 'r2') {
+      const filtered = allMunicipalities.filter((m) =>
+        (m.pcode && (m.pcode.startsWith('PH01') || m.pcode.startsWith('PH02'))) ||
+        (m.region && (m.region.includes('Ilocos') || m.region.includes('Cagayan') || m.region.includes('Region I') || m.region.includes('Region II')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
+      const filtered = allMunicipalities.filter((m) =>
+        (m.pcode && m.pcode.startsWith('PH03')) ||
+        (m.region && (m.region.includes('Central Luzon') || m.region.includes('Region III')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'calabarzon_mimaropa' || currentRegionKey === 'ncr_southern_tagalog' || ['r4a', 'r4b'].includes(currentRegionKey)) {
+      const ncrProvs = ['Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Quezon', 'Marinduque', 'Occidental Mindoro', 'Oriental Mindoro', 'Palawan', 'Romblon'];
+      const filtered = allMunicipalities.filter((m) =>
+        ncrProvs.includes(m.province) ||
+        (m.pcode && (m.pcode.startsWith('PH04') || m.pcode.startsWith('PH17') || m.pcode.startsWith('PH13'))) ||
+        (m.region && (m.region.includes('NCR') || m.region.includes('IV-A') || m.region.includes('IV-B') || m.region.includes('MIMAROPA')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'bicol' || currentRegionKey === 'r5') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Albay', 'Camarines Norte', 'Camarines Sur', 'Catanduanes', 'Masbate', 'Sorsogon'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH05')) ||
+        (m.region && (m.region.includes('Bicol') || m.region.includes('Region V')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'zamboanga_peninsula' || currentRegionKey === 'r9') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Zamboanga del Norte', 'Zamboanga del Sur', 'Zamboanga Sibugay', 'City of Isabela'].includes(m.province) ||
+        (m.pcode && m.pcode.startsWith('PH09')) ||
+        (m.region && (m.region.includes('Zamboanga') || m.region.includes('Region IX')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'northern_mindanao_caraga' || ['r10', 'r13'].includes(currentRegionKey)) {
+      const filtered = allMunicipalities.filter((m) =>
+        (m.pcode && (m.pcode.startsWith('PH10') || m.pcode.startsWith('PH16'))) ||
+        (m.region && (m.region.includes('Northern Mindanao') || m.region.includes('Caraga') || m.region.includes('Region X') || m.region.includes('Region XIII')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    if (currentRegionKey === 'barmm') {
+      const filtered = allMunicipalities.filter((m) =>
+        ['Basilan', 'Lanao del Sur', 'Maguindanao', 'Maguindanao del Norte', 'Maguindanao del Sur', 'Sulu', 'Tawi-Tawi', 'Cotabato City'].includes(m.province) ||
+        (m.pcode && (m.pcode.startsWith('PH15') || m.pcode.startsWith('PH19'))) ||
+        (m.region && (m.region.includes('BARMM') || m.region.includes('Bangsamoro')))
+      );
+      if (filtered.length > 0) return filtered;
+    }
+    // If extraMunicipalities has items for this loaded chunk
+    if (extraMunicipalities.length > 0) {
+      return extraMunicipalities;
+    }
+    return allMunicipalities;
+  }, [allMunicipalities, extraMunicipalities, currentRegionKey]);
 
   const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
   const selected = allMunicipalities.find((m: Municipality) => m.id === selectedId);
@@ -317,8 +424,15 @@ export default function PanayMap({
               <div className="flex items-center gap-2">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30">
-                  {currentRegionKey === 'panay' ? 'Panay Island (Default)' : activePreset.name}
+                  {currentRegionKey === 'panay' ? 'Panay Island (Default)' : (activePreset?.name || currentRegionKey)}
                 </span>
+                {/* Dynamic regional chunk indicator */}
+                {currentRegionKey !== 'panay' && REGIONAL_CHUNKS.some(c => c.key === currentRegionKey) && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30 animate-fade-in" title="Dynamic regional boundary GeoJSON chunk active">
+                    <MapPin className="h-3 w-3 text-sky-500" />
+                    Dynamic Chunk
+                  </span>
+                )}
                 <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25" title="Hardware-accelerated HTML5 Canvas (L.canvas) renderer">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                   Canvas 2D Engine
@@ -365,38 +479,34 @@ export default function PanayMap({
                   className="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1"
                   aria-label="Select Philippine Region or Province"
                 >
-                  <optgroup label="Primary Scope">
-                    <option value="panay" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Panay Island (Default)</option>
-                    <option value="iloilo" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Iloilo Province</option>
-                    <option value="capiz" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Capiz Province</option>
-                    <option value="aklan" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Aklan Province</option>
-                    <option value="antique" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">↳ Antique Province</option>
+                  <optgroup label="Primary Scope" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                    <option value="panay" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Panay Island (Default)</option>
+                    <option value="iloilo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Iloilo Province</option>
+                    <option value="capiz" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Capiz Province</option>
+                    <option value="aklan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Aklan Province</option>
+                    <option value="antique" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Antique Province</option>
                   </optgroup>
-                  <optgroup label="Nationwide">
-                    <option value="philippines" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Nationwide (Philippines)</option>
+                  <optgroup label="Nationwide" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                    <option value="philippines" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Nationwide (Philippines)</option>
                   </optgroup>
-                  <optgroup label="Luzon">
-                    <option value="ncr" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">NCR (Metro Manila)</option>
-                    <option value="r3" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region III (Central Luzon)</option>
-                    <option value="r4a" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region IV-A (CALABARZON)</option>
-                    <option value="r5" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region V (Bicol Region)</option>
-                    <option value="r1" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region I (Ilocos Region)</option>
-                    <option value="r2" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region II (Cagayan Valley)</option>
-                    <option value="car" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">CAR (Cordillera)</option>
-                    <option value="r4b" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">MIMAROPA (Region IV-B)</option>
+                  <optgroup label="Luzon" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                    <option value="ncr" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">NCR (Metro Manila)</option>
+                    <option value="car" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CAR (Cordillera Administrative Region)</option>
+                    <option value="ilocos_cagayan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Luzon (Regions I & II - Ilocos / Cagayan)</option>
+                    <option value="central_luzon" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Luzon (Region III)</option>
+                    <option value="calabarzon_mimaropa" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CALABARZON & MIMAROPA (Regions IV-A & IV-B)</option>
+                    <option value="bicol" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bicol Region (Region V)</option>
                   </optgroup>
-                  <optgroup label="Visayas">
-                    <option value="r7" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VII (Central Visayas / Cebu)</option>
-                    <option value="r8" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VIII (Eastern Visayas / Leyte)</option>
-                    <option value="r6_negros" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region VI (Negros Occidental)</option>
+                  <optgroup label="Visayas" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                    <option value="panay_guimaras" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Western Visayas (Panay, Guimaras, Negros)</option>
+                    <option value="central_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Visayas (Region VII - Cebu, Bohol)</option>
+                    <option value="eastern_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Eastern Visayas (Region VIII - Leyte, Samar)</option>
                   </optgroup>
-                  <optgroup label="Mindanao">
-                    <option value="r11" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XI (Davao Region)</option>
-                    <option value="r10" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region X (Northern Mindanao)</option>
-                    <option value="r9" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region IX (Zamboanga Peninsula)</option>
-                    <option value="r12" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XII (SOCCSKSARGEN)</option>
-                    <option value="r13" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">Region XIII (Caraga)</option>
-                    <option value="barmm" className="bg-white dark:bg-ink-950 text-slate-800 dark:text-white">BARMM (Bangsamoro)</option>
+                  <optgroup label="Mindanao" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                    <option value="zamboanga_peninsula" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Zamboanga Peninsula (Region IX)</option>
+                    <option value="northern_mindanao_caraga" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Mindanao & Caraga (Regions X & XIII)</option>
+                    <option value="mindanao_south" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">South Mindanao (Regions XI & XII - Davao & SOCCSKSARGEN)</option>
+                    <option value="barmm" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bangsamoro (BARMM)</option>
                   </optgroup>
                 </select>
               </div>
@@ -444,6 +554,9 @@ export default function PanayMap({
                 <Ruler className={`h-3.5 w-3.5 ${showScaleRuler ? 'text-sky-500 dark:text-sky-300' : 'text-slate-500 dark:text-ink-400'}`} />
                 <span className="hidden sm:inline">Scale Ruler</span>
               </button>
+
+              {/* Administrative Hierarchy Reference Popover */}
+              <GisHierarchyReference />
 
               {alertsWithCoords.length > 0 && (
                 <button
@@ -541,7 +654,18 @@ export default function PanayMap({
                   nightGlowMode={nightGlowMode}
                   onNightGlowModeChange={handleNightGlowToggle}
                   onZoomChange={setMapZoom}
+                  onFeaturesInViewChange={setHasRenderedFeatures}
                 />
+
+                {/* Night Glow Fallback Notification Toast */}
+                {nightGlowMode && !hasRenderedFeatures && (
+                  <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] max-w-[90%] sm:max-w-md px-3.5 py-2 rounded-xl bg-slate-900/90 dark:bg-black/90 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs shadow-xl flex items-center gap-2.5 animate-fade-in pointer-events-auto">
+                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
+                    <span className="leading-snug">
+                      Orbital night glow active. Waiting for regional telemetry or boundaries.
+                    </span>
+                  </div>
+                )}
 
                 {/* 500m VIIRS Spatial Grid Overlay */}
                 {showGrid && <div className="viirs-grid-pane animate-fade-in" />}
@@ -804,59 +928,55 @@ export default function PanayMap({
                 </span>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {(() => {
-                    let targetIds: string[] = ['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000'];
-                    if (currentRegionKey === 'ncr') {
-                      targetIds = ['PH133901000', 'PH137404000', 'PH137601000', 'PH137403000'];
-                    } else if (currentRegionKey === 'r7') {
-                      targetIds = ['PH072217000', 'PH072230000', 'PH072226000', 'PH071242000'];
-                    } else if (currentRegionKey === 'r11') {
-                      targetIds = ['PH112402000', 'PH112319000', 'PH112315000', 'PH112403000'];
-                    } else if (currentRegionKey === 'r3') {
-                      targetIds = ['PH035416000', 'PH035401000', 'PH031410000', 'PH036916000'];
-                    } else if (currentRegionKey === 'r4a') {
-                      targetIds = ['PH045801000', 'PH043405000', 'PH042106000', 'PH041005000'];
-                    } else if (currentRegionKey === 'r8') {
-                      targetIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
-                    } else if (currentRegionKey === 'r6_negros') {
-                      targetIds = ['PH060450100', 'PH060452600', 'PH060450200', 'PH060451400'];
-                    } else if (currentRegionKey === 'r1') {
-                      targetIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000'];
-                    } else if (currentRegionKey === 'r2') {
-                      targetIds = ['PH021529000', 'PH023134000', 'PH025007000'];
+                    let preferredIds: string[] = [];
+                    if (currentRegionKey === 'mindanao_south') {
+                      preferredIds = [
+                        'PH126303000', // General Santos City
+                        'PH112402000', // Davao City
+                        'PH128002000', // Glan
+                        'PH128001000', // Alabel
+                        'PH112403000', // Digos City
+                        'PH126306000', // Koronadal City
+                        'PH112319000', // Tagum City
+                        'PH128006000', // Malapatan
+                      ];
+                    } else if (currentRegionKey === 'panay' || currentRegionKey === 'panay_guimaras' || currentRegionKey === 'r6_negros') {
+                      preferredIds = ['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000', 'PH060450100'];
+                    } else if (currentRegionKey === 'ncr' || currentRegionKey === 'ncr_southern_tagalog') {
+                      preferredIds = ['PH133901000', 'PH137404000', 'PH137601000', 'PH137403000'];
+                    } else if (currentRegionKey === 'central_visayas' || currentRegionKey === 'cebu_bohol' || currentRegionKey === 'r7') {
+                      preferredIds = ['PH072217000', 'PH072230000', 'PH072226000', 'PH071242000'];
+                    } else if (currentRegionKey === 'mindanao_south' || currentRegionKey === 'r11' || currentRegionKey === 'r12') {
+                      preferredIds = ['PH126303000', 'PH112402000', 'PH128002000', 'PH128001000', 'PH112403000', 'PH126306000', 'PH112319000'];
+                    } else if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
+                      preferredIds = ['PH035416000', 'PH035401000', 'PH031410000', 'PH036916000'];
+                    } else if (currentRegionKey === 'calabarzon_mimaropa' || currentRegionKey === 'r4a' || currentRegionKey === 'r4b') {
+                      preferredIds = ['PH045801000', 'PH043405000', 'PH042106000', 'PH041005000'];
+                    } else if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
+                      preferredIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
+                    } else if (currentRegionKey === 'ilocos_cagayan' || currentRegionKey === 'r1' || currentRegionKey === 'r2') {
+                      preferredIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000', 'PH021529000', 'PH023134000'];
                     } else if (currentRegionKey === 'car') {
-                      targetIds = ['PH141102000', 'PH141114000', 'PH143213000'];
-                    } else if (currentRegionKey === 'r5') {
-                      targetIds = ['PH050506000', 'PH051724000', 'PH056216000'];
-                    } else if (currentRegionKey === 'r10') {
-                      targetIds = ['PH104305000', 'PH103504000', 'PH101312000'];
-                    } else if (currentRegionKey === 'r9') {
-                      targetIds = ['PH097332000', 'PH097322000'];
-                    } else if (currentRegionKey === 'r12') {
-                      targetIds = ['PH126303000', 'PH126306000'];
-                    } else if (currentRegionKey === 'r13') {
-                      targetIds = ['PH160202000', 'PH166724000'];
+                      preferredIds = ['PH141102000', 'PH141114000', 'PH143213000'];
+                    } else if (currentRegionKey === 'bicol' || currentRegionKey === 'r5') {
+                      preferredIds = ['PH050506000', 'PH051724000', 'PH056216000'];
+                    } else if (currentRegionKey === 'northern_mindanao_caraga' || currentRegionKey === 'r10' || currentRegionKey === 'r13') {
+                      preferredIds = ['PH104305000', 'PH103504000', 'PH101312000', 'PH160202000', 'PH166724000'];
+                    } else if (currentRegionKey === 'zamboanga_peninsula' || currentRegionKey === 'r9') {
+                      preferredIds = ['PH097332000', 'PH097322000'];
                     } else if (currentRegionKey === 'barmm') {
-                      targetIds = ['PH199901000', 'PH193601000'];
+                      preferredIds = ['PH199901000', 'PH193601000'];
                     }
 
-                    const items = targetIds
-                      .map((id) => allMunicipalities.find((item: Municipality) => item.id === id))
+                    const matched = preferredIds
+                      .map((id) => activeRegionMunicipalities.find((item: Municipality) => item.id === id || item.pcode === id))
                       .filter((m: Municipality | undefined): m is Municipality => Boolean(m));
 
-                    if (items.length === 0) {
-                      return allMunicipalities.slice(0, 4).map((m: Municipality) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          onClick={() => onSelect(m.id)}
-                          className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
-                        >
-                          {m.name}
-                        </button>
-                      ));
-                    }
+                    const matchedIds = new Set(matched.map((m) => m.id));
+                    const remaining = activeRegionMunicipalities.filter((m) => !matchedIds.has(m.id));
+                    const displayList = [...matched, ...remaining].slice(0, 5);
 
-                    return items.map((m: Municipality) => (
+                    return displayList.map((m: Municipality) => (
                       <button
                         key={m.id}
                         type="button"
@@ -937,15 +1057,19 @@ function getPolygonStyle(
   municipality: Municipality | null | undefined,
   isSelected: boolean | null | undefined,
   isLight: boolean | null | undefined,
-  nightGlow: boolean | null | undefined
+  nightGlow: boolean | null | undefined,
+  simRecord?: SimulationRecord | null
 ) {
   const selected = Boolean(isSelected);
   const light = Boolean(isLight);
   const glow = Boolean(nightGlow);
-  const score = municipality?.recoveryScore ?? 50;
+  const ratio = simRecord != null
+    ? simRecord.recovery_ratio
+    : (municipality?.recoveryScore != null ? municipality.recoveryScore / 100 : 1.0);
+  const score = Math.round(ratio * 100);
 
   if (glow) {
-    if (score >= 90) {
+    if (ratio >= 0.90) {
       // Near-Full Recovery / Active Urban Center: Warm golden-amber with clear boundary lines
       return {
         color: selected ? '#ffffff' : 'rgba(255, 192, 77, 0.85)',
@@ -956,7 +1080,7 @@ function getPolygonStyle(
         lineJoin: 'round' as const,
         lineCap: 'round' as const,
       };
-    } else if (score >= 60) {
+    } else if (ratio >= 0.60) {
       // Active Restoration: Moderate warm amber
       return {
         color: selected ? '#ffffff' : 'rgba(224, 145, 35, 0.75)',
@@ -983,7 +1107,10 @@ function getPolygonStyle(
   }
 
   // Standard Vector Status
-  const color = getRecoveryColor(score);
+  // Recovery Ratio < 0.60 -> Red #ef4444 (Critical Deficit)
+  // Recovery Ratio < 0.90 -> Amber #f59e0b (Active Restoration)
+  // Recovery Ratio >= 0.90 -> Green #10b981 (Near-Full / Normal)
+  const color = ratio < 0.60 ? '#ef4444' : ratio < 0.90 ? '#f59e0b' : '#10b981';
   return {
     color: selected
       ? (light ? '#0f172a' : '#ffffff')
@@ -1213,6 +1340,7 @@ function LeafletMap({
   nightGlowMode = false,
   onNightGlowModeChange,
   onZoomChange,
+  onFeaturesInViewChange,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const { settings } = useSettings();
@@ -1240,6 +1368,176 @@ function LeafletMap({
   const islandSilhouetteLayerRef = useRef<L.GeoJSON | null>(null);
   const canvasRendererRef = useRef<L.Canvas | null>(null);
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
+  const geojsonCacheRef = useRef<Map<string, any>>(new Map());
+  const activeChunkKeyRef = useRef<string>(selectedRegionKey || 'panay');
+  const epicenterBufferRef = useRef<L.Circle | null>(null);
+  const onFeaturesInViewChangeRef = useRef(onFeaturesInViewChange);
+  onFeaturesInViewChangeRef.current = onFeaturesInViewChange;
+
+  const activeSimulationMapRef = useRef<ActiveSimulationMap>({});
+  const [, setActiveSimulationMapState] = useState<ActiveSimulationMap>({});
+
+  const getFeatureColor = (feature: any) => {
+    const props = feature?.properties || feature || {};
+    const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE || props.pcode || props.id;
+    const simData = (pcode && activeSimulationMapRef.current[pcode])
+      || (props.id && activeSimulationMapRef.current[props.id])
+      || (props.name && activeSimulationMapRef.current[props.name.toLowerCase().trim()]);
+    if (!simData) return '#10b981'; // default green
+    if (simData.recovery_ratio < 0.60) return '#ef4444'; // Red: Critical
+    if (simData.recovery_ratio < 0.90) return '#f59e0b'; // Amber: Active Restoration
+    return '#10b981'; // Green: Near-Full Recovery
+  };
+
+  const runSimulationForCurrentRegion = useCallback((
+    targetEvent?: DisasterEvent | GdacsAlert | null,
+    featuresToUse?: GeoJSON.Feature[]
+  ) => {
+    const evt = targetEvent || activeEvent;
+    if (!evt) return;
+
+    const lat = evt.latitude ?? (evt as any).coordinates?.[0];
+    const lng = evt.longitude ?? (evt as any).coordinates?.[1];
+    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) return;
+
+    const featuresList = featuresToUse || (geoJsonLayerRef.current ? (geoJsonLayerRef.current as any).toGeoJSON?.()?.features : null);
+
+    const simMap = computeDistanceDecaySimulation({
+      event: evt,
+      municipalities: Array.from(municipalitiesByIdRef.current.values()),
+      features: featuresList,
+      centroidsMap: centroidsRef.current,
+    });
+
+    activeSimulationMapRef.current = simMap;
+    setActiveSimulationMapState(simMap);
+
+    const updatedList: Municipality[] = [];
+    municipalitiesByIdRef.current.forEach((m) => {
+      const pcode = m.pcode || m.id;
+      const sim = simMap[pcode] || (m.id ? simMap[m.id] : null) || (m.name ? simMap[m.name.toLowerCase().trim()] : null);
+      if (sim) {
+        const score = Math.max(0, Math.min(100, Math.round(sim.recovery_ratio * 100)));
+        m.recoveryScore = score;
+        m.status = sim.status;
+        m.baselineRadiance = sim.pre_radiance;
+        m.currentRadiance = sim.post_radiance;
+        m.recoveryDate = evt.date;
+        m.estimatedDaysToRecover = score >= 90 ? 0 : Math.max(1, Math.round((100 - score) / 8));
+        updatedList.push(m);
+      }
+    });
+
+    // Immediate re-render of the GeoJSON canvas layer
+    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
+      (geoJsonLayerRef.current as any).setStyle((feature: any) => {
+        const props = feature?.properties || {};
+        const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+        const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+
+        const municipality =
+          municipalitiesByIdRef.current.get(id) ||
+          (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+          (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+          (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+        const simRecord = simMap[pcode] || simMap[id] || (normName ? simMap[normName] : null);
+        const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
+
+        return {
+          renderer: canvasRendererRef.current || undefined,
+          ...getPolygonStyle(municipality, isSelected, isLightRef.current, nightGlowModeRef.current, simRecord),
+        };
+      });
+    }
+
+    // Re-style individual feature layers in layersRef
+    Object.entries(layersRef.current).forEach(([id, layer]) => {
+      if (!layer || !(layer as any)._map) return;
+      const props = (layer as any)?.feature?.properties || {};
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
+      const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+      const m =
+        municipalitiesByIdRef.current.get(id) ||
+        (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+        (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
+        (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+      const simRecord = simMap[pcode] || simMap[id] || (normName ? simMap[normName] : null);
+      if (m) {
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current, simRecord);
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const tip = nightGlowModeRef.current
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+        layer.setTooltipContent(tip);
+      }
+    });
+
+    // Immediate redraw of realistic night light radiance bloom canvas
+    nightLightOverlayRef.current?.redraw();
+
+    // Propagate updated municipalities to parent
+    if (updatedList.length > 0) {
+      onChunkLoaded?.(updatedList);
+    }
+  }, [activeEvent, onChunkLoaded]);
+
+  const clearEpicenterBuffer = () => {
+    if (epicenterBufferRef.current && mapRef.current) {
+      try {
+        mapRef.current.removeLayer(epicenterBufferRef.current);
+      } catch { }
+      epicenterBufferRef.current = null;
+    }
+  };
+
+  const drawEpicenterBuffer = (lat: number, lng: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    clearEpicenterBuffer();
+    const buffer = L.circle([lat, lng], {
+      radius: 45000,
+      color: '#f59e0b',
+      dashArray: '6, 6',
+      fillOpacity: 0.15,
+    }).addTo(map);
+    epicenterBufferRef.current = buffer;
+  };
+
+  const checkViewportFeatures = () => {
+    const map = mapRef.current;
+    if (!map || !(map as any)._loaded) return false;
+    const bounds = map.getBounds();
+    let hasFeatures = false;
+
+    const layerEntries = Object.values(layersRef.current);
+    if (layerEntries.length > 0) {
+      for (const layer of layerEntries) {
+        if (layer && typeof (layer as any).getBounds === 'function') {
+          const b = (layer as any).getBounds();
+          if (b && bounds.intersects(b)) {
+            hasFeatures = true;
+            break;
+          }
+        }
+      }
+    }
+
+    onFeaturesInViewChangeRef.current?.(hasFeatures);
+
+    if (mapElement.current) {
+      if (nightGlowModeRef.current && !hasFeatures) {
+        mapElement.current.classList.add('night-glow-no-features');
+      } else {
+        mapElement.current.classList.remove('night-glow-no-features');
+      }
+    }
+    return hasFeatures;
+  };
 
   // Handle map invalidation, size re-calculations, and tile layer preservation when Map tab becomes active or window resizes
   useEffect(() => {
@@ -1361,11 +1659,13 @@ function LeafletMap({
         map.dragging?.disable();
         map.touchZoom?.disable();
         map.doubleClickZoom?.disable();
+        map.scrollWheelZoom?.disable();
         map.boxZoom?.disable();
       } else {
         map.dragging?.enable();
         map.touchZoom?.enable();
         map.doubleClickZoom?.enable();
+        map.scrollWheelZoom?.enable();
         map.boxZoom?.enable();
       }
     }
@@ -1376,16 +1676,65 @@ function LeafletMap({
     }
   };
 
+  // Asynchronous coordinate-to-region loader for on-demand chunk retrieval
+  const loadRegionByCoordinates = async (lat: number, lng: number): Promise<boolean> => {
+    const chunk = findRegionByCoordinates(lat, lng);
+    if (!chunk) return false;
+
+    if (activeChunkKeyRef.current === chunk.key && geoJsonLayerRef.current) {
+      return true;
+    }
+
+    activeChunkKeyRef.current = chunk.key;
+    onRegionChange?.(chunk.key);
+
+    let data = geojsonCacheRef.current.get(chunk.key);
+    if (!data) {
+      onChunkLoadingChange?.(true);
+      try {
+        const res = await fetch(chunk.geojsonPath);
+        if (res.ok) {
+          data = await res.json();
+          geojsonCacheRef.current.set(chunk.key, data);
+          regionCacheRef.current.set(chunk.key, data);
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch chunk ${chunk.key}:`, err);
+      } finally {
+        onChunkLoadingChange?.(false);
+      }
+    }
+
+    if (data) {
+      renderRegionGeoJson(chunk.key, data);
+      checkViewportFeatures();
+      return true;
+    }
+
+    return false;
+  };
+
   // Asynchronous lazy-loader for regional GeoJSON chunks with in-memory caching
   const fetchRegionChunk = async (key: string): Promise<GeoJSON.FeatureCollection | null> => {
+    if (geojsonCacheRef.current.has(key)) {
+      return geojsonCacheRef.current.get(key)!;
+    }
     if (regionCacheRef.current.has(key)) {
       return regionCacheRef.current.get(key)!;
     }
 
+    const canonicalKey = REGION_PRESETS[key]?.id || key;
+    if (geojsonCacheRef.current.has(canonicalKey)) {
+      return geojsonCacheRef.current.get(canonicalKey)!;
+    }
+    if (regionCacheRef.current.has(canonicalKey)) {
+      return regionCacheRef.current.get(canonicalKey)!;
+    }
+
     // If selecting a Panay sub-province (iloilo, capiz, aklan, antique), derive from Panay if already cached
-    if (['iloilo', 'capiz', 'aklan', 'antique'].includes(key) && regionCacheRef.current.has('panay')) {
-      const panayData = regionCacheRef.current.get('panay')!;
-      const filtered = panayData.features.filter((f: GeoJSON.Feature) =>
+    const cachedPanay = geojsonCacheRef.current.get('panay') || regionCacheRef.current.get('panay');
+    if (['iloilo', 'capiz', 'aklan', 'antique'].includes(key) && cachedPanay) {
+      const filtered = cachedPanay.features.filter((f: GeoJSON.Feature) =>
         (f.properties?.ADM2_EN || '').toLowerCase().includes(key)
       );
       if (filtered.length > 0) {
@@ -1393,6 +1742,7 @@ function LeafletMap({
           type: 'FeatureCollection',
           features: filtered,
         };
+        geojsonCacheRef.current.set(key, subCol);
         regionCacheRef.current.set(key, subCol);
         return subCol;
       }
@@ -1400,25 +1750,31 @@ function LeafletMap({
 
     onChunkLoadingChange?.(true);
     try {
-      const url = key === 'philippines'
-        ? '/philippines_boundaries.geojson'
-        : key === 'panay'
-          ? '/regions/panay.geojson'
-          : `/regions/${key}.geojson`;
+      const chunkMeta = REGIONAL_CHUNKS.find((r) => r.key === canonicalKey || r.key === key);
+      const url = chunkMeta
+        ? chunkMeta.geojsonPath
+        : canonicalKey === 'philippines'
+          ? '/philippines_boundaries.geojson'
+          : canonicalKey === 'panay'
+            ? '/regions/panay.geojson'
+            : `/regions/${canonicalKey}.geojson`;
       let res = await fetch(url);
-      if (!res.ok && key === 'panay') {
+      if (!res.ok && (key === 'panay' || canonicalKey === 'panay')) {
         res = await fetch('/panay_municipalities.geojson');
       }
       if (res.ok) {
         const geojson: GeoJSON.FeatureCollection = await res.json();
-        if (key === 'panay' && geojson.features) {
+        if ((key === 'panay' || canonicalKey === 'panay') && geojson.features) {
           geojson.features = geojson.features.filter((f: GeoJSON.Feature) => {
             const adm2 = (f.properties?.ADM2_EN || f.properties?.province || '').toLowerCase().trim();
             const pcode = f.properties?.ADM3_PCODE || f.properties?.psgc_code || '';
             return adm2 !== 'guimaras' && !pcode.startsWith('PH06079');
           });
         }
+        geojsonCacheRef.current.set(key, geojson);
+        geojsonCacheRef.current.set(canonicalKey, geojson);
         regionCacheRef.current.set(key, geojson);
+        regionCacheRef.current.set(canonicalKey, geojson);
         return geojson;
       }
     } catch (err) {
@@ -1427,7 +1783,7 @@ function LeafletMap({
       onChunkLoadingChange?.(false);
     }
 
-    return regionCacheRef.current.get(key) || null;
+    return geojsonCacheRef.current.get(key) || regionCacheRef.current.get(key) || geojsonCacheRef.current.get(canonicalKey) || null;
   };
 
   // Function to bind fine-grained municipal features for the active region using HTML5 Canvas
@@ -1468,12 +1824,40 @@ function LeafletMap({
     if (newToRegister.length > 0) {
       const generated = createMunicipalities(newToRegister);
       generated.forEach((m: Municipality) => {
-        if (!municipalitiesByIdRef.current.has(m.id)) {
-          municipalitiesByIdRef.current.set(m.id, m);
+        municipalitiesByIdRef.current.set(m.id, m);
+        if (m.pcode) municipalitiesByIdRef.current.set(m.pcode, m);
+        if (m.psgc) municipalitiesByIdRef.current.set(m.psgc, m);
+        if (m.name) {
+          municipalitiesByIdRef.current.set(m.name.toLowerCase().trim(), m);
+          const norm = m.name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '');
+          if (norm) municipalitiesByIdRef.current.set(norm, m);
         }
       });
       onChunkLoaded?.(generated);
     }
+
+    // Ensure every feature in this active chunk has a valid entry in municipalitiesByIdRef
+    data.features.forEach((feat: GeoJSON.Feature) => {
+      const props = feat.properties || {};
+      const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const rawName = String(props.ADM3_EN || props.name || props.ADM2_EN || props.ADM1_EN || '');
+      const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+      let m = municipalitiesByIdRef.current.get(id) ||
+        (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
+        (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
+        (normName ? municipalitiesByIdRef.current.get(normName) : null);
+      if (!m) {
+        const [created] = createMunicipalities([feat]);
+        m = created;
+      }
+      if (m) {
+        municipalitiesByIdRef.current.set(id, m);
+        if (pcode) municipalitiesByIdRef.current.set(pcode, m);
+        if (rawName) municipalitiesByIdRef.current.set(rawName.toLowerCase().trim(), m);
+        if (normName) municipalitiesByIdRef.current.set(normName, m);
+      }
+    });
 
     // Island silhouette & boundary layer: guarantees that the geographic shape of Panay Island
     // and all internal municipal boundaries remain crisp and distinct against the dark oceanic basemap.
@@ -1499,12 +1883,32 @@ function LeafletMap({
     }).addTo(map);
     islandSilhouetteLayerRef.current = silhouetteLayer;
 
+    // If there is an active event, compute the simulation map for this new region chunk immediately before styling
+    const curEvent = activeEvent || gdacsAlerts?.find((a) =>
+      String(activeEventId) === String(a.id) ||
+      String(activeEventId) === `gdacs-${a.event_id}` ||
+      String(activeEventId) === String(a.event_id)
+    );
+    if (curEvent) {
+      const computedSim = computeDistanceDecaySimulation({
+        event: curEvent,
+        municipalities: Array.from(municipalitiesByIdRef.current.values()),
+        features: data.features,
+        centroidsMap: centroidsRef.current,
+      });
+      activeSimulationMapRef.current = {
+        ...activeSimulationMapRef.current,
+        ...computedSim,
+      };
+      setActiveSimulationMapState((prev) => ({ ...prev, ...computedSim }));
+    }
+
     // HTML5 Canvas renderer configuration: eliminates DOM node bloat for hundreds/thousands of polygons
     const newLayer = L.geoJSON(data, {
       style: (feature) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
         const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1514,12 +1918,18 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
+        const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+          || (id && activeSimulationMapRef.current[id])
+          || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+          || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+          || (normName && activeSimulationMapRef.current[normName]);
+
         const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
         const lightMode = isLightRef.current;
         const isNight = nightGlowModeRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          ...getPolygonStyle(municipality, isSelected, lightMode, isNight),
+          ...getPolygonStyle(municipality, isSelected, lightMode, isNight, simRecord),
         };
       },
       onEachFeature: (feature, featureLayer) => {
@@ -1528,7 +1938,7 @@ function LeafletMap({
         if (!featureLayer || (!('setStyle' in featureLayer) && !(featureLayer instanceof L.Path))) return;
 
         layersRef.current[id] = featureLayer;
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const rawName = String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
         const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1539,6 +1949,7 @@ function LeafletMap({
             const center = bounds.getCenter();
             centroidsRef.current.set(id, [center.lat, center.lng]);
             if (pcode) centroidsRef.current.set(pcode, [center.lat, center.lng]);
+            if (props.GID_2) centroidsRef.current.set(props.GID_2, [center.lat, center.lng]);
           }
         }
 
@@ -1593,10 +2004,15 @@ function LeafletMap({
               (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
               (rawName ? municipalitiesByIdRef.current.get(rawName.toLowerCase().trim()) : null) ||
               (normName ? municipalitiesByIdRef.current.get(normName) : null);
+            const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+              || (id && activeSimulationMapRef.current[id])
+              || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+              || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+              || (normName && activeSimulationMapRef.current[normName]);
             if (currentM) {
-              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current, activeLight, activeNight);
+              updateLayerStyle(featureLayer, currentM, id === selectedIdRef.current || currentM.id === selectedIdRef.current, activeLight, activeNight, simRecord);
             } else if (typeof (featureLayer as any).setStyle === 'function') {
-              (featureLayer as any).setStyle(getPolygonStyle(null, false, activeLight, activeNight));
+              (featureLayer as any).setStyle(getPolygonStyle(null, false, activeLight, activeNight, simRecord));
             }
           },
         });
@@ -1605,10 +2021,10 @@ function LeafletMap({
 
     geoJsonLayerRef.current = newLayer;
 
-    // Apply any telemetry scores already in memory
+    // Apply any telemetry scores or dynamic simulation records
     Object.entries(layersRef.current).forEach(([id, featureLayer]) => {
       const props = (featureLayer as any)?.feature?.properties || {};
-      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
       const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1618,8 +2034,20 @@ function LeafletMap({
         (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
+      const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+        || (id && activeSimulationMapRef.current[id])
+        || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+        || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+        || (normName && activeSimulationMapRef.current[normName]);
+
       if (m) {
-        updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current);
+        if (simRecord) {
+          m.recoveryScore = Math.max(0, Math.min(100, Math.round(simRecord.recovery_ratio * 100)));
+          m.status = simRecord.status;
+          m.baselineRadiance = simRecord.pre_radiance;
+          m.currentRadiance = simRecord.post_radiance;
+        }
+        updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current, simRecord);
         const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
         const tip = nightGlowModeRef.current
           ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
@@ -1628,8 +2056,13 @@ function LeafletMap({
       }
     });
 
+    if (curEvent) {
+      runSimulationForCurrentRegion(curEvent, data.features);
+    }
+
     // Synchronize the Realistic Night Light canvas overlay with the newly rendered features
     nightLightOverlayRef.current?.redraw();
+    checkViewportFeatures();
   };
 
   // Helper to read the active default region setting from localStorage or settings context
@@ -1796,6 +2229,24 @@ function LeafletMap({
     const gdacsGroup = L.layerGroup().addTo(map);
     gdacsGroupRef.current = gdacsGroup;
 
+    // Viewport-driven dynamic regional GeoJSON chunk loading with debouncing
+    let moveTimeout: any = null;
+    const handleViewportChange = () => {
+      clearTimeout(moveTimeout);
+      moveTimeout = setTimeout(() => {
+        if (!mapRef.current) return;
+        const center = mapRef.current.getCenter();
+        const matched = findRegionByCoordinates(center.lat, center.lng);
+        if (matched && matched.key !== activeChunkKeyRef.current) {
+          loadRegionByCoordinates(center.lat, center.lng);
+        } else {
+          checkViewportFeatures();
+        }
+      }, 250);
+    };
+
+    map.on('moveend', handleViewportChange);
+
     let disposed = false;
 
     fetchRegionChunk(initialRegionKey)
@@ -1810,6 +2261,9 @@ function LeafletMap({
 
     return () => {
       disposed = true;
+      clearTimeout(moveTimeout);
+      map.off('moveend', handleViewportChange);
+      clearEpicenterBuffer();
       if (nightLightOverlayRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(nightLightOverlayRef.current);
@@ -1866,7 +2320,7 @@ function LeafletMap({
       (geoJsonLayerRef.current as any).setStyle((feature: any) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
         const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1876,11 +2330,17 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
+        const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+          || (id && activeSimulationMapRef.current[id])
+          || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+          || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+          || (normName && activeSimulationMapRef.current[normName]);
+
         const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
 
         return {
           renderer: canvasRendererRef.current || undefined,
-          ...getPolygonStyle(municipality, isSelected, isLight, nightGlowModeRef.current),
+          ...getPolygonStyle(municipality, isSelected, isLight, nightGlowModeRef.current, simRecord),
         };
       });
     }
@@ -1888,7 +2348,7 @@ function LeafletMap({
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       if (!mapRef.current || !layer || !(layer as any)._map) return;
       const props = (layer as any)?.feature?.properties || {};
-      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
       const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
       const m =
@@ -1896,8 +2356,15 @@ function LeafletMap({
         (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
         (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+      const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+        || (id && activeSimulationMapRef.current[id])
+        || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+        || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+        || (normName && activeSimulationMapRef.current[normName]);
+
       if (m) {
-        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight, nightGlowModeRef.current);
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLight, nightGlowModeRef.current, simRecord);
       }
     });
   }, [isLight, settings?.basemapSource]);
@@ -1945,7 +2412,7 @@ function LeafletMap({
       (geoJsonLayerRef.current as any).setStyle((feature: any) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
         const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1955,10 +2422,16 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
+        const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+          || (id && activeSimulationMapRef.current[id])
+          || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+          || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+          || (normName && activeSimulationMapRef.current[normName]);
+
         const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
         return {
           renderer: canvasRendererRef.current || undefined,
-          ...getPolygonStyle(municipality, isSelected, isLightRef.current, nightGlowMode),
+          ...getPolygonStyle(municipality, isSelected, isLightRef.current, nightGlowMode, simRecord),
         };
       });
     }
@@ -1966,7 +2439,7 @@ function LeafletMap({
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       if (!mapRef.current || !layer || !(layer as any)._map) return;
       const props = (layer as any)?.feature?.properties || {};
-      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
       const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
       const m =
@@ -1974,8 +2447,15 @@ function LeafletMap({
         (pcode ? municipalitiesByIdRef.current.get(pcode) : null) ||
         (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
+
+      const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+        || (id && activeSimulationMapRef.current[id])
+        || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+        || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+        || (normName && activeSimulationMapRef.current[normName]);
+
       if (m) {
-        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowMode);
+        updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowMode, simRecord);
         const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
         const tip = nightGlowMode
           ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
@@ -1994,6 +2474,8 @@ function LeafletMap({
         fillOpacity: nightGlowMode ? 0.40 : 0,
       });
     }
+
+    checkViewportFeatures();
   }, [nightGlowMode]);
 
   // Dynamically update spatial grid sizing when VIIRS scale calibration is adjusted
@@ -2021,6 +2503,8 @@ function LeafletMap({
     let isMounted = true;
     const map = mapRef.current;
     if (!map || !selectedRegionKey) return;
+    activeChunkKeyRef.current = selectedRegionKey;
+    clearEpicenterBuffer();
 
     fetchRegionChunk(selectedRegionKey).then((chunkData) => {
       if (!isMounted) return;
@@ -2116,7 +2600,7 @@ function LeafletMap({
       (geoJsonLayerRef.current as any).setStyle((feature: any) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
         const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -2126,19 +2610,25 @@ function LeafletMap({
           (name ? map.get(name.toLowerCase().trim()) : null) ||
           (normName ? map.get(normName) : null);
 
+        const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+          || (id && activeSimulationMapRef.current[id])
+          || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+          || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+          || (normName && activeSimulationMapRef.current[normName]);
+
         const isSelected = Boolean(id === selectedId || (municipality && municipality.id === selectedId));
         const lightMode = isLightRef.current;
         const isNight = nightGlowModeRef.current;
         return {
           renderer: canvasRendererRef.current || undefined,
-          ...getPolygonStyle(municipality, isSelected, lightMode, isNight),
+          ...getPolygonStyle(municipality, isSelected, lightMode, isNight, simRecord),
         };
       });
     }
 
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       const props = (layer as any)?.feature?.properties || {};
-      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
       const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -2148,8 +2638,14 @@ function LeafletMap({
         (name ? map.get(name.toLowerCase().trim()) : null) ||
         (normName ? map.get(normName) : null);
 
+      const simRecord = (pcode && activeSimulationMapRef.current[pcode])
+        || (id && activeSimulationMapRef.current[id])
+        || (props.GID_2 && activeSimulationMapRef.current[props.GID_2])
+        || (props.psgc_code && activeSimulationMapRef.current[props.psgc_code])
+        || (normName && activeSimulationMapRef.current[normName]);
+
       if (municipality) {
-        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current, nightGlowModeRef.current);
+        updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current, nightGlowModeRef.current, simRecord);
         const radVal = municipality?.currentRadiance ? `${municipality.currentRadiance.toFixed(1)} nW` : `${(municipality.recoveryScore * 0.45).toFixed(1)} nW`;
         const tip = nightGlowModeRef.current
           ? `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery · ${radVal} radiance`
@@ -2203,6 +2699,15 @@ function LeafletMap({
         icon: customIcon,
         zIndexOffset: isActive ? 1200 : 800,
         title: `${alert.name} (${alert.alert_level} Alert)`,
+      });
+
+      marker.on('click', async () => {
+        const success = await loadRegionByCoordinates(lat, lng);
+        if (!success) {
+          drawEpicenterBuffer(lat, lng);
+        } else {
+          clearEpicenterBuffer();
+        }
       });
 
       // Concentric radar circle around hazard epicenter
@@ -2276,9 +2781,16 @@ function LeafletMap({
           btn.className = 'w-full py-1.5 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 shadow-md shadow-ocean-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95';
           btn.innerHTML = '<span>Simulate Event</span>';
           btn.title = 'Ready to Simulate: Confirmed NASA VIIRS radiance data available';
-          btn.onclick = (e) => {
+          btn.onclick = async (e) => {
             e.stopPropagation();
             marker.closePopup();
+            const success = await loadRegionByCoordinates(lat, lng);
+            if (!success) {
+              drawEpicenterBuffer(lat, lng);
+            } else {
+              clearEpicenterBuffer();
+            }
+            runSimulationForCurrentRegion(alert);
             onSimulateGdacs(alert);
           };
         }
@@ -2338,11 +2850,32 @@ function LeafletMap({
         isFinite(lat) &&
         isFinite(lng)
       ) {
+        const targetLat = lat;
+        const targetLng = lng;
+        const currentEvt = activeEvent || matchingAlert;
+
+        if (currentEvt) {
+          runSimulationForCurrentRegion(currentEvt);
+        }
+
+        // Concurrently attempt regional chunk loading; fallback to epicenter buffer circle if no chunk covers it
+        loadRegionByCoordinates(targetLat, targetLng).then((loaded) => {
+          if (!loaded) {
+            drawEpicenterBuffer(targetLat, targetLng);
+          } else {
+            clearEpicenterBuffer();
+          }
+          if (currentEvt) {
+            runSimulationForCurrentRegion(currentEvt);
+          }
+          checkViewportFeatures();
+        });
+
         const rawZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
         const currentZoom = typeof rawZoom === 'number' && isFinite(rawZoom) ? rawZoom : 8;
         const targetZoom = Math.max(currentZoom, 8);
 
-        map.flyTo([lat, lng], targetZoom, {
+        map.flyTo([targetLat, targetLng], targetZoom, {
           animate: true,
           duration: 1.2,
         });
@@ -2372,7 +2905,7 @@ function LeafletMap({
         initialLocked={initialLocked}
         defaultRegionName={REGION_PRESETS[getActiveDefaultRegion()]?.name || 'Default Region'}
         onUnlock={() => applyMapLock(false)}
-        onLock={() => { applyMapLock(true); resetToDefaultBounds(true); }}
+        onLock={() => applyMapLock(true)}
         onReset={handleReset}
         nightGlowMode={nightGlowMode}
         onToggleNightGlow={onNightGlowModeChange ? () => onNightGlowModeChange(!nightGlowMode) : undefined}
@@ -2382,9 +2915,8 @@ function LeafletMap({
 }
 
 // ─── MapLockOverlay ──────────────────────────────────────────────────────────
-// Isolated button component whose re-renders are fully decoupled from LeafletMap.
-// It owns the visual toggle state; all Leaflet side-effects are handled by the
-// callbacks passed from LeafletMap via applyMapLock().
+// Secondary map action cluster (Vector Map | Reset View | Lock Map) positioned
+// over the top-right of the map container with persistent visibility and active locking state.
 interface MapLockOverlayProps {
   initialLocked?: boolean;
   defaultRegionName?: string;
@@ -2395,7 +2927,7 @@ interface MapLockOverlayProps {
   onToggleNightGlow?: () => void;
 }
 function MapLockOverlay({
-  initialLocked = true,
+  initialLocked = false,
   defaultRegionName = 'Default Region',
   onUnlock,
   onLock,
@@ -2403,20 +2935,20 @@ function MapLockOverlay({
   nightGlowMode = true,
   onToggleNightGlow,
 }: MapLockOverlayProps) {
-  const [isLocked, setIsLocked] = useState<boolean>(initialLocked);
+  const [isMapLocked, setIsMapLocked] = useState<boolean>(initialLocked);
 
   useEffect(() => {
-    setIsLocked(initialLocked);
+    setIsMapLocked(initialLocked);
   }, [initialLocked]);
 
-  const handleUnlock = () => {
-    setIsLocked(false);
-    onUnlock();
-  };
-
-  const handleLock = () => {
-    setIsLocked(true);
-    onLock();
+  const handleToggleLock = () => {
+    const nextLocked = !isMapLocked;
+    setIsMapLocked(nextLocked);
+    if (nextLocked) {
+      onLock();
+    } else {
+      onUnlock();
+    }
   };
 
   return (
@@ -2427,7 +2959,7 @@ function MapLockOverlay({
           onClick={onToggleNightGlow}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${nightGlowMode
             ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 shadow-amber-950/40'
-            : 'bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 border border-slate-300 dark:border-white/10'
+            : 'bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60'
             }`}
           aria-label={nightGlowMode ? 'Switch to Standard Vector Map' : 'Switch to NASA Black Marble Night Glow'}
           title={nightGlowMode ? 'NASA Black Marble Night Glow Active (Click for Standard View)' : 'Activate NASA Black Marble Night Light View'}
@@ -2437,50 +2969,49 @@ function MapLockOverlay({
         </button>
       )}
 
-      {isLocked ? (
-        <button
-          type="button"
-          onClick={handleUnlock}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-ocean-700 dark:text-ocean-300 hover:text-ocean-900 dark:hover:text-white border border-ocean-300 dark:border-ocean-500/35 hover:border-ocean-400/60 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 group focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-          aria-label="Unlock map to interact, pan, and zoom"
-          title="Unlock map to pan and zoom"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-ocean-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-ocean-500"></span>
-          </span>
-          <Lock className="w-3.5 h-3.5 text-ocean-600 dark:text-ocean-400 group-hover:text-ocean-700 dark:group-hover:text-ocean-300 transition-colors" />
-          <span>Tap to Interact</span>
-        </button>
-      ) : (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onReset}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/95 dark:bg-ink-950/90 hover:bg-slate-100 dark:hover:bg-ink-900 text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white border border-slate-300 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/25 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label={`Reset map view to ${defaultRegionName}`}
-            title={`Re-center on ${defaultRegionName}`}
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-ink-400" />
-            <span className="hidden sm:inline">Reset View</span>
-            <span className="sm:hidden">Reset</span>
-          </button>
+      {/* Reset View Button */}
+      <button
+        type="button"
+        onClick={onReset}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 shadow-lg backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+        aria-label={`Reset map view to ${defaultRegionName}`}
+        title={`Re-center on ${defaultRegionName}`}
+      >
+        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+        <span className="hidden sm:inline">Reset View</span>
+        <span className="sm:hidden">Reset</span>
+      </button>
 
-          <button
-            type="button"
-            onClick={handleLock}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-ocean-50 dark:bg-ocean-500/20 hover:bg-ocean-100 dark:hover:bg-ocean-500/30 text-ocean-700 dark:text-ocean-200 hover:text-ocean-900 dark:hover:text-white border border-ocean-300 dark:border-ocean-500/40 hover:border-ocean-400/70 shadow-lg shadow-black/10 dark:shadow-black/50 backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
-            aria-label={`Lock map viewport and re-center on ${defaultRegionName}`}
-            title={`Lock map and re-center on ${defaultRegionName}`}
-          >
-            <Lock className="w-3.5 h-3.5 text-ocean-600 dark:text-ocean-300" />
+      {/* Lock Map Interactive Toggle */}
+      <button
+        type="button"
+        id="lock-map-toggle"
+        onClick={handleToggleLock}
+        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
+          isMapLocked
+            ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-amber-500/10 hover:bg-amber-500/30'
+            : 'bg-slate-800/70 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-700/80'
+        }`}
+        aria-label={isMapLocked ? 'Map locked: click to unlock pan and zoom' : 'Map unlocked: click to lock viewport'}
+        title={isMapLocked ? 'Map locked (Click to unlock pan & zoom)' : 'Lock map viewport (Disable pan & zoom)'}
+        aria-pressed={isMapLocked}
+      >
+        {isMapLocked ? (
+          <>
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>Locked</span>
+          </>
+        ) : (
+          <>
+            <Unlock className="w-3.5 h-3.5 text-slate-400" />
             <span>Lock Map</span>
-          </button>
-        </div>
-      )}
+          </>
+        )}
+      </button>
     </div>
   );
 }
+
 
 // ─── VIIRSScaleRuler ─────────────────────────────────────────────────────────
 // Compact dual-axis NASA VIIRS Day/Night Band (DNB) spatial resolution scale ruler.
@@ -2755,10 +3286,11 @@ function updateLayerStyle(
   municipality: Municipality | null | undefined,
   selected: boolean,
   isLight = false,
-  nightGlow = false
+  nightGlow = false,
+  simRecord?: SimulationRecord | null
 ) {
   if (layer && typeof layer.setStyle === 'function') {
-    layer.setStyle(getPolygonStyle(municipality, selected, isLight, nightGlow));
+    layer.setStyle(getPolygonStyle(municipality, selected, isLight, nightGlow, simRecord));
   }
 }
 

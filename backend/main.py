@@ -1053,6 +1053,241 @@ def _cached_event_radiance_query(
     return (event_dict, tuple(spatial_time_data))
 
 
+def haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculates great-circle distance between two points in km."""
+    r_earth = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2.0) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2.0) ** 2)
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r_earth * c
+
+
+def compute_distance_decay_ratio(dist_km: float) -> Tuple[float, str]:
+    """
+    Computes simulated recovery ratio and status based on distance from event epicenter:
+    - d < 45 km (Ground zero: Tacloban, Guiuan, Palo, Basey): 5% - 25% radiance (Critical Deficit)
+    - 45 km <= d < 90 km (Ormoc, Carigara, Borongan): 35% - 55% radiance (Critical Deficit)
+    - 90 km <= d < 150 km (North Cebu, Biliran, Southern Leyte): 60% - 85% radiance (Active Restoration)
+    - d >= 150 km: >= 90% (Near-Full / Normal)
+    """
+    if dist_km < 45.0:
+        frac = max(0.0, min(1.0, dist_km / 45.0))
+        ratio = round(0.05 + 0.20 * frac, 4)
+        return ratio, "critical"
+    elif dist_km < 90.0:
+        frac = max(0.0, min(1.0, (dist_km - 45.0) / 45.0))
+        ratio = round(0.35 + 0.20 * frac, 4)
+        return ratio, "critical"
+    elif dist_km < 150.0:
+        frac = max(0.0, min(1.0, (dist_km - 90.0) / 60.0))
+        ratio = round(0.60 + 0.25 * frac, 4)
+        return ratio, "warning"
+    else:
+        frac = max(0.0, min(1.0, (dist_km - 150.0) / 100.0))
+        ratio = round(min(1.0, 0.90 + 0.10 * frac), 4)
+        return ratio, "restored"
+
+
+class SimulationMunicipalityItem(BaseModel):
+    id: Optional[str] = None
+    pcode: Optional[str] = None
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    coordinates: Optional[List[float]] = None
+    baseline_radiance: Optional[float] = None
+
+
+class SimulationRequest(BaseModel):
+    municipalities: Optional[List[Dict[str, Any]]] = None
+    region_key: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@app.api_route("/api/v1/events/{event_id}/simulate", methods=["GET", "POST"], tags=["Events & Spatial Data"])
+def simulate_event_radiance(
+    event_id: str,
+    payload: Optional[SimulationRequest] = None,
+    lat: Optional[float] = Query(None, description="Event latitude override"),
+    lng: Optional[float] = Query(None, description="Event longitude override"),
+    region_key: Optional[str] = Query(None, description="Optional regional chunk key")
+):
+    """
+    Multi-regional and nationwide post-event nocturnal radiance deficit simulation.
+    Checks if mounted/requested municipalities have explicit database records for that event.
+    If explicit records are missing, dynamically computes synthetic post-radiance scores
+    based on distance-decay proximity to event coordinates.
+    """
+    lookup_id = "panay-blackout-2024" if event_id.strip() == "1" else event_id.strip()
+    
+    # 1. Resolve event epicenter coordinates
+    event_lat = lat or (payload.latitude if payload else None)
+    event_lng = lng or (payload.longitude if payload else None)
+    
+    if event_lat is None or event_lng is None:
+        from event_presets import get_presets
+        presets = get_presets()
+        for p in presets:
+            if str(p.get("id")) == lookup_id:
+                event_lat = p.get("latitude") or (p.get("coordinates") and p["coordinates"][0])
+                event_lng = p.get("longitude") or (p.get("coordinates") and p["coordinates"][1])
+                break
+                
+    if event_lat is None or event_lng is None and lookup_id == "typhoon-haiyan-2013":
+        event_lat = 11.1000
+        event_lng = 125.3000
+        
+    if event_lat is None or event_lng is None:
+        event_lat = 11.0000
+        event_lng = 122.5000
+
+    # 2. Check explicit database records
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    explicit_by_pcode: Dict[str, Dict[str, Any]] = {}
+    explicit_by_name: Dict[str, Dict[str, Any]] = {}
+    
+    try:
+        # Check if records exist in radiance_observations for this event or target date
+        evt_row = cursor.execute("SELECT event_date FROM events WHERE id = ?", (lookup_id,)).fetchone()
+        obs_date = evt_row["event_date"] if evt_row else None
+        
+        if obs_date:
+            obs_rows = cursor.execute("""
+                SELECT municipality_name, municipality_pcode, daily_radiance,
+                       (SELECT baseline_radiance FROM baselines WHERE municipality_pcode = o.municipality_pcode LIMIT 1) as baseline
+                FROM radiance_observations o
+                WHERE observation_date = ?
+            """, (obs_date,)).fetchall()
+            for r in obs_rows:
+                base = r["baseline"] or 15.0
+                daily = r["daily_radiance"] or 0.0
+                ratio = round(daily / base if base > 0 else 1.0, 4)
+                entry = {
+                    "pre_radiance": base,
+                    "post_radiance": daily,
+                    "recovery_ratio": ratio,
+                    "status": "critical" if ratio < 0.60 else "warning" if ratio < 0.90 else "restored",
+                    "distance_km": 0.0
+                }
+                if r["municipality_pcode"]:
+                    explicit_by_pcode[r["municipality_pcode"]] = entry
+                if r["municipality_name"]:
+                    explicit_by_name[r["municipality_name"].lower().strip()] = entry
+    except Exception as e:
+        logger.warning(f"Error checking explicit database records: {e}")
+    finally:
+        conn.close()
+
+    # 3. Collect target municipalities (from payload or regional chunk)
+    target_items: List[Dict[str, Any]] = []
+    if payload and payload.municipalities:
+        target_items = payload.municipalities
+    else:
+        req_chunk = region_key or (payload.region_key if payload else None)
+        if req_chunk:
+            chunk_file = Path(__file__).resolve().parent.parent / "frontend" / "public" / "regions" / f"{req_chunk}.geojson"
+            if chunk_file.exists():
+                try:
+                    import json
+                    with open(chunk_file, "r", encoding="utf-8") as f:
+                        geo = json.load(f)
+                        for feat in geo.get("features", []):
+                            props = feat.get("properties", {})
+                            geom = feat.get("geometry", {})
+                            coords = geom.get("coordinates", [])
+                            # Simple centroid extraction
+                            flat_pts = []
+                            def extract_pts(c):
+                                if isinstance(c, (list, tuple)) and len(c) >= 2 and isinstance(c[0], (int, float)):
+                                    flat_pts.append((c[1], c[0])) # (lat, lng)
+                                elif isinstance(c, (list, tuple)):
+                                    for sub in c:
+                                        extract_pts(sub)
+                            extract_pts(coords)
+                            c_lat = sum(p[0] for p in flat_pts) / len(flat_pts) if flat_pts else event_lat
+                            c_lng = sum(p[1] for p in flat_pts) / len(flat_pts) if flat_pts else event_lng
+                            target_items.append({
+                                "id": props.get("ADM3_PCODE") or props.get("psgc_code") or props.get("GID_2"),
+                                "pcode": props.get("ADM3_PCODE") or props.get("psgc_code") or props.get("GID_2"),
+                                "name": props.get("ADM3_EN") or props.get("name"),
+                                "latitude": c_lat,
+                                "longitude": c_lng,
+                                "baseline_radiance": 15.0
+                            })
+                except Exception as ex:
+                    logger.warning(f"Error loading region chunk {req_chunk}: {ex}")
+
+    # Fallback to predefined Leyte / Eastern Visayas reference LGUs if none supplied
+    if not target_items:
+        target_items = [
+            {"id": "PH083747000", "pcode": "PH083747000", "name": "Tacloban City", "latitude": 11.2444, "longitude": 125.0039},
+            {"id": "PH082608000", "pcode": "PH082608000", "name": "Guiuan", "latitude": 11.0333, "longitude": 125.7233},
+            {"id": "PH083738000", "pcode": "PH083738000", "name": "Palo", "latitude": 11.1583, "longitude": 124.9917},
+            {"id": "PH086003000", "pcode": "PH086003000", "name": "Basey", "latitude": 11.2800, "longitude": 125.0689},
+            {"id": "PH083734000", "pcode": "PH083734000", "name": "Ormoc City", "latitude": 11.0050, "longitude": 124.6075},
+            {"id": "PH083713000", "pcode": "PH083713000", "name": "Carigara", "latitude": 11.3000, "longitude": 124.6833},
+            {"id": "PH082603000", "pcode": "PH082603000", "name": "Borongan City", "latitude": 11.6083, "longitude": 125.4319},
+            {"id": "PH072213000", "pcode": "PH072213000", "name": "Bogo (North Cebu)", "latitude": 11.0500, "longitude": 124.0000},
+            {"id": "PH087801000", "pcode": "PH087801000", "name": "Naval (Biliran)", "latitude": 11.5600, "longitude": 124.4000},
+            {"id": "PH086407000", "pcode": "PH086407000", "name": "Maasin (Southern Leyte)", "latitude": 10.1333, "longitude": 124.8667},
+            {"id": "PH063022000", "pcode": "PH063022000", "name": "Iloilo City (Panay)", "latitude": 10.7202, "longitude": 122.5621},
+        ]
+
+    # 4. Compute distance-decay simulation results
+    sim_data: Dict[str, Dict[str, Any]] = {}
+    for item in target_items:
+        pcode = item.get("pcode") or item.get("id") or ""
+        name = (item.get("name") or "").lower().strip()
+        
+        # Check explicit database records first
+        if pcode in explicit_by_pcode:
+            sim_data[pcode] = explicit_by_pcode[pcode]
+            continue
+        if name in explicit_by_name:
+            sim_data[pcode] = explicit_by_name[name]
+            continue
+            
+        m_lat = item.get("latitude") or (item.get("coordinates") and item["coordinates"][0])
+        m_lng = item.get("longitude") or (item.get("coordinates") and item["coordinates"][1])
+        
+        if m_lat is not None and m_lng is not None:
+            dist = haversine_distance_km(float(m_lat), float(m_lng), float(event_lat), float(event_lng))
+        else:
+            dist = 999.0
+            
+        ratio, status = compute_distance_decay_ratio(dist)
+        base = float(item.get("baseline_radiance") or 15.0)
+        post = round(base * ratio, 2)
+        
+        entry = {
+            "pre_radiance": base,
+            "post_radiance": post,
+            "recovery_ratio": ratio,
+            "status": status,
+            "distance_km": round(dist, 1)
+        }
+        sim_data[pcode] = entry
+        if item.get("id") and item["id"] != pcode:
+            sim_data[item["id"]] = entry
+        if name:
+            sim_data[name] = entry
+
+    return {
+        "event_id": lookup_id,
+        "event_coordinates": [event_lat, event_lng],
+        "simulation_model": "distance_decay_viirs_radiance",
+        "records_count": len(sim_data),
+        "data": sim_data
+    }
+
+
 @app.get("/api/v1/resilience/timeline", response_model=TimelineResponse, tags=["Timeline"])
 def get_timeline_query(
     municipality: Optional[str] = Query(None, description="Filter by municipality name or ADM3_PCODE"),

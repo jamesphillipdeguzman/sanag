@@ -2,7 +2,14 @@
   "panay": {
     "file": "/regions/panay.geojson",
     "count": 98,
-    "size_kb": 115.0
+    "size_kb": 115.0,
+    "label": "Panay Island (Western Visayas)",
+    "bounds": {
+      "minLat": 10.3,
+      "maxLat": 12.1,
+      "minLng": 121.8,
+      "maxLng": 123.4
+    }
   },
   "iloilo": {
     "file": "/regions/iloilo.geojson",
@@ -32,7 +39,14 @@
   "ncr": {
     "file": "/regions/ncr.geojson",
     "count": 17,
-    "size_kb": 10.3
+    "size_kb": 23.4,
+    "label": "National Capital Region (Metro Manila)",
+    "bounds": {
+      "minLat": 14.35,
+      "maxLat": 14.78,
+      "minLng": 120.92,
+      "maxLng": 121.13
+    }
   },
   "r7": {
     "file": "/regions/r7.geojson",
@@ -81,8 +95,15 @@
   },
   "car": {
     "file": "/regions/car.geojson",
-    "count": 3,
-    "size_kb": 1.9
+    "count": 77,
+    "size_kb": 75.1,
+    "label": "Cordillera Administrative Region (CAR)",
+    "bounds": {
+      "minLat": 16.19,
+      "maxLat": 18.54,
+      "minLng": 120.47,
+      "maxLng": 121.67
+    }
   },
   "r4b": {
     "file": "/regions/r4b.geojson",
@@ -111,7 +132,163 @@
   },
   "barmm": {
     "file": "/regions/barmm.geojson",
-    "count": 2,
-    "size_kb": 1.3
+    "count": 114,
+    "size_kb": 195.0,
+    "label": "Bangsamoro (BARMM)",
+    "bounds": {
+      "minLat": 4.59,
+      "maxLat": 8.21,
+      "minLng": 118.08,
+      "maxLng": 125.0
+    }
+  },
+  "mindanao_south": {
+    "file": "/regions/mindanao_south.geojson",
+    "count": 98,
+    "size_kb": 148.2,
+    "label": "South Mindanao (Davao & SOCCSKSARGEN / Sarangani)",
+    "bounds": {
+      "minLat": 5.37,
+      "maxLat": 8.0,
+      "minLng": 124.02,
+      "maxLng": 126.61
+    }
+  },
+  "cebu_bohol": {
+    "file": "/regions/central_visayas.geojson",
+    "count": 132,
+    "size_kb": 152.7,
+    "label": "Central Visayas (Region VII - Cebu, Bohol)",
+    "bounds": {
+      "minLat": 9.04,
+      "maxLat": 11.58,
+      "minLng": 122.61,
+      "maxLng": 124.65
+    }
+  },
+  "ncr_southern_tagalog": {
+    "file": "/regions/calabarzon_mimaropa.geojson",
+    "count": 215,
+    "size_kb": 463.1,
+    "label": "CALABARZON & MIMAROPA (Regions IV-A & IV-B)",
+    "bounds": {
+      "minLat": 7.51,
+      "maxLat": 15.22,
+      "minLng": 116.93,
+      "maxLng": 125.23
+    }
+  },
+  "central_visayas": {
+    "file": "/regions/central_visayas.geojson",
+    "count": 132,
+    "size_kb": 152.7,
+    "label": "Central Visayas (Region VII - Cebu, Bohol)",
+    "bounds": {
+      "minLat": 9.04,
+      "maxLat": 11.58,
+      "minLng": 122.61,
+      "maxLng": 124.65
+    }
+  },
+  "ncr_calabarzon": {
+    "file": "/regions/ncr_calabarzon.geojson",
+    "count": 32,
+    "size_kb": 18.9
+  },
+  "ilocos_cagayan": {
+    "file": "/regions/ilocos_cagayan.geojson",
+    "count": 218,
+    "size_kb": 255.7,
+    "label": "Ilocos & Cagayan Valley (Regions I & II)",
+    "bounds": {
+      "minLat": 15.62,
+      "maxLat": 21.07,
+      "minLng": 119.75,
+      "maxLng": 122.53
+    }
+  },
+  "central_luzon": {
+    "file": "/regions/central_luzon.geojson",
+    "count": 130,
+    "size_kb": 177.0,
+    "label": "Central Luzon (Region III)",
+    "bounds": {
+      "minLat": 14.36,
+      "maxLat": 16.53,
+      "minLng": 119.79,
+      "maxLng": 122.27
+    }
+  },
+  "calabarzon_mimaropa": {
+    "file": "/regions/calabarzon_mimaropa.geojson",
+    "count": 215,
+    "size_kb": 463.1,
+    "label": "CALABARZON & MIMAROPA (Regions IV-A & IV-B)",
+    "bounds": {
+      "minLat": 7.51,
+      "maxLat": 15.22,
+      "minLng": 116.93,
+      "maxLng": 125.23
+    }
+  },
+  "bicol": {
+    "file": "/regions/bicol.geojson",
+    "count": 114,
+    "size_kb": 214.8,
+    "label": "Bicol Region (Region V)",
+    "bounds": {
+      "minLat": 11.71,
+      "maxLat": 14.5,
+      "minLng": 122.3,
+      "maxLng": 124.43
+    }
+  },
+  "panay_guimaras": {
+    "file": "/regions/panay_guimaras.geojson",
+    "count": 133,
+    "size_kb": 218.8,
+    "label": "Western Visayas (Panay & Negros)",
+    "bounds": {
+      "minLat": 9.42,
+      "maxLat": 12.12,
+      "minLng": 121.28,
+      "maxLng": 123.57
+    }
+  },
+  "eastern_visayas": {
+    "file": "/regions/eastern_visayas.geojson",
+    "count": 143,
+    "size_kb": 198.2,
+    "label": "Eastern Visayas (Region VIII - Leyte, Samar)",
+    "bounds": {
+      "minLat": 9.89,
+      "maxLat": 12.76,
+      "minLng": 124.0,
+      "maxLng": 125.97
+    }
+  },
+  "zamboanga_peninsula": {
+    "file": "/regions/zamboanga_peninsula.geojson",
+    "count": 71,
+    "size_kb": 117.4,
+    "label": "Zamboanga Peninsula (Region IX)",
+    "bounds": {
+      "minLat": 6.86,
+      "maxLat": 8.86,
+      "minLng": 121.9,
+      "maxLng": 123.67
+    }
+  },
+  "northern_mindanao_caraga": {
+    "file": "/regions/northern_mindanao_caraga.geojson",
+    "count": 166,
+    "size_kb": 238.5,
+    "label": "Northern Mindanao & Caraga (Regions X & XIII)",
+    "bounds": {
+      "minLat": 7.4,
+      "maxLat": 10.47,
+      "minLng": 123.55,
+      "maxLng": 126.46
+    }
   }
 }
