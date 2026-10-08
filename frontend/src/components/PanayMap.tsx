@@ -83,10 +83,10 @@ export interface LeafletMapProps {
 }
 
 const statusLabels: Record<string, string> = {
-  restored: 'Power Restored',
-  recovering: 'Recovering',
-  warning: 'Limited Power',
-  critical: 'Critical Outage',
+  restored: 'Near-Full Recovery',
+  recovering: 'Active Restoration',
+  warning: 'Active Restoration',
+  critical: 'Critical Deficit',
 };
 
 function MapLoadingSkeleton() {
@@ -498,17 +498,15 @@ export default function PanayMap({
 
               {nightGlowMode ? (
                 <>
-                  <LegendDot color="#ffaa33" label="Golden Radiance" glow />
-                  <LegendDot color="#e08b18" label="Moderate Amber" />
-                  <LegendDot color="#8c531b" label="Dim Ember" />
-                  <LegendDot color="#121722" label="Blackout" />
+                  <LegendDot color="#ffaa33" label=">= 90% Near-Full Recovery" glow />
+                  <LegendDot color="#e08b18" label="60%–89% Active Restoration" />
+                  <LegendDot color="#121722" label="< 60% Critical Deficit" />
                 </>
               ) : (
                 <>
-                  <LegendDot color="#10b981" label="Restored" />
-                  <LegendDot color="#599ffd" label="Recovering" />
-                  <LegendDot color="#fbbf24" label="Limited" />
-                  <LegendDot color="#f43f5e" label="Critical" />
+                  <LegendDot color="#10b981" label=">= 90% Near-Full Recovery" />
+                  <LegendDot color="#f59e0b" label="60%–89% Active Restoration" />
+                  <LegendDot color="#ef4444" label="< 60% Critical Deficit" />
                 </>
               )}
             </div>
@@ -574,10 +572,10 @@ export default function PanayMap({
                           className="h-2.5 w-2.5 rounded-full"
                           style={{
                             backgroundColor: nightGlowMode
-                              ? (hovered.recoveryScore >= 80 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : hovered.recoveryScore >= 40 ? '#8c531b' : '#121722')
+                              ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#121722')
                               : getRecoveryColor(hovered.recoveryScore),
                             boxShadow: nightGlowMode && hovered.recoveryScore >= 60 ? '0 0 8px #ffaa33' : undefined,
-                            border: nightGlowMode && hovered.recoveryScore < 40 ? '1px solid rgba(255,255,255,0.2)' : undefined,
+                            border: nightGlowMode && hovered.recoveryScore < 60 ? '1px solid rgba(255,255,255,0.2)' : undefined,
                           }}
                         />
                         <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
@@ -594,14 +592,14 @@ export default function PanayMap({
                       <span className="text-gray-600 dark:text-ink-300">
                         Status: <span style={{
                           color: nightGlowMode
-                            ? (hovered.recoveryScore >= 80 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : hovered.recoveryScore >= 40 ? '#8c531b' : '#94a3b8')
+                            ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#94a3b8')
                             : getRecoveryStatusColor(hovered.status)
                         }}>
                           {nightGlowMode && hovered.status === 'restored'
-                            ? 'Radiant Light'
-                            : nightGlowMode && hovered.status === 'critical'
-                              ? 'Blackout Outage'
-                              : statusLabels[hovered.status]}
+                            ? 'Near-Full Recovery'
+                            : nightGlowMode && (hovered.status === 'critical' || hovered.recoveryScore < 60)
+                              ? 'Critical Deficit'
+                              : statusLabels[hovered.status] || (hovered.recoveryScore >= 90 ? 'Near-Full Recovery' : hovered.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit')}
                         </span>
                       </span>
                     </div>
@@ -632,17 +630,15 @@ export default function PanayMap({
               <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden">
                 {nightGlowMode ? (
                   <>
-                    <div className="flex-1 bg-[#121722]" title="Blackout Outage (<40%)" />
-                    <div className="flex-1 bg-[#8c531b]" title="Dim Ember (40-59%)" />
-                    <div className="flex-1 bg-[#e08b18]" title="Moderate Amber (60-79%)" />
-                    <div className="flex-1 bg-gradient-to-r from-[#ffaa33] to-[#ffc04d] shadow-[0_0_8px_#ffaa33]" title="Golden Radiance (80-100%)" />
+                    <div className="flex-1 bg-[#121722]" title="< 60% Critical Deficit" />
+                    <div className="flex-1 bg-[#e08b18]" title="60%–89% Active Restoration" />
+                    <div className="flex-1 bg-gradient-to-r from-[#ffaa33] to-[#ffc04d] shadow-[0_0_8px_#ffaa33]" title=">= 90% Near-Full Recovery" />
                   </>
                 ) : (
                   <>
-                    <div className="flex-1 bg-rose-500" />
-                    <div className="flex-1 bg-amber-400" />
-                    <div className="flex-1 bg-ocean-400" />
-                    <div className="flex-1 bg-emerald-500" />
+                    <div className="flex-1 bg-[#ef4444]" title="< 60% Critical Deficit" />
+                    <div className="flex-1 bg-[#f59e0b]" title="60%–89% Active Restoration" />
+                    <div className="flex-1 bg-[#10b981]" title=">= 90% Near-Full Recovery" />
                   </>
                 )}
               </div>
@@ -949,8 +945,8 @@ function getPolygonStyle(
   const score = municipality?.recoveryScore ?? 50;
 
   if (glow) {
-    if (score >= 80) {
-      // Restored / Active Urban Center: Warm golden-amber with clear boundary lines
+    if (score >= 90) {
+      // Near-Full Recovery / Active Urban Center: Warm golden-amber with clear boundary lines
       return {
         color: selected ? '#ffffff' : 'rgba(255, 192, 77, 0.85)',
         weight: selected ? 2.5 : 1.2,
@@ -961,7 +957,7 @@ function getPolygonStyle(
         lineCap: 'round' as const,
       };
     } else if (score >= 60) {
-      // Recovering: Moderate warm amber
+      // Active Restoration: Moderate warm amber
       return {
         color: selected ? '#ffffff' : 'rgba(224, 145, 35, 0.75)',
         weight: selected ? 2.2 : 1.0,
@@ -971,22 +967,11 @@ function getPolygonStyle(
         lineJoin: 'round' as const,
         lineCap: 'round' as const,
       };
-    } else if (score >= 40) {
-      // Limited: Dim muted ember with faint slate boundary
-      return {
-        color: selected ? '#ffffff' : '#334155',
-        weight: selected ? 2.0 : 1.0,
-        opacity: selected ? 1.0 : 0.40,
-        fillColor: '#522f0e',
-        fillOpacity: selected ? 0.60 : 0.18,
-        lineJoin: 'round' as const,
-        lineCap: 'round' as const,
-      };
     } else {
-      // Critical Outage: Deeply extinguished near-black charcoal slate with subtle slate border (#334155)
+      // Critical Deficit (<60%): Deeply extinguished near-black charcoal slate with subtle slate border (#334155)
       // to preserve the geographic silhouette of the island against the ocean
       return {
-        color: selected ? '#f43f5e' : '#334155',
+        color: selected ? '#ef4444' : '#334155',
         weight: selected ? 2.0 : 1.0,
         opacity: selected ? 1.0 : 0.30,
         fillColor: '#0e131d',
@@ -1591,7 +1576,7 @@ function LeafletMap({
                 color: '#ffffff',
                 fillOpacity: 0.95,
                 fillColor: activeNight
-                  ? (initialScore >= 80 ? '#ffc04d' : initialScore >= 60 ? '#f59e0b' : initialScore >= 40 ? '#b45309' : '#1e293b')
+                  ? (initialScore >= 90 ? '#ffc04d' : initialScore >= 60 ? '#f59e0b' : '#1e293b')
                   : undefined,
               });
             }

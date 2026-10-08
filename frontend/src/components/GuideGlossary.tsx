@@ -77,8 +77,8 @@ const GLOSSARY_ITEMS: GlossaryItem[] = [
     shortName: 'R(t) = 0–100%',
     category: 'metric',
     formula: 'R(t) = \\min\\left(100, \\frac{\\text{Radiance}_{\\text{post}}}{\\text{Radiance}_{\\text{base}}} \\times 100\\right)',
-    definition: 'Post-impact observed radiance divided by baseline radiance. Values ≥ 90% indicate benchmark restoration; < 30% indicate severe blackout clusters.',
-    details: 'Color-coded into 4 operational tiers: Restored (≥90%, Emerald), Recovering (60–89%, Blue), Limited (40–59%, Amber), and Critical (<40%, Rose).',
+    definition: 'Post-impact observed radiance divided by baseline radiance. Values ≥ 90% indicate benchmark restoration; < 60% indicate critical deficits / blackout clusters.',
+    details: 'Color-coded into 3 official operational tiers: Near-Full Recovery (≥90%, Emerald), Active Restoration (60–89%, Amber), and Critical Deficit (<60%, Red).',
     tags: ['Performance', 'Index', 'Restoration'],
   },
   {
@@ -237,7 +237,7 @@ export default function GuideGlossary({ onNavigateTab }: GuideGlossaryProps) {
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
-                  Open the interactive Philippine Satellite Grid map to inspect municipality-level blackout severity. Darkened polygons immediately identify LGUs with severe radiance collapse (&lt;30% recovery) on Day-0.
+                  Open the interactive Philippine Satellite Grid map to inspect municipality-level blackout severity. Darkened polygons immediately identify LGUs with severe radiance collapse (&lt;60% recovery) on Day-0.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <button

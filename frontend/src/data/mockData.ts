@@ -127,14 +127,13 @@ export const events: DisasterEvent[] = [
 ];
 
 export function getRecoveryColor(score: number): string {
-  if (score >= 80) return '#10b981';
-  if (score >= 60) return '#599ffd';
-  if (score >= 40) return '#fbbf24';
-  return '#f43f5e';
+  if (score >= 90) return '#10b981';
+  if (score >= 60) return '#f59e0b';
+  return '#ef4444';
 }
 
 export function getRecoveryStatusColor(status: RecoveryStatus): string {
-  return getRecoveryColor(status === 'restored' ? 95 : status === 'recovering' ? 70 : status === 'warning' ? 50 : 20);
+  return getRecoveryColor(status === 'restored' ? 95 : status === 'recovering' || status === 'warning' ? 75 : 30);
 }
 
 export function getSeverityColor(severity: DisasterEvent['severity']): string {

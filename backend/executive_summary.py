@@ -406,17 +406,24 @@ def generate_recovery_briefing(event_context: str, max_retries=2, delay=1.5) -> 
 Analyze the following disaster recovery scenario in the Philippines.
 Provide a concise, professional briefing suitable for a disaster response command team.
 
+PROJECT SANAG OFFICIAL 3-TIER OPERATIONAL BENCHMARKS (R(t) = L(t) / L_baseline):
+- Near-Full Recovery (Normal Operating Conditions): R(t) >= 0.90 (>= 90% baseline radiance)
+- Active Restoration: 0.60 <= R(t) < 0.90 (60% to 89% baseline radiance)
+- Critical Deficit / Severe Blackout: R(t) < 0.60 (< 60% baseline radiance)
+- No Data / Cloud Masked: None
+
 Format your response in clear, well-structured Markdown with the following sections:
 ### Executive Summary
 A 2-3 sentence overview of grid restoration progress.
 - Note on scope: Panay Island comprises exactly 95 monitored Local Government Units (LGUs)—including 17 in Aklan, 18 in Antique, 16 in Capiz, and 44 in Iloilo (encompassing Iloilo City as a highly urbanized city and Passi City as a component city, alongside Roxas City and all component municipalities). Always report the monitored scope as 95 LGUs (never 93).
 - When Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. Instead, it must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
+- Jurisdictions with scores from 60% to 89% (0.60 to 0.89) are in "Active Restoration", while scores under 60% (< 0.60) are "Critical Deficits".
 
 ### Critical Alerts
-Bullet points highlighting the most severely affected municipalities, persistent feeder outages, and vulnerable coastal or rural communities. If Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
+Bullet points highlighting the most severely affected municipalities (< 60% baseline radiance), persistent feeder outages, and vulnerable coastal or rural communities. If Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
 
 ### Restoration Benchmarks
-Key milestones, municipalities that have reached >= 90% restoration (or if 0 municipalities have crossed >= 90%, accurately designate the section or bullet as "Top Performing Hubs" reflecting their actual sub-90% recovery scores without falsely claiming any municipality reached >= 90%), and regional recovery baselines.
+Key milestones, municipalities that have reached >= 90% restoration (or if 0 municipalities have crossed >= 90%, accurately designate the section or bullet as "Top Performing Hubs" reflecting their actual sub-90% recovery scores in the Active Restoration band 60%–89% without falsely claiming any municipality reached >= 90%), and regional recovery baselines.
 
 ### Priority Recommendations
 3 actionable next steps for disaster response teams and electric cooperatives. When all monitored municipalities achieve benchmark restoration (>= 90%) with 0 active critical deficits, adjust recommendations to focus on ongoing telemetry re-assessment, long-term grid stability monitoring, and routine utility reporting (instead of emergency generators, lineman mutual aid, or line repairs).
@@ -424,6 +431,10 @@ Key milestones, municipalities that have reached >= 90% restoration (or if 0 mun
 CRITICAL FACTUAL CONSISTENCY RULES:
 - Strictly obey the scenario data numbers and definitions.
 - MONITORED SCOPE: Exactly 95 LGUs across Panay Island. Never state 93 monitored LGUs. Always specify and count 95 LGUs being monitored, including Iloilo City as a highly urbanized city and Passi City as a component city.
+- OPERATIONAL BENCHMARK TIERS: Harmonize all evaluations to the official 3-tier benchmarks:
+  * Near-Full Recovery (>= 90%): >= 0.90 baseline radiance
+  * Active Restoration (60% to 89%): 0.60 to 0.89 baseline radiance
+  * Critical Deficit (< 60%): < 0.60 baseline radiance. All values under 0.60 are critical deficits; never classify 0.60–0.89 as critical outages.
 - EXECUTIVE SUMMARY RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. It must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
 - CRITICAL ALERTS RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Critical Alerts section MUST completely suppress any outage warnings, severe cluster counts, infrastructure bottleneck claims, or vulnerable community deficit texts. NEVER list fully recovered municipalities (scores >= 60% or >= 90%) as having outages, blackouts, or deficits. Instead, the Critical Alerts section MUST render clean, positive steady-state bullet points confirming:
   1. Zero Active Outages: Confirmation that no active outage clusters remain and all monitored LGUs have surpassed baseline recovery.

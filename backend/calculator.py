@@ -1,6 +1,12 @@
 """
 Calculates power grid recovery metrics for the SANAG capstone project.
 
+Operational Recovery Benchmarks (R(t) = L(t) / L_baseline):
+    - Near-Full Recovery (Normal Operating Conditions): R(t) >= 0.90 (>= 90% baseline radiance)
+    - Active Restoration: 0.60 <= R(t) < 0.90 (60% to 89% baseline radiance)
+    - Critical Deficit (Blackout): R(t) < 0.60 (< 60% baseline radiance)
+    - Cloud Masked: None (No Data)
+
 What this calculates:
     1. Baseline & Minimum Radiance: Establishes the expected pre-disaster state vs. 
        the deepest drop during the outage.
@@ -15,23 +21,27 @@ import calendar
 from datetime import datetime, timedelta
 from functools import lru_cache
 import sqlite3
-from typing import Optional, Dict, List, Union, Any, Tuple
+from typing import Optional, Dict, List, Union, Any, Tuple, Sequence
 
 # Define the database path relative to the script location
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.db")
 
 def interpret_score(r_val: Optional[float]) -> str:
     """
-    Classifies the R(t) recovery ratio based on defined benchmarks.
+    Classifies the R(t) recovery ratio based on defined benchmarks:
+    - R(t) >= 0.90 (>= 90%): "Normal Operating Conditions"
+    - 0.60 <= R(t) < 0.90 (60%–89%): "Active Restoration"
+    - R(t) < 0.60 (< 60%): "Critical Deficit / Blackout"
+    - R(t) is None: "No Data / Cloud Masked"
     """
     if r_val is None:
         return "No Data / Cloud Masked"
     elif r_val >= 0.9:
         return "Normal Operating Conditions"
-    elif 0.3 <= r_val < 0.9:
-        return "Partial Power / Brownouts"
+    elif 0.6 <= r_val < 0.9:
+        return "Active Restoration"
     else:
-        return "Severe Grid Collapse / Blackout"
+        return "Critical Deficit / Blackout"
 
 @lru_cache(maxsize=128)
 def _cached_compute_recovery_index(
@@ -309,7 +319,7 @@ def compute_recovery_index(
 
 def calculate_recovery_metrics(
     baseline_radiance: float, 
-    daily_radiance_series: List[Optional[float]]
+    daily_radiance_series: Sequence[Optional[float]]
 ) -> Dict[str, Union[float, int, str]]:
     """
     Calculates power grid recovery metrics comparing daily post-blackout 

@@ -972,6 +972,40 @@ export default function RecoveryChart({
                 </g>
               ))}
 
+              {/* Operational Critical Deficit Threshold Line (60%) */}
+              <g className="transition-opacity duration-200">
+                <line
+                  x1={margin.left}
+                  y1={yScale(60)}
+                  x2={W - margin.right}
+                  y2={yScale(60)}
+                  stroke="#ef4444"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                  opacity={isLight ? '0.75' : '0.65'}
+                />
+                <rect
+                  x={W - margin.right - 180}
+                  y={yScale(60) - 16}
+                  width="176"
+                  height="14"
+                  rx="3"
+                  fill={isLight ? '#fef2f2' : '#450a0a'}
+                  stroke={isLight ? '#fecaca' : '#991b1b'}
+                  strokeWidth="1"
+                  opacity="0.9"
+                />
+                <text
+                  x={W - margin.right - 92}
+                  y={yScale(60) - 6}
+                  textAnchor="middle"
+                  fill={isLight ? '#dc2626' : '#f87171'}
+                  style={{ fontSize: '9px', fontWeight: 600 }}
+                >
+                  Critical Deficit Threshold (60%)
+                </text>
+              </g>
+
               {/* Y axis label */}
               <text
                 x={14}
@@ -1309,7 +1343,21 @@ export default function RecoveryChart({
                 </div>
                 <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500 dark:text-ink-500">
                   <span>Day-0: {start}%</span>
-                  <span className="capitalize">{s.municipality.status}</span>
+                  <span
+                    className={`font-semibold ${
+                      end >= 90
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : end >= 60
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-rose-600 dark:text-rose-400'
+                    }`}
+                  >
+                    {end >= 90
+                      ? 'Near-Full Recovery'
+                      : end >= 60
+                      ? 'Active Restoration'
+                      : 'Critical Deficit'}
+                  </span>
                 </div>
               </div>
             );
