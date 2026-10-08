@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   RotateCcw,
@@ -15,6 +15,8 @@ import {
   Sliders,
   Check,
   Info,
+  Image as ImageIcon,
+  Maximize2,
 } from 'lucide-react';
 import { useSettings, type BasemapSource, type InteractionMode, type RenderingEngine } from '@/context/SettingsContext';
 import { REGION_PRESETS } from './PanayMap';
@@ -37,17 +39,25 @@ export default function SettingsModal({ isOpen: externalIsOpen, onClose: externa
   const onClose = externalOnClose ?? contextCloseSettings;
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Close on Escape key press
+  // State for VIIRS calibration architecture diagram lightbox modal
+  const [showCalibrationDiagram, setShowCalibrationDiagram] = useState(false);
+
+  // Close on Escape key press (close diagram lightbox first if open)
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (showCalibrationDiagram) {
+          e.stopPropagation();
+          setShowCalibrationDiagram(false);
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, showCalibrationDiagram]);
 
   // Prevent background body scroll when open
   useEffect(() => {
@@ -262,6 +272,19 @@ export default function SettingsModal({ isOpen: externalIsOpen, onClose: externa
                     ({(settings.scaleCalibration || 1.0).toFixed(2)}x)
                   </span>
                 </div>
+              </div>
+
+              {/* View Calibration Architecture Diagram Link Button */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowCalibrationDiagram(true)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 hover:border-sky-500/50 transition-all cursor-pointer group shadow-2xs"
+                >
+                  <ImageIcon className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 group-hover:scale-110 transition-transform" />
+                  <span>View Calibration Architecture Diagram</span>
+                  <Maximize2 className="h-3 w-3 opacity-60 ml-0.5 group-hover:opacity-100 transition-opacity" />
+                </button>
               </div>
 
               {/* Slider Input */}
@@ -519,6 +542,129 @@ export default function SettingsModal({ isOpen: externalIsOpen, onClose: externa
           </div>
         </div>
       </div>
+
+      {/* ────────────────── VIIRS CALIBRATION ARCHITECTURE MODAL ────────────────── */}
+      {showCalibrationDiagram && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="calibration-diagram-title"
+        >
+          {/* Dimmed Backdrop with Blur */}
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-fade-in"
+            onClick={() => setShowCalibrationDiagram(false)}
+            aria-hidden="true"
+          />
+
+          {/* Modal Card */}
+          <div
+            className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto flex flex-col rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl shadow-black/60 text-slate-900 dark:text-slate-100 animate-scale-in z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="sticky top-0 z-20 flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-white/10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">
+                  <Sliders className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 id="calibration-diagram-title" className="text-base font-bold text-slate-900 dark:text-white">
+                    VIIRS Scale Calibration Architecture
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-ink-400">
+                    750m Raw Nadir Footprint vs. 500m Gridded NASA Black Marble (VNP46A2)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCalibrationDiagram(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Close calibration diagram"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body: Image + 3-part Explanatory Context Panel */}
+            <div className="p-5 sm:p-6 space-y-6">
+              {/* Diagram Image Container */}
+              <div className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-950 flex items-center justify-center p-2 shadow-inner">
+                <img
+                  src="/images/viirs-scale-calibration.jpg"
+                  alt="VIIRS Scale Calibration Architecture Diagram"
+                  className="w-full max-h-[60vh] object-contain rounded-lg transition-transform"
+                  loading="lazy"
+                />
+              </div>
+
+              {/* 3-Part Contextual Explanatory Panel */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* 1. Top Panel — The Orbital Sensor */}
+                <div className="p-4 rounded-xl border border-sky-200 dark:border-sky-500/20 bg-sky-50/60 dark:bg-sky-950/20 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-sky-700 dark:text-sky-300 font-bold text-xs uppercase tracking-wider mb-2">
+                      <span className="flex h-2 w-2 rounded-full bg-sky-500" />
+                      1. The Orbital Sensor (750m Raw Nadir)
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-700 dark:text-ink-200">
+                      The physical VIIRS radiometer aboard Suomi NPP and NOAA-20 scans the surface at a native footprint of ~750m × 750m per pixel directly below the spacecraft (at nadir).
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. Middle Panel — Processed Data Pipeline */}
+                <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50/60 dark:bg-indigo-950/20 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold text-xs uppercase tracking-wider mb-2">
+                      <span className="flex h-2 w-2 rounded-full bg-indigo-500" />
+                      2. Processed Pipeline (500m Gridded NASA DNB)
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-700 dark:text-ink-200">
+                      The NASA Black Marble (VNP46A2) suite resamples and reprojects raw swaths into a standardized, equidistant 15 arc-second (~500m) geographic grid to facilitate spatial analytics and time-series alignment.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Bottom Panel — Map Calibration Slider Offset */}
+                <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50/60 dark:bg-emerald-950/20 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider mb-2">
+                      <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+                      3. Map Calibration Slider Offset
+                    </div>
+                    <div className="text-xs leading-relaxed text-slate-700 dark:text-ink-200 space-y-1.5">
+                      <p>Sets the conversion ratio for the on-map scale ruler:</p>
+                      <ul className="list-disc list-inside space-y-1 text-[11.5px] text-slate-600 dark:text-ink-300">
+                        <li><strong>1.0x (500m Nominal):</strong> Calibrated to standard processed NASA Black Marble raster tiles.</li>
+                        <li><strong>1.5x (750m Nadir):</strong> Calibrated to the raw physical instrument footprint.</li>
+                        <li><strong>0.8x–1.2x (400m–600m):</strong> Accommodates off-nadir pixel expansion and orbital track perspective shifts.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-slate-950/50">
+              <span className="text-[11px] text-slate-500 dark:text-ink-400">
+                Source: NASA Black Marble User Guide & NOAA VIIRS Sensor Specs
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCalibrationDiagram(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-colors cursor-pointer"
+              >
+                Close Diagram
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

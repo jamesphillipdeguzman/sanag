@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Zap,
 } from 'lucide-react';
+import { resolveEventContext, EventContextCard } from './ExecutiveBriefing';
 
 interface AiBriefingCardProps {
   event?: DisasterEvent | null;
@@ -103,11 +104,11 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     const hasCritical = critical.length > 0;
     const criticalOutageSummary = hasCritical
       ? priorityLGUs
-          .map(
-            (m) =>
-              `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
-          )
-          .join('; ')
+        .map(
+          (m) =>
+            `${m.name} (${m.province}): ${m.recoveryScore}% score, est ${m.estimatedDaysToRecover} days to recover`
+        )
+        .join('; ')
       : 'None. All monitored municipalities have achieved recovery scores >= 60% (100% or near-full recovery), with zero active critical deficit clusters.';
 
     const eventName = event?.name || 'Disaster Incident';
@@ -116,8 +117,12 @@ export default function AiBriefingCard({ event, municipalities }: AiBriefingCard
     const eventDate = event?.date || '';
     const totalMonitoredCount = municipalities.length === 93 ? 95 : (municipalities.length || 95);
 
+    const eventContextInfo = resolveEventContext(event);
     const contextString = `
 Disaster Incident: ${eventName} (${eventDate})
+Classification: ${eventContextInfo.eventType} (${eventContextInfo.disasterCategory})
+Primary Driver: ${eventContextInfo.rootCauseSummary}
+Physical Grid Impact: ${eventContextInfo.infrastructureImpact}
 Incident Severity: ${eventSeverity} | Category: ${eventType}
 Total Municipalities Monitored: ${totalMonitoredCount}
 Island-wide Average Recovery Score: ${avgScore}%
@@ -133,7 +138,14 @@ ${benchmarkHeader}: ${benchmarkString}
       const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_context: contextString }),
+        body: JSON.stringify({
+          event_context: contextString,
+          event_id: event?.id,
+          event_type: eventContextInfo.eventType,
+          disaster_category: eventContextInfo.disasterCategory,
+          root_cause_summary: eventContextInfo.rootCauseSummary,
+          infrastructure_impact: eventContextInfo.infrastructureImpact,
+        }),
       });
 
       if (!response.ok) {
@@ -272,6 +284,7 @@ ${benchmarkHeader}: ${benchmarkString}
         ) : (
           /* Structured Cards View */
           <div className="space-y-6">
+
             {/* 1. Executive Summary Card */}
             {briefingData?.summary && (
               <div className="rounded-xl bg-ocean-50/80 border border-ocean-200 dark:bg-gradient-to-r dark:from-ocean-500/10 dark:via-ink-900/60 dark:to-ink-900/80 dark:border-ocean-500/25 p-4 sm:p-5 shadow-sm dark:shadow-lg transition-colors">
@@ -284,7 +297,7 @@ ${benchmarkHeader}: ${benchmarkString}
                 <MarkdownContent
                   content={
                     isAllRestoredOrNoCritical &&
-                    (/\b(critical or warning states?|requiring targeted technical and logistical reinforcement|limited-power states?)\b/i.test(briefingData.summary))
+                      (/\b(critical or warning states?|requiring targeted technical and logistical reinforcement|limited-power states?)\b/i.test(briefingData.summary))
                       ? `Following the impact of ${event?.name || 'the disaster event'}, satellite nightlight observations confirm that all ${municipalities.length === 93 ? 95 : (municipalities.length || 95)} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring.`
                       : briefingData.summary
                   }
@@ -296,21 +309,19 @@ ${benchmarkHeader}: ${benchmarkString}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {/* Critical Alerts Card */}
               <div
-                className={`rounded-xl border p-4 flex flex-col justify-between transition-colors ${
-                  !isAllRestoredOrNoCritical && critical.length > 0
+                className={`rounded-xl border p-4 flex flex-col justify-between transition-colors ${!isAllRestoredOrNoCritical && critical.length > 0
                     ? 'bg-rose-50/70 border-rose-200 dark:bg-rose-500/5 dark:border-rose-500/20'
                     : 'bg-emerald-50/70 border-emerald-200 dark:bg-emerald-500/5 dark:border-emerald-500/20'
-                }`}
+                  }`}
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-                          !isAllRestoredOrNoCritical && critical.length > 0
+                        className={`flex h-7 w-7 items-center justify-center rounded-lg ${!isAllRestoredOrNoCritical && critical.length > 0
                             ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'
                             : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400'
-                        }`}
+                          }`}
                       >
                         {!isAllRestoredOrNoCritical && critical.length > 0 ? (
                           <ShieldAlert className="h-4 w-4" />
@@ -319,21 +330,19 @@ ${benchmarkHeader}: ${benchmarkString}
                         )}
                       </div>
                       <h4
-                        className={`text-xs font-bold uppercase tracking-wider ${
-                          !isAllRestoredOrNoCritical && critical.length > 0
+                        className={`text-xs font-bold uppercase tracking-wider ${!isAllRestoredOrNoCritical && critical.length > 0
                             ? 'text-rose-700 dark:text-rose-300'
                             : 'text-emerald-700 dark:text-emerald-300'
-                        }`}
+                          }`}
                       >
                         Critical Alerts
                       </h4>
                     </div>
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                        !isAllRestoredOrNoCritical && critical.length > 0
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${!isAllRestoredOrNoCritical && critical.length > 0
                           ? 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/30'
                           : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
-                      }`}
+                        }`}
                     >
                       {!isAllRestoredOrNoCritical && critical.length > 0
                         ? `${briefingData?.criticalAlerts.length || critical.length} Flags`
@@ -347,18 +356,17 @@ ${benchmarkHeader}: ${benchmarkString}
                       : (briefingData?.criticalAlerts && briefingData.criticalAlerts.length > 0
                         ? briefingData.criticalAlerts
                         : [
-                            `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
-                            `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
-                          ]
+                          `${critical.length} municipalities remain below baseline radiance, with southern Antique and inland highlands experiencing extended restoration lags.`,
+                          `Critical infrastructure in ${critical[0]?.name || 'impacted LGUs'} operating on emergency secondary power.`,
+                        ]
                       )
                     ).map((alert, i) => (
                       <li key={i} className="flex items-start gap-2 leading-relaxed">
                         <span
-                          className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${
-                            !isAllRestoredOrNoCritical && critical.length > 0
+                          className={`h-1.5 w-1.5 rounded-full mt-1.5 shrink-0 ${!isAllRestoredOrNoCritical && critical.length > 0
                               ? 'bg-rose-500 dark:bg-rose-400'
                               : 'bg-emerald-500 dark:bg-emerald-400'
-                          }`}
+                            }`}
                         />
                         <span className="flex-1">{renderInlineFormatting(alert)}</span>
                       </li>
@@ -420,11 +428,10 @@ ${benchmarkHeader}: ${benchmarkString}
                       </h4>
                     </div>
                     <span
-                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${
-                        isAllRestoredOrNoCritical
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border transition-colors ${isAllRestoredOrNoCritical
                           ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/30'
                           : 'bg-ocean-100 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/15 dark:text-ocean-300 dark:border-ocean-500/30'
-                      }`}
+                        }`}
                     >
                       {isAllRestoredOrNoCritical ? 'Post-Restoration' : 'Targeted Next Steps'}
                     </span>

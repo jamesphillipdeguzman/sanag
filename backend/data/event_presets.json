@@ -4,76 +4,155 @@
     "name": "Typhoon Kalmaegi (Tino)",
     "startDate": "2025-11-03",
     "endDate": "2025-12-03",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Tropical Cyclone",
+    "disaster_category": "Category 3 Landfall",
+    "root_cause_summary": "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors.",
+    "infrastructure_impact": "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
   },
   {
     "id": "sts-trami-2024",
     "name": "Severe Tropical Storm Trami (Kristine)",
     "startDate": "2024-10-22",
     "endDate": "2024-11-22",
-    "type": "monsoon_flood"
+    "type": "monsoon_flood",
+    "category": "Flood",
+    "event_type": "Severe Tropical Storm",
+    "disaster_category": "High-Volume Monsoon Inundation",
+    "root_cause_summary": "Unprecedented continuous precipitation, inundated low-lying substations, and widespread transmission right-of-way landslides across river basins.",
+    "infrastructure_impact": "Substation water-logging and precautionary sectional feeder isolations; rapid recovery as floodwaters recede followed by equipment drying."
   },
   {
     "id": "habagat-carina-2024",
     "name": "Southwest Monsoon / Gaemi Floods",
     "startDate": "2024-07-24",
     "endDate": "2024-08-24",
-    "type": "monsoon_flood"
+    "type": "monsoon_flood",
+    "category": "Flood",
+    "event_type": "Southwest Monsoon / Tropical Cyclone",
+    "disaster_category": "Monsoon Flooding & Landslide",
+    "root_cause_summary": "Enhanced Southwest Monsoon combined with Typhoon Gaemi triggering massive urban and agricultural flooding across lowland Panay plains.",
+    "infrastructure_impact": "Localized feeder trips and pole destabilization in saturated soils; moderate recovery timeline."
   },
   {
-    "id": "panay-blackout-2024",
+    "id": "panay-grid-collapse-2024",
     "name": "Panay Island Grid Collapse",
     "startDate": "2024-01-02",
     "endDate": "2024-02-01",
-    "type": "grid_failure"
+    "type": "grid_failure",
+    "category": "Power Disruption",
+    "event_type": "Grid Disturbance / Frequency Trip",
+    "disaster_category": "Cascading System Separation",
+    "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
+    "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate."
+  },
+  {
+    "id": "panay-blackout-2024",
+    "name": "Panay Island Grid Collapse (January 2024)",
+    "startDate": "2024-01-02",
+    "endDate": "2024-02-01",
+    "type": "grid_failure",
+    "category": "Power Disruption",
+    "event_type": "Grid Disturbance / Frequency Trip",
+    "disaster_category": "Cascading System Separation",
+    "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
+    "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate."
   },
   {
     "id": "sts-nalgae-2022",
     "name": "Severe Tropical Storm Nalgae (Paeng)",
     "startDate": "2022-10-28",
     "endDate": "2022-11-28",
-    "type": "monsoon_flood"
+    "type": "monsoon_flood",
+    "category": "Flood",
+    "event_type": "Severe Tropical Storm",
+    "disaster_category": "Flash Flooding & Mudslides",
+    "root_cause_summary": "Stationary rainbands causing riverine surges, washed out bridge distribution conduits, and mudslide damage to transmission towers.",
+    "infrastructure_impact": "Physical feeder breaks and severed bridge crossings requiring line re-routing and bypass installation."
   },
   {
     "id": "ts-megi-2022",
     "name": "Tropical Storm Megi (Agaton)",
     "startDate": "2022-04-10",
     "endDate": "2022-05-10",
-    "type": "monsoon_flood"
+    "type": "monsoon_flood",
+    "category": "Flood",
+    "event_type": "Tropical Storm",
+    "disaster_category": "Prolonged Lowland Inundation",
+    "root_cause_summary": "Slow-moving tropical depression causing persistent torrential rain, flash landslides, and submerged municipal load centers across Capiz.",
+    "infrastructure_impact": "Waterlogged pad-mounted distribution transformers and mud deposit clearance across rural distribution lines."
+  },
+  {
+    "id": "typhoon-odette-2021",
+    "name": "Super Typhoon Odette (Rai)",
+    "startDate": "2021-12-16",
+    "endDate": "2022-01-16",
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Super Typhoon",
+    "disaster_category": "Category 5 Landfall",
+    "root_cause_summary": "Catastrophic transmission tower toppling, severed high-voltage backbone interconnects, and total regional blackout footprint extending across Visayan provinces.",
+    "infrastructure_impact": "Long-term grid reconstruction requiring emergency temporary bypass towers; persistent, weeks-long multi-LGU critical deficit."
   },
   {
     "id": "typhoon-rai-2021",
     "name": "Typhoon Rai (Odette)",
     "startDate": "2021-12-16",
     "endDate": "2022-01-16",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Super Typhoon",
+    "disaster_category": "Category 5 Landfall",
+    "root_cause_summary": "Catastrophic transmission tower toppling, severed high-voltage backbone interconnects, and total regional blackout footprint extending across Visayan provinces.",
+    "infrastructure_impact": "Long-term grid reconstruction requiring emergency temporary bypass towers; persistent, weeks-long multi-LGU critical deficit."
   },
   {
     "id": "typhoon-molave-2020",
     "name": "Typhoon Molave (Quinta)",
     "startDate": "2020-10-25",
     "endDate": "2020-11-25",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Typhoon",
+    "disaster_category": "Category 1 Landfall",
+    "root_cause_summary": "High wind gusts causing vegetation contact and fallen distribution lines along coastal highways.",
+    "infrastructure_impact": "Moderate distribution pole snapping; quick line-clearing and re-stringing restores power within 48 to 72 hours."
   },
   {
     "id": "typhoon-phanfone-2019",
     "name": "Typhoon Phanfone (Ursula)",
     "startDate": "2019-12-25",
     "endDate": "2020-01-25",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Typhoon",
+    "disaster_category": "Category 2 Landfall",
+    "root_cause_summary": "Violent holiday eye-wall transit across Northern Panay causing widespread snapped concrete distribution poles and downed conductor cables.",
+    "infrastructure_impact": "Extensive physical grid destruction across Aklan and Northern Capiz requiring heavy inter-cooperative lineman assistance."
   },
   {
     "id": "typhoon-hagupit-2014",
     "name": "Typhoon Hagupit (Ruby)",
     "startDate": "2014-12-06",
     "endDate": "2015-01-05",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Typhoon",
+    "disaster_category": "Category 3 Landfall",
+    "root_cause_summary": "Gale-force wind gusts and storm surges damaging coastal substations and distribution backbones.",
+    "infrastructure_impact": "Structural distribution pole damage and salt spray insulator flashovers along coastal feeder corridors."
   },
   {
     "id": "typhoon-haiyan-2013",
     "name": "Super Typhoon Haiyan (Yolanda)",
     "startDate": "2013-11-08",
     "endDate": "2013-12-08",
-    "type": "typhoon"
+    "type": "typhoon",
+    "category": "Typhoon",
+    "event_type": "Super Typhoon",
+    "disaster_category": "Category 5 Super Typhoon",
+    "root_cause_summary": "Unprecedented 315 km/h sustained winds and catastrophic storm surge destroying entire transmission line backbones across Eastern and Western Visayas.",
+    "infrastructure_impact": "Total collapse of high-voltage transmission lines and distribution networks; multi-month physical reconstruction required."
   }
 ]

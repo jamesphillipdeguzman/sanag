@@ -157,6 +157,10 @@ function mapApiEvent(event) {
     viirs_data_available: event.viirs_data_available ?? true,
     critical_municipalities: event.critical_municipalities ?? [],
     resource_url: event.resource_url || mockMatch?.resource_url,
+    event_type: event.event_type || mockMatch?.event_type,
+    disaster_category: event.disaster_category || mockMatch?.disaster_category,
+    root_cause_summary: event.root_cause_summary || mockMatch?.root_cause_summary,
+    infrastructure_impact: event.infrastructure_impact || mockMatch?.infrastructure_impact,
   }
 }
 

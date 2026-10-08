@@ -1,3 +1,5 @@
 import AiBriefingCard from './AiBriefingCard';
+import ExecutiveBriefing, { EventContextCard, resolveEventContext } from './ExecutiveBriefing';
 
-export default AiBriefingCard;
+export { AiBriefingCard, ExecutiveBriefing, EventContextCard, resolveEventContext };
+export default ExecutiveBriefing;
