@@ -12,10 +12,14 @@ import logging
 import asyncio
 from pathlib import Path
 
+import sys
+_backend_dir = Path(__file__).resolve().parent
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
 # Load environment variables from .env files
 try:
     from dotenv import load_dotenv
-    _backend_dir = Path(__file__).resolve().parent
     load_dotenv(_backend_dir / ".env")
     load_dotenv(_backend_dir.parent / ".env")
 except ImportError:
@@ -42,6 +46,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Runs automatically on application startup
+    try:
+        from database import get_db_connection, seed_historical_event_profiles
+        conn = get_db_connection(DB_PATH)
+        seed_historical_event_profiles(conn)
+        conn.close()
+    except Exception as e:
+        print(f"Startup event profile seeding error: {e}")
+
     try:
         print("Running automatic database seeding for events...")
         seed_observations_for_all_events()
@@ -74,6 +86,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Serve static frontend assets (e.g., images) if directory exists
+images_dir = Path(__file__).resolve().parent.parent / "frontend" / "public" / "images"
+if images_dir.is_dir():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/images", StaticFiles(directory=str(images_dir)), name="images")
+
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sanag.db")
 
 # --- Pydantic Response Shapes ---
@@ -105,6 +123,10 @@ class EventModel(BaseModel):
     affected_population: Optional[int] = None
     critical_municipalities: Optional[List[Dict[str, Any]]] = None
     viirs_data_available: Optional[bool] = None
+    event_type: Optional[str] = None
+    disaster_category: Optional[str] = None
+    root_cause_summary: Optional[str] = None
+    infrastructure_impact: Optional[str] = None
 
 class EventsResponse(BaseModel):
     events: List[EventModel]
@@ -438,11 +460,12 @@ def get_event_presets():
 def get_events():
     """
     Returns all historical disaster and power disruption event records
-    with computed total affected population based on municipal radiance recovery
-    and structured event metadata (startDate, endDate, type, resource_url).
+    with computed total affected population based on municipal radiance recovery,
+    structured event metadata, and root-cause contextual attributes.
     """
     try:
         from event_presets import get_presets
+        from database import get_event_profile
         presets_list = get_presets()
         presets_by_id = {p["id"]: p for p in presets_list}
 
@@ -452,9 +475,17 @@ def get_events():
         
         # Check actual table schema to dynamically alias columns safely
         cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
+        has_root_cause = "event_type" in cols
         has_metadata = "start_date" in cols and "resource_url" in cols
         
-        if has_metadata:
+        if has_root_cause:
+            sql = """
+                SELECT id, municipality_code, name, description, date, category, image_url,
+                       start_date, end_date, type, resource_url,
+                       event_type, disaster_category, root_cause_summary, infrastructure_impact
+                FROM events ORDER BY date DESC
+            """
+        elif has_metadata:
             sql = """
                 SELECT id, municipality_code, name, description, date, category, image_url,
                        start_date, end_date, type, resource_url
@@ -515,6 +546,13 @@ def get_events():
             event["type"] = event.get("type") or (preset_match.get("type") if preset_match else "typhoon" if "typhoon" in event.get("category", "").lower() else "grid_failure" if "power" in event.get("category", "").lower() else "monsoon_flood")
             event["resource_url"] = event.get("resource_url") or (preset_match.get("resource_url") if preset_match else None)
 
+            # Enrich root cause contextual parameters
+            prof = get_event_profile(ev_id) or get_event_profile(name)
+            event["event_type"] = event.get("event_type") or (preset_match.get("event_type") if preset_match else None) or (prof.get("event_type") if prof else None)
+            event["disaster_category"] = event.get("disaster_category") or (preset_match.get("disaster_category") if preset_match else None) or (prof.get("disaster_category") if prof else None)
+            event["root_cause_summary"] = event.get("root_cause_summary") or (preset_match.get("root_cause_summary") if preset_match else None) or (prof.get("root_cause_summary") if prof else None)
+            event["infrastructure_impact"] = event.get("infrastructure_impact") or (preset_match.get("infrastructure_impact") if preset_match else None) or (prof.get("infrastructure_impact") if prof else None)
+
             # Compute total affected population dynamically from satellite observations
             event["affected_population"] = compute_event_affected_population(cursor, date_val)
             event["critical_municipalities"] = compute_event_critical_municipalities(cursor, date_val, limit=5)
@@ -531,6 +569,105 @@ def get_events():
         )
 
         return {"events": events}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/v1/events/{event_id}", response_model=EventModel, tags=["Events"])
+def get_event_by_id(event_id: str):
+    """
+    Returns single disaster event details including event context, root cause narrative,
+    affected population, and critical municipalities.
+    """
+    try:
+        from event_presets import get_presets
+        from database import get_event_profile
+        presets_list = get_presets()
+        presets_by_id = {p["id"]: p for p in presets_list}
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cols = [col[1] for col in cursor.execute("PRAGMA table_info(events)").fetchall()]
+        has_root_cause = "event_type" in cols
+
+        # Check direct ID or common aliases
+        query_ids = [event_id]
+        alias_pairs = {
+            "panay-grid-collapse-2024": "panay-blackout-2024",
+            "panay-blackout-2024": "panay-grid-collapse-2024",
+            "typhoon-odette-2021": "typhoon-rai-2021",
+            "typhoon-rai-2021": "typhoon-odette-2021",
+        }
+        if event_id in alias_pairs:
+            query_ids.append(alias_pairs[event_id])
+
+        placeholders = ",".join("?" for _ in query_ids)
+        if has_root_cause:
+            sql = f"""
+                SELECT id, municipality_code, name, description, date, category, image_url,
+                       start_date, end_date, type, resource_url,
+                       event_type, disaster_category, root_cause_summary, infrastructure_impact
+                FROM events WHERE id IN ({placeholders}) LIMIT 1
+            """
+        else:
+            sql = f"""
+                SELECT id, municipality_code, name, description, date, category, image_url,
+                       start_date, end_date, type, resource_url
+                FROM events WHERE id IN ({placeholders}) LIMIT 1
+            """
+
+        cursor.execute(sql, query_ids)
+        row = cursor.fetchone()
+
+        preset_match = presets_by_id.get(event_id)
+        if not preset_match and event_id in alias_pairs:
+            preset_match = presets_by_id.get(alias_pairs[event_id])
+
+        if not row and not preset_match:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"Event '{event_id}' not found")
+
+        event = dict(row) if row else {}
+        if not event:
+            event["id"] = event_id
+            if preset_match is not None:
+                event["name"] = preset_match.get("name", event_id)
+                event["description"] = preset_match.get("description")
+                event["date"] = preset_match.get("startDate") or preset_match.get("date")
+                event["category"] = preset_match.get("category", "Typhoon")
+            else:
+                event["name"] = event_id
+                event["description"] = ""
+                event["date"] = None
+                event["category"] = "Typhoon"
+            event["municipality_code"] = "PANAY_ALL"
+
+        ev_id = str(event.get("id") or event_id)
+        name_candidate = event.get("name") or (preset_match.get("name") if preset_match else ev_id)
+        name = str(name_candidate or ev_id)
+        date_val = str(event["date"]) if event.get("date") is not None else (preset_match.get("startDate") if preset_match else None)
+
+        event["startDate"] = event.get("start_date") or (preset_match.get("startDate") if preset_match else date_val)
+        event["endDate"] = event.get("end_date") or (preset_match.get("endDate") if preset_match else None)
+        event["type"] = event.get("type") or (preset_match.get("type") if preset_match else "typhoon")
+        event["resource_url"] = event.get("resource_url") or (preset_match.get("resource_url") if preset_match else None)
+
+        prof = get_event_profile(ev_id) or get_event_profile(name) or get_event_profile((event_id))
+        event["event_type"] = event.get("event_type") or (preset_match.get("event_type") if preset_match else None) or (prof.get("event_type") if prof else None)
+        event["disaster_category"] = event.get("disaster_category") or (preset_match.get("disaster_category") if preset_match else None) or (prof.get("disaster_category") if prof else None)
+        event["root_cause_summary"] = event.get("root_cause_summary") or (preset_match.get("root_cause_summary") if preset_match else None) or (prof.get("root_cause_summary") if prof else None)
+        event["infrastructure_impact"] = event.get("infrastructure_impact") or (preset_match.get("infrastructure_impact") if preset_match else None) or (prof.get("infrastructure_impact") if prof else None)
+
+        event["affected_population"] = compute_event_affected_population(cursor, date_val) or (preset_match.get("affected_population") if preset_match else None)
+        event["critical_municipalities"] = compute_event_critical_municipalities(cursor, date_val, limit=5)
+        event["viirs_data_available"] = check_viirs_data_availability(date_val, conn=conn)
+
+        conn.close()
+        return event
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
@@ -1093,6 +1230,11 @@ async def get_weather_forecast_endpoint(
 
 class BriefingRequest(BaseModel):
     event_context: Optional[str] = None
+    event_id: Optional[str] = None
+    event_type: Optional[str] = None
+    disaster_category: Optional[str] = None
+    root_cause_summary: Optional[str] = None
+    infrastructure_impact: Optional[str] = None
 
 @app.post("/api/generate-briefing", tags=["AI Briefing"])
 @app.post("/api/v1/generate-briefing", tags=["AI Briefing"])
@@ -1108,7 +1250,13 @@ def api_generate_briefing(
     """
     try:
         context = (request.event_context if request and request.event_context else None) or event_context or ""
-        briefing = generate_recovery_briefing(context)
+        briefing = generate_recovery_briefing(
+            context,
+            event_type=request.event_type if request else None,
+            disaster_category=request.disaster_category if request else None,
+            root_cause_summary=request.root_cause_summary if request else None,
+            infrastructure_impact=request.infrastructure_impact if request else None,
+        )
         return {"status": "success", "briefing": briefing}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

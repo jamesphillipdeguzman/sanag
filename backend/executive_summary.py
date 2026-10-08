@@ -106,8 +106,27 @@ def _clean_lgu_summary(raw_str: str, max_items: int = 3) -> str:
     return "; ".join(cleaned_items)
 
 
+def _enrich_from_database_profile(data: dict):
+    """Enriches data dict with standardized event profile metadata if available."""
+    try:
+        from database import get_event_profile
+        target_key = data.get("incident_name") or data.get("category") or ""
+        profile = get_event_profile(target_key)
+        if profile:
+            if not data.get("event_type"):
+                data["event_type"] = profile.get("event_type")
+            if not data.get("disaster_category"):
+                data["disaster_category"] = profile.get("disaster_category")
+            if not data.get("root_cause_summary"):
+                data["root_cause_summary"] = profile.get("root_cause_summary")
+            if not data.get("infrastructure_impact"):
+                data["infrastructure_impact"] = profile.get("infrastructure_impact")
+    except Exception:
+        pass
+
+
 def _parse_event_context(context: str) -> dict:
-    """Extracts key disaster telemetry data points from the provided event context."""
+    """Extracts key disaster telemetry data points and root cause metadata from the provided event context."""
     data = {
         "incident_name": None,
         "incident_date": None,
@@ -120,8 +139,13 @@ def _parse_event_context(context: str) -> dict:
         "top_critical": None,
         "top_benchmark": None,
         "top_performing": None,
+        "event_type": None,
+        "disaster_category": None,
+        "root_cause_summary": None,
+        "infrastructure_impact": None,
     }
     if not context or not isinstance(context, str):
+        _enrich_from_database_profile(data)
         return data
 
     text = context.strip()
@@ -145,6 +169,11 @@ def _parse_event_context(context: str) -> dict:
                 data["top_critical"] = parsed.get("top_critical")
                 data["top_benchmark"] = parsed.get("top_benchmark")
                 data["top_performing"] = parsed.get("top_performing")
+                data["event_type"] = parsed.get("event_type") or parsed.get("classification")
+                data["disaster_category"] = parsed.get("disaster_category") or parsed.get("disasterCategory")
+                data["root_cause_summary"] = parsed.get("root_cause_summary") or parsed.get("rootCauseSummary") or parsed.get("primary_driver")
+                data["infrastructure_impact"] = parsed.get("infrastructure_impact") or parsed.get("infrastructureImpact") or parsed.get("physical_grid_impact")
+                _enrich_from_database_profile(data)
                 return data
         except Exception:
             pass
@@ -202,6 +231,33 @@ def _parse_event_context(context: str) -> dict:
     m_top_perf = re.search(r"(?:Top Performing Hubs(?:\s*\([^)]*\))?|Leading Recovery Hubs|Top Benchmark LGUs):\s*([^\n\r]+)", text, re.I)
     if m_top_perf:
         data["top_performing"] = m_top_perf.group(1).strip()
+
+    # Root cause & event context metadata extractions
+    m_class = re.search(r"(?:Classification|\*\*Classification:\*\*):\s*([^(\n\r]+)(?:\(([^)\n\r]+)\))?", text, re.I)
+    if m_class:
+        data["event_type"] = m_class.group(1).strip().strip("*").strip()
+        if m_class.group(2):
+            data["disaster_category"] = m_class.group(2).strip().strip("*").strip()
+
+    if not data["event_type"]:
+        m_et = re.search(r"(?:Event Type|\*\*Event Type:\*\*):\s*([^\n\r]+)", text, re.I)
+        if m_et:
+            data["event_type"] = m_et.group(1).strip().strip("*").strip()
+
+    if not data["disaster_category"]:
+        m_dc = re.search(r"(?:Disaster Category|\*\*Disaster Category:\*\*):\s*([^\n\r]+)", text, re.I)
+        if m_dc:
+            data["disaster_category"] = m_dc.group(1).strip().strip("*").strip()
+
+    m_pd = re.search(r"(?:Primary Driver|\*\*Primary Driver:\*\*|Root Cause Summary|Root Cause):\s*([^\n\r]+)", text, re.I)
+    if m_pd:
+        data["root_cause_summary"] = m_pd.group(1).strip().strip("*").strip()
+
+    m_pi = re.search(r"(?:Physical Grid Impact|\*\*Physical Grid Impact:\*\*|Infrastructure Impact):\s*([^\n\r]+)", text, re.I)
+    if m_pi:
+        data["infrastructure_impact"] = m_pi.group(1).strip().strip("*").strip()
+
+    _enrich_from_database_profile(data)
 
     return data
 
@@ -350,7 +406,17 @@ def generate_fallback_briefing(context: str) -> str:
             "* **Telemetry Re-assessment**: Continue daily situational monitoring to verify recovery metrics and ground-truth utility reports."
         )
 
-    raw_briefing = f"""### Executive Summary
+    event_type = data.get("event_type") or "Tropical Cyclone"
+    disaster_category = data.get("disaster_category") or "Category 3 Landfall"
+    root_cause_summary = data.get("root_cause_summary") or "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors."
+    infrastructure_impact = data.get("infrastructure_impact") or "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
+
+    raw_briefing = f"""### Event Context & Root Cause
+- **Classification:** {event_type} ({disaster_category})
+- **Primary Driver:** {root_cause_summary}
+- **Physical Grid Impact:** {infrastructure_impact}
+
+### Executive Summary
 {summary}
 
 ### Critical Alerts
@@ -382,10 +448,19 @@ def generate_fallback_briefing(context: str) -> str:
     return raw_briefing
 
 
-def generate_recovery_briefing(event_context: str, max_retries=2, delay=1.5) -> str:
+def generate_recovery_briefing(
+    event_context: str,
+    max_retries: int = 2,
+    delay: float = 1.5,
+    event_type: Optional[str] = None,
+    disaster_category: Optional[str] = None,
+    root_cause_summary: Optional[str] = None,
+    infrastructure_impact: Optional[str] = None,
+) -> str:
     """
     Sends disaster recovery context to Gemini for an automated briefing.
     Falls back gracefully to high-quality telemetry synthesis if external API is unreachable.
+    Integrates Event Profile & Root Cause metadata alongside VIIRS nocturnal radiance observations.
     """
     # Normalize event_context so that legacy 93 LGU strings strictly become 95 LGUs
     clean_event_context = re.sub(
@@ -401,6 +476,27 @@ def generate_recovery_briefing(event_context: str, max_retries=2, delay=1.5) -> 
         flags=re.IGNORECASE,
     )
 
+    parsed_ctx = _parse_event_context(clean_event_context)
+    if event_type:
+        parsed_ctx["event_type"] = event_type
+    if disaster_category:
+        parsed_ctx["disaster_category"] = disaster_category
+    if root_cause_summary:
+        parsed_ctx["root_cause_summary"] = root_cause_summary
+    if infrastructure_impact:
+        parsed_ctx["infrastructure_impact"] = infrastructure_impact
+
+    ev_type = parsed_ctx.get("event_type") or "Tropical Cyclone"
+    dis_cat = parsed_ctx.get("disaster_category") or "Category 3 Landfall"
+    rc_summary = (
+        parsed_ctx.get("root_cause_summary")
+        or "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors."
+    )
+    infra_impact = (
+        parsed_ctx.get("infrastructure_impact")
+        or "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
+    )
+
     api_key = os.getenv("GEMINI_API_KEY")
     prompt = f"""
 Analyze the following disaster recovery scenario in the Philippines.
@@ -412,7 +508,25 @@ PROJECT SANAG OFFICIAL 3-TIER OPERATIONAL BENCHMARKS (R(t) = L(t) / L_baseline):
 - Critical Deficit / Severe Blackout: R(t) < 0.60 (< 60% baseline radiance)
 - No Data / Cloud Masked: None
 
+EVENT PROFILE & ROOT CAUSE PARAMETERS:
+- Classification: {ev_type} ({dis_cat})
+- Primary Root Cause: {rc_summary}
+- Physical Grid Impact: {infra_impact}
+
+ROOT CAUSE ANALYSIS & BRIEFING INSTRUCTIONS:
+Distinguish clearly between the satellite observation and the physical root cause:
+- The Root Cause explains the mechanical or meteorological trigger (e.g., generator trips vs. downed poles/towers).
+- VIIRS nocturnal radiance captures the ground symptom (spatial blackout footprint and restoration velocity).
+- Correlate the observed recovery velocity with the nature of the event: note whether the satellite trajectory reflects steep V-shaped resynchronization (grid trip) or prolonged physical reconstruction (cyclone).
+- Include a concise 'Event Profile & Root Cause' section at the top of the briefing.
+
 Format your response in clear, well-structured Markdown with the following sections:
+### Event Profile & Root Cause
+A concise overview distinguishing between physical disaster damage and operational disturbances:
+- **Classification:** {ev_type} ({dis_cat})
+- **Primary Driver:** {rc_summary}
+- **Physical Grid Impact:** {infra_impact}
+
 ### Executive Summary
 A 2-3 sentence overview of grid restoration progress.
 - Note on scope: Panay Island comprises exactly 95 monitored Local Government Units (LGUs)—including 17 in Aklan, 18 in Antique, 16 in Capiz, and 44 in Iloilo (encompassing Iloilo City as a highly urbanized city and Passi City as a component city, alongside Roxas City and all component municipalities). Always report the monitored scope as 95 LGUs (never 93).
@@ -449,6 +563,10 @@ CRITICAL FACTUAL CONSISTENCY RULES:
 
 Scenario Data:
 {clean_event_context}
+Event Type: {ev_type}
+Disaster Category: {dis_cat}
+Primary Driver: {rc_summary}
+Physical Grid Impact: {infra_impact}
 """
 
     if api_key:
@@ -504,6 +622,16 @@ Scenario Data:
                                         f"\\1{steady_narrative}\n\n",
                                         text_resp
                                     )
+
+                            # Ensure Event Profile & Root Cause section is present at the top
+                            if not re.search(r"###\s*Event (?:Profile|Context)\s*&\s*(?:Root Cause|Primary Driver)", text_resp, re.IGNORECASE):
+                                profile_header = (
+                                    f"### Event Profile & Root Cause\n"
+                                    f"- **Classification:** {ev_type} ({dis_cat})\n"
+                                    f"- **Primary Driver:** {rc_summary}\n"
+                                    f"- **Physical Grid Impact:** {infra_impact}\n\n"
+                                )
+                                text_resp = profile_header + text_resp
 
                             # Clean any legacy hallucination where Gemini states 93 monitored LGUs / municipalities
                             text_resp = re.sub(r"\b93\s+monitored\s+LGUs\b", "95 monitored LGUs", text_resp, flags=re.IGNORECASE)

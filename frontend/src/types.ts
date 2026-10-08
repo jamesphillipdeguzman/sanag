@@ -47,6 +47,10 @@ export interface DisasterEvent {
   longitude?: number | null;
   coordinates?: [number, number] | null;
   is_live_simulated?: boolean;
+  event_type?: string;
+  disaster_category?: string;
+  root_cause_summary?: string;
+  infrastructure_impact?: string;
 }
 
 export interface GdacsAlert {

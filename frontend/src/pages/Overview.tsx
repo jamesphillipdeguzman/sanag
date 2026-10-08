@@ -5,6 +5,7 @@ import { formatAffectedPopulation } from '@/data/mockData';
 import GdacsAlertBanner from '@/components/GdacsAlertBanner';
 import WeatherForecast from '@/components/WeatherForecast';
 import AiBriefingCard from '@/components/AiBriefingCard';
+import ExecutiveBriefing, { EventContextCard } from '@/components/ExecutiveBriefing';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import PanaySilhouetteBackground from '@/components/PanaySilhouetteBackground';
 

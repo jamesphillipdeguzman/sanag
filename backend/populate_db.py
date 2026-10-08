@@ -170,11 +170,18 @@ def ensure_database_schema(conn: sqlite3.Connection):
                 start_date TEXT,
                 end_date TEXT,
                 type TEXT,
-                resource_url TEXT
+                resource_url TEXT,
+                event_type TEXT,
+                disaster_category TEXT,
+                root_cause_summary TEXT,
+                infrastructure_impact TEXT
             )
         """)
     else:
-        for new_col in ["start_date TEXT", "end_date TEXT", "type TEXT", "resource_url TEXT"]:
+        for new_col in [
+            "start_date TEXT", "end_date TEXT", "type TEXT", "resource_url TEXT",
+            "event_type TEXT", "disaster_category TEXT", "root_cause_summary TEXT", "infrastructure_impact TEXT"
+        ]:
             col_name = new_col.split()[0]
             if col_name not in event_cols:
                 cursor.execute(f"ALTER TABLE events ADD COLUMN {new_col}")
@@ -395,17 +402,28 @@ def seed_event_and_baseline_references(conn: sqlite3.Connection, lookup: Dict[st
             evt["startDate"],
             evt["endDate"],
             evt["type"],
-            evt.get("resource_url")
+            evt.get("resource_url"),
+            evt.get("event_type"),
+            evt.get("disaster_category"),
+            evt.get("root_cause_summary"),
+            evt.get("infrastructure_impact"),
         )
         for evt in PANAY_EVENT_PRESETS
     ]
 
     cursor.executemany("""
-        INSERT OR REPLACE INTO events (id, municipality_code, name, description, date, category, image_url, start_date, end_date, type, resource_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO events (
+            id, municipality_code, name, description, date, category, image_url,
+            start_date, end_date, type, resource_url,
+            event_type, disaster_category, root_cause_summary, infrastructure_impact
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, events_data)
 
     conn.commit()
+    # Also run profile seeding to guarantee canonical aliases and standardized profiles
+    from database import seed_historical_event_profiles
+    seed_historical_event_profiles(conn)
     print(f"SUCCESS: Events table seeded with {len(events_data)} verified disaster milestones (VIIRS epoch 2012–present).")
 
 def run_ingestion():

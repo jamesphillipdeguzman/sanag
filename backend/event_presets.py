@@ -14,7 +14,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1220000,
         "description": "Late-season typhoon causing gale-force wind damage and flash floods across coastal Antique and Aklan.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Tropical Cyclone",
+        "disaster_category": "Category 3 Landfall",
+        "root_cause_summary": "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors.",
+        "infrastructure_impact": "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
     },
     {
         "id": "sts-trami-2024",
@@ -25,7 +29,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1350000,
         "description": "Broad circulation severe tropical storm bringing unprecedented continuous precipitation and submerged transmission substations.",
-        "category": "Flood"
+        "category": "Flood",
+        "event_type": "Severe Tropical Storm",
+        "disaster_category": "High-Volume Monsoon Inundation",
+        "root_cause_summary": "Unprecedented continuous precipitation, inundated low-lying substations, and widespread transmission right-of-way landslides across river basins.",
+        "infrastructure_impact": "Substation water-logging and precautionary sectional feeder isolations; rapid recovery as floodwaters recede followed by equipment drying."
     },
     {
         "id": "habagat-carina-2024",
@@ -36,10 +44,14 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "Moderate",
         "affected_population": 980000,
         "description": "Enhanced Southwest Monsoon combined with Typhoon Gaemi triggering massive urban and agricultural flooding across lowland Panay plains.",
-        "category": "Flood"
+        "category": "Flood",
+        "event_type": "Southwest Monsoon / Tropical Cyclone",
+        "disaster_category": "Monsoon Flooding & Landslide",
+        "root_cause_summary": "Enhanced Southwest Monsoon combined with Typhoon Gaemi triggering massive urban and agricultural flooding across lowland Panay plains.",
+        "infrastructure_impact": "Localized feeder trips and pole destabilization in saturated soils; moderate recovery timeline."
     },
     {
-        "id": "panay-blackout-2024",
+        "id": "panay-grid-collapse-2024",
         "name": "Panay Island Grid Collapse",
         "startDate": "2024-01-02",
         "endDate": "2024-02-01",
@@ -47,7 +59,26 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "Severe",
         "affected_population": 4500000,
         "description": "Cascading power plant shutdowns and transmission line trips leading to a total island-wide blackout across all Panay and Guimaras LGUs.",
-        "category": "Power Disruption"
+        "category": "Power Disruption",
+        "event_type": "Grid Disturbance / Frequency Trip",
+        "disaster_category": "Cascading System Separation",
+        "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
+        "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate."
+    },
+    {
+        "id": "panay-blackout-2024",
+        "name": "Panay Island Grid Collapse (January 2024)",
+        "startDate": "2024-01-02",
+        "endDate": "2024-02-01",
+        "type": "grid_failure",
+        "severity": "Severe",
+        "affected_population": 4500000,
+        "description": "Cascading power plant shutdowns and transmission line trips leading to a total island-wide blackout across all Panay and Guimaras LGUs.",
+        "category": "Power Disruption",
+        "event_type": "Grid Disturbance / Frequency Trip",
+        "disaster_category": "Cascading System Separation",
+        "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
+        "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate."
     },
     {
         "id": "sts-nalgae-2022",
@@ -58,7 +89,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1580000,
         "description": "Severe Tropical Storm Nalgae brought immense rainbands causing widespread riverine flooding and bridge washouts across Western Visayas.",
-        "category": "Flood"
+        "category": "Flood",
+        "event_type": "Severe Tropical Storm",
+        "disaster_category": "Flash Flooding & Mudslides",
+        "root_cause_summary": "Stationary rainbands causing riverine surges, washed out bridge distribution conduits, and mudslide damage to transmission towers.",
+        "infrastructure_impact": "Physical feeder breaks and severed bridge crossings requiring line re-routing and bypass installation."
     },
     {
         "id": "ts-megi-2022",
@@ -69,7 +104,26 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1120000,
         "description": "Stationary tropical storm inducing continuous heavy rains, catastrophic landslides, and severe lowland inundation across Capiz and Iloilo.",
-        "category": "Flood"
+        "category": "Flood",
+        "event_type": "Tropical Storm",
+        "disaster_category": "Prolonged Lowland Inundation",
+        "root_cause_summary": "Slow-moving tropical depression causing persistent torrential rain, flash landslides, and submerged municipal load centers across Capiz.",
+        "infrastructure_impact": "Waterlogged pad-mounted distribution transformers and mud deposit clearance across rural distribution lines."
+    },
+    {
+        "id": "typhoon-odette-2021",
+        "name": "Super Typhoon Odette (Rai)",
+        "startDate": "2021-12-16",
+        "endDate": "2022-01-16",
+        "type": "typhoon",
+        "severity": "Severe",
+        "affected_population": 2450000,
+        "description": "Super Typhoon Rai (Odette) devastated the Visayas corridor, inflicting major transmission line destruction and month-long restoration.",
+        "category": "Typhoon",
+        "event_type": "Super Typhoon",
+        "disaster_category": "Category 5 Landfall",
+        "root_cause_summary": "Catastrophic transmission tower toppling, severed high-voltage backbone interconnects, and total regional blackout footprint extending across Visayan provinces.",
+        "infrastructure_impact": "Long-term grid reconstruction requiring emergency temporary bypass towers; persistent, weeks-long multi-LGU critical deficit."
     },
     {
         "id": "typhoon-rai-2021",
@@ -80,7 +134,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "Severe",
         "affected_population": 2450000,
         "description": "Super Typhoon Rai (Odette) devastated the Visayas corridor, inflicting major transmission line destruction and month-long restoration.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Super Typhoon",
+        "disaster_category": "Category 5 Landfall",
+        "root_cause_summary": "Catastrophic transmission tower toppling, severed high-voltage backbone interconnects, and total regional blackout footprint extending across Visayan provinces.",
+        "infrastructure_impact": "Long-term grid reconstruction requiring emergency temporary bypass towers; persistent, weeks-long multi-LGU critical deficit."
     },
     {
         "id": "typhoon-molave-2020",
@@ -91,7 +149,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "Moderate",
         "affected_population": 890000,
         "description": "Fast-moving typhoon triggering coastal storm surges, widespread agricultural flooding, and localized power disruptions.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Typhoon",
+        "disaster_category": "Category 1 Landfall",
+        "root_cause_summary": "High wind gusts causing vegetation contact and fallen distribution lines along coastal highways.",
+        "infrastructure_impact": "Moderate distribution pole snapping; quick line-clearing and re-stringing restores power within 48 to 72 hours."
     },
     {
         "id": "typhoon-phanfone-2019",
@@ -102,7 +164,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1680000,
         "description": "Holiday typhoon causing widespread destructive winds, power pole collapses, and prolonged blackouts across Northern Panay.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Typhoon",
+        "disaster_category": "Category 2 Landfall",
+        "root_cause_summary": "Violent holiday eye-wall transit across Northern Panay causing widespread snapped concrete distribution poles and downed conductor cables.",
+        "infrastructure_impact": "Extensive physical grid destruction across Aklan and Northern Capiz requiring heavy inter-cooperative lineman assistance."
     },
     {
         "id": "typhoon-hagupit-2014",
@@ -113,7 +179,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "High",
         "affected_population": 1450000,
         "description": "Powerful typhoon bringing torrential rainfall, high winds, and severe power outages across Panay and Eastern Visayas.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Typhoon",
+        "disaster_category": "Category 3 Landfall",
+        "root_cause_summary": "Gale-force wind gusts and storm surges damaging coastal substations and distribution backbones.",
+        "infrastructure_impact": "Structural distribution pole damage and salt spray insulator flashovers along coastal feeder corridors."
     },
     {
         "id": "typhoon-haiyan-2013",
@@ -124,7 +194,11 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "severity": "Severe",
         "affected_population": 4200000,
         "description": "Catastrophic Category 5 super typhoon crossing the Visayas region with unprecedented storm surge and widespread grid destruction.",
-        "category": "Typhoon"
+        "category": "Typhoon",
+        "event_type": "Super Typhoon",
+        "disaster_category": "Category 5 Super Typhoon",
+        "root_cause_summary": "Unprecedented 315 km/h sustained winds and catastrophic storm surge destroying entire transmission line backbones across Eastern and Western Visayas.",
+        "infrastructure_impact": "Total collapse of high-voltage transmission lines and distribution networks; multi-month physical reconstruction required."
     }
 ]
 
