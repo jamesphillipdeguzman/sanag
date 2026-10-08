@@ -159,6 +159,37 @@ html.dark .leaflet-map {
   }
 }
 
+.leaflet-map.is-fullscreen,
+.is-fullscreen .leaflet-map,
+#leaflet-map.is-fullscreen {
+  height: 100% !important;
+  min-height: 100% !important;
+  max-height: 100% !important;
+  width: 100% !important;
+}
+
+.leaflet-map.is-fullscreen .leaflet-container,
+.is-fullscreen .leaflet-container,
+#leaflet-map.is-fullscreen .leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  min-height: 100% !important;
+}
+
+.is-fullscreen .leaflet-pane,
+.is-fullscreen .leaflet-tile-pane,
+.is-fullscreen .leaflet-tile-container,
+.leaflet-map.is-fullscreen .leaflet-pane,
+.leaflet-map.is-fullscreen .leaflet-tile-pane,
+.leaflet-map.is-fullscreen .leaflet-tile-container,
+#leaflet-map.is-fullscreen .leaflet-pane,
+#leaflet-map.is-fullscreen .leaflet-tile-pane,
+#leaflet-map.is-fullscreen .leaflet-tile-container {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
 .leaflet-map.is-locked,
 .leaflet-map.is-locked .leaflet-container {
   touch-action: pan-y;
