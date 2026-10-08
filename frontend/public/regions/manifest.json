@@ -1,13 +1,13 @@
 {
   "panay": {
     "file": "/regions/panay.geojson",
-    "count": 96,
-    "size_kb": 113.3
+    "count": 98,
+    "size_kb": 115.0
   },
   "iloilo": {
     "file": "/regions/iloilo.geojson",
-    "count": 42,
-    "size_kb": 49.5
+    "count": 44,
+    "size_kb": 51.3
   },
   "capiz": {
     "file": "/regions/capiz.geojson",
@@ -26,8 +26,8 @@
   },
   "philippines": {
     "file": "/regions/philippines.geojson",
-    "count": 185,
-    "size_kb": 165.5
+    "count": 187,
+    "size_kb": 167.3
   },
   "ncr": {
     "file": "/regions/ncr.geojson",

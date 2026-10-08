@@ -11,12 +11,23 @@ import {
   Layers,
   Plus,
   Sparkles,
+  MapPin,
+  Globe,
 } from 'lucide-react';
 import { events as defaultMockEvents } from '@/data/mockData';
 import { useTheme } from '@/hooks/useTheme';
 import { isEventCompatibleWithRegion, getRegionDisplayName } from '@/utils/eventScope';
 
 export type ViewMode = 'hubs' | 'critical';
+export type ScopeFilter = 'panay' | 'nationwide';
+
+export const PANAY_PROVINCES = ['Aklan', 'Antique', 'Capiz', 'Iloilo'] as const;
+
+export const isPanayProvince = (prov?: string): boolean => {
+  if (!prov) return false;
+  const p = prov.trim().toLowerCase();
+  return p === 'aklan' || p === 'antique' || p === 'capiz' || p === 'iloilo';
+};
 
 interface RecoveryChartProps {
   municipalities: Municipality[];
@@ -78,15 +89,16 @@ export default function RecoveryChart({
   const { theme } = useTheme();
   const isLight = theme === 'light';
   const [viewMode, setViewMode] = useState<ViewMode>('hubs');
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('panay');
 
   // Interactive hover tracking and point selection state
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
 
-  // Clear hover state on parameter or timeline changes
+  // Clear hover state on parameter, timeline, or scope changes
   useEffect(() => {
     setHoveredData(null);
-  }, [viewMode, selectedId, startDate, endDate, activeEventId]);
+  }, [viewMode, scopeFilter, selectedId, startDate, endDate, activeEventId]);
 
   // Custom events created interactively by the user
   const [localCustomEvents, setLocalCustomEvents] = useState<DisasterEvent[]>([]);
@@ -261,31 +273,42 @@ export default function RecoveryChart({
     return map;
   }, [endDate, records, startDate]);
 
-  // Determine which municipalities to display based on viewMode or selectedId
+  // Filter municipalities according to selected regional scope
+  const scopedMunicipalities = useMemo(() => {
+    if (scopeFilter === 'panay') {
+      const panayList = municipalities.filter((m) => isPanayProvince(m.province));
+      return panayList.length > 0 ? panayList : municipalities;
+    }
+    return municipalities;
+  }, [municipalities, scopeFilter]);
+
+  // Determine which municipalities to display based on viewMode, scopeFilter, or selectedId
   const featured = useMemo(() => {
     if (selectedId) {
       const sel = municipalities.find((m) => m.id === selectedId);
       if (sel) return [sel];
     }
 
+    const pool = scopedMunicipalities;
+
     if (viewMode === 'critical') {
-      // Top 4 municipalities with the lowest Day-0 recovery scores across the active event,
+      // Top 4 municipalities with the lowest Day-0 recovery scores across the active event within scope,
       // directly aligned with the sorting and data shown in the Municipal Resilience Index table
-      return [...municipalities]
+      return [...pool]
         .filter((m) => records.length === 0 || (recordsByPcode.get(m.id)?.length ?? 0) > 0)
         .sort((a, b) => a.recoveryScore - b.recoveryScore || a.name.localeCompare(b.name))
         .slice(0, 4);
     }
 
-    // Default viewMode === 'hubs': Largest municipality per province, sorted by score
+    // Default viewMode === 'hubs': Largest municipality per province within scope, sorted by score
     const byProvince = new Map<string, Municipality>();
-    for (const m of municipalities) {
+    for (const m of pool) {
       if (!byProvince.has(m.province) || m.population > byProvince.get(m.province)!.population) {
         byProvince.set(m.province, m);
       }
     }
     return Array.from(byProvince.values()).sort((a, b) => b.recoveryScore - a.recoveryScore);
-  }, [municipalities, selectedId, viewMode, records.length, recordsByPcode]);
+  }, [municipalities, scopedMunicipalities, selectedId, viewMode, records.length, recordsByPcode]);
 
   const series = useMemo(() => {
     // 1. Check if database has actual observations for selected municipalities and date range
@@ -633,23 +656,24 @@ export default function RecoveryChart({
     setHoveredData(null);
   };
 
-  // Dynamic subtitle reflecting active display mode
+  // Dynamic subtitle reflecting active display mode and regional scope
   const subtitle = useMemo(() => {
     if (selectedId) {
       return `Day-by-day recovery curve for ${featured[0]?.name ?? 'selected municipality'} (${featured[0]?.province ?? 'Panay'}) · ${
         viewMode === 'critical' ? 'Critical vulnerability target' : 'Regional provincial hub'
       }`;
     }
+    const scopeLabel = scopeFilter === 'panay' ? 'Panay Island' : 'Nationwide';
     if (viewMode === 'critical') {
-      return 'Top 4 hardest-hit municipalities with lowest Day-0 recovery scores across active event · Critical vulnerability targets';
+      return `Top ${featured.length} hardest-hit municipalities with lowest Day-0 recovery scores across active event (${scopeLabel}) · Critical vulnerability targets`;
     }
-    return 'Major regional capitals and provincial hubs · Continuous API observations';
-  }, [featured, selectedId, viewMode]);
+    return `Major provincial hubs across ${scopeLabel} (${featured.length} ${featured.length === 1 ? 'curve' : 'curves'}) · Continuous API observations`;
+  }, [featured, selectedId, viewMode, scopeFilter]);
 
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm overflow-hidden shadow-lg dark:shadow-xl transition-colors">
-      {/* Header with Title and View-Mode Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-5 py-4 border-b border-slate-200 dark:border-white/10">
+      {/* Header with Title, Curve Count, Scope Toggle, and View-Mode Toggle */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 px-5 py-4 border-b border-slate-200 dark:border-white/10">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Comparative Recovery Curves</h3>
@@ -662,22 +686,62 @@ export default function RecoveryChart({
             >
               {viewMode === 'critical' ? 'Critical Targets' : 'Regional Hubs'}
             </span>
+            <span className="px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:text-ink-300 bg-slate-100 dark:bg-ink-950/70 rounded-md border border-slate-200 dark:border-white/10">
+              {featured.length} {featured.length === 1 ? 'curve' : 'curves'}
+            </span>
           </div>
           <p className="text-xs text-slate-500 dark:text-ink-400 mt-1">{subtitle}</p>
         </div>
 
-        {/* View Mode Toggle Controls */}
-        <div className="flex items-center gap-2">
+        {/* Scope & View Mode Toggle Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Regional Scope Toggle: Panay Island (95) vs Nationwide Hubs (187) */}
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-ink-950/80 border border-slate-200 dark:border-white/10 shadow-inner">
+            <button
+              type="button"
+              onClick={() => {
+                setScopeFilter('panay');
+                if (selectedId && onSelect) onSelect(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                scopeFilter === 'panay'
+                  ? 'bg-white dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-slate-200 dark:border-ocean-500/30 shadow-sm'
+                  : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
+              }`}
+              title="Filter comparative recovery curves to Panay Island LGUs (95)"
+            >
+              <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+              <span>Panay Island (95)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setScopeFilter('nationwide');
+                if (selectedId && onSelect) onSelect(null);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                scopeFilter === 'nationwide'
+                  ? 'bg-white dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-slate-200 dark:border-ocean-500/30 shadow-sm'
+                  : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
+              }`}
+              title="Filter comparative recovery curves to Nationwide Hubs (187)"
+            >
+              <Globe className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+              <span>Nationwide Hubs (187)</span>
+            </button>
+          </div>
+
+          {/* View Mode Toggle Controls */}
           <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-ink-950/80 border border-slate-200 dark:border-white/10 shadow-inner">
             <button
               type="button"
               onClick={() => handleModeChange('hubs')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 viewMode === 'hubs' && !selectedId
                   ? 'bg-white dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-slate-200 dark:border-ocean-500/30 shadow-sm'
                   : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
               }`}
-              title="Track major regional capitals and economic hubs across Panay"
+              title={scopeFilter === 'panay' ? 'Track largest provincial hubs across Panay' : 'Track major regional capitals and economic hubs across the Philippines'}
             >
               <Building2 className="h-3.5 w-3.5" />
               <span>Largest Hubs per Province</span>
@@ -685,12 +749,12 @@ export default function RecoveryChart({
             <button
               type="button"
               onClick={() => handleModeChange('critical')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 viewMode === 'critical' && !selectedId
                   ? 'bg-white dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-slate-200 dark:border-rose-500/30 shadow-sm'
                   : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
               }`}
-              title="Inspect top 4 municipalities with lowest Day-0 scores"
+              title="Inspect top hardest-hit municipalities with lowest Day-0 scores"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
               <span>Most Critical / Hardest-Hit</span>
