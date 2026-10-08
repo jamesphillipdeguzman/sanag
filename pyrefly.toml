@@ -1,6 +1,7 @@
 search_path = [
     ".",
     "backend",
-    ".venv/Lib/site-packages"
+    ".venv/Lib/site-packages",
+    "C:/Users/PC/AppData/Roaming/Python/Python312/site-packages"
 ]
 python_interpreter_path = ".venv/Scripts/python.exe"

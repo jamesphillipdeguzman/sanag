@@ -19,7 +19,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { useSettings, type BasemapSource, type InteractionMode, type RenderingEngine } from '@/context/SettingsContext';
-import { REGION_PRESETS } from './PanayMap';
+import { REGION_PRESETS, getAllRegisteredRegions } from '@/utils/regionLookup';
 
 interface SettingsModalProps {
   isOpen?: boolean;
@@ -162,28 +162,34 @@ export default function SettingsModal({ isOpen: externalIsOpen, onClose: externa
                 onChange={(e) => updateSetting('defaultRegion', e.target.value)}
                 className="px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/15 text-slate-900 dark:text-white text-xs font-semibold shadow-xs focus:outline-none focus:ring-2 focus:ring-ocean-500 cursor-pointer min-w-[210px]"
               >
-                <optgroup label="Primary Scope">
-                  <option value="panay">Panay Island (Default)</option>
-                  <option value="iloilo">↳ Iloilo Province</option>
-                  <option value="capiz">↳ Capiz Province</option>
-                  <option value="aklan">↳ Aklan Province</option>
-                  <option value="antique">↳ Antique Province</option>
+                <optgroup label="Primary Scope" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                  <option value="panay" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Panay Island (Default)</option>
+                  <option value="iloilo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Iloilo Province</option>
+                  <option value="capiz" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Capiz Province</option>
+                  <option value="aklan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Aklan Province</option>
+                  <option value="antique" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Antique Province</option>
                 </optgroup>
-                <optgroup label="Nationwide">
-                  <option value="philippines">Nationwide (Philippines)</option>
+                <optgroup label="Nationwide" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                  <option value="philippines" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Nationwide (Philippines)</option>
                 </optgroup>
-                <optgroup label="Luzon">
-                  <option value="ncr">NCR (Metro Manila)</option>
-                  <option value="r3">Region III (Central Luzon)</option>
-                  <option value="r4a">Region IV-A (CALABARZON)</option>
-                  <option value="r5">Region V (Bicol Region)</option>
+                <optgroup label="Luzon" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                  <option value="ncr" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">NCR (Metro Manila)</option>
+                  <option value="car" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CAR (Cordillera Administrative Region)</option>
+                  <option value="ilocos_cagayan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Luzon (Regions I & II - Ilocos / Cagayan)</option>
+                  <option value="central_luzon" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Luzon (Region III)</option>
+                  <option value="calabarzon_mimaropa" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CALABARZON & MIMAROPA (Regions IV-A & IV-B)</option>
+                  <option value="bicol" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bicol Region (Region V)</option>
                 </optgroup>
-                <optgroup label="Visayas & Mindanao">
-                  <option value="r7">Region VII (Central Visayas)</option>
-                  <option value="r8">Region VIII (Eastern Visayas)</option>
-                  <option value="r6_negros">Region VI (Negros Occidental)</option>
-                  <option value="r11">Region XI (Davao Region)</option>
-                  <option value="r10">Region X (Northern Mindanao)</option>
+                <optgroup label="Visayas" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                  <option value="panay_guimaras" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Western Visayas (Panay, Guimaras, Negros)</option>
+                  <option value="central_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Visayas (Region VII - Cebu, Bohol)</option>
+                  <option value="eastern_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Eastern Visayas (Region VIII - Leyte, Samar)</option>
+                </optgroup>
+                <optgroup label="Mindanao" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
+                  <option value="zamboanga_peninsula" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Zamboanga Peninsula (Region IX)</option>
+                  <option value="northern_mindanao_caraga" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Mindanao & Caraga (Regions X & XIII)</option>
+                  <option value="mindanao_south" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">South Mindanao (Regions XI & XII - Davao & SOCCSKSARGEN)</option>
+                  <option value="barmm" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bangsamoro (BARMM)</option>
                 </optgroup>
               </select>
             </div>

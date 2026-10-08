@@ -21,6 +21,11 @@ import {
   isPanayExclusiveEvent,
   getRegionDisplayName,
 } from './utils/eventScope.ts'
+import {
+  computeDistanceDecayRatio,
+  calculateHaversineDistance,
+  extractCentroid,
+} from './services/simulation.ts'
 import './App.css'
 
 const VALID_TABS = ['overview', 'map', 'recovery', 'events', 'guide']
@@ -39,43 +44,50 @@ function normalizeMunicipalityName(name) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-function applyRecoveryScores(municipalities, records, startDate, endDate) {
+function applyRecoveryScores(municipalities, records, startDate, endDate, activeEvent) {
   const worstByPcode = new Map()
   const worstByName = new Map()
 
-  records
-    .filter((record) => {
-      if (record.r_t === null || record.r_t === undefined) return false
-      const recDate = record.date || record.observation_date
-      if (startDate && recDate && recDate < startDate) return false
-      if (endDate && recDate && recDate > endDate) return false
-      return true
-    })
-    .forEach((record) => {
-      const recDate = record.date || record.observation_date || ''
-      const entry = { ...record, date: recDate }
-      const rt = Number(record.r_t)
+  if (Array.isArray(records)) {
+    records
+      .filter((record) => {
+        if (record.r_t === null || record.r_t === undefined) return false
+        const recDate = record.date || record.observation_date
+        if (startDate && recDate && recDate < startDate) return false
+        if (endDate && recDate && recDate > endDate) return false
+        return true
+      })
+      .forEach((record) => {
+        const recDate = record.date || record.observation_date || ''
+        const entry = { ...record, date: recDate }
+        const rt = Number(record.r_t)
 
-      const updateWorst = (map, key) => {
-        const current = map.get(key)
-        if (!current || rt < Number(current.r_t)) {
-          map.set(key, entry)
+        const updateWorst = (map, key) => {
+          const current = map.get(key)
+          if (!current || rt < Number(current.r_t)) {
+            map.set(key, entry)
+          }
         }
-      }
 
-      if (record.pcode && record.pcode !== 'UNKNOWN') {
-        updateWorst(worstByPcode, record.pcode)
-      }
-      if (record.municipality_pcode && record.municipality_pcode !== 'UNKNOWN') {
-        updateWorst(worstByPcode, record.municipality_pcode)
-      }
-      if (record.municipality_name) {
-        const normName = record.municipality_name.toLowerCase().trim()
-        const cleanName = normalizeMunicipalityName(record.municipality_name)
-        updateWorst(worstByName, normName)
-        if (cleanName) updateWorst(worstByName, cleanName)
-      }
-    })
+        if (record.pcode && record.pcode !== 'UNKNOWN') {
+          updateWorst(worstByPcode, record.pcode)
+        }
+        if (record.municipality_pcode && record.municipality_pcode !== 'UNKNOWN') {
+          updateWorst(worstByPcode, record.municipality_pcode)
+        }
+        if (record.municipality_name) {
+          const normName = record.municipality_name.toLowerCase().trim()
+          const cleanName = normalizeMunicipalityName(record.municipality_name)
+          updateWorst(worstByName, normName)
+          if (cleanName) updateWorst(worstByName, cleanName)
+        }
+      })
+  }
+
+  // Pre-calculate event coordinates if present
+  const evtLat = activeEvent?.latitude ?? activeEvent?.coordinates?.[0]
+  const evtLng = activeEvent?.longitude ?? activeEvent?.coordinates?.[1]
+  const hasEventCoords = evtLat != null && evtLng != null && !isNaN(evtLat) && !isNaN(evtLng)
 
   return municipalities.map((municipality) => {
     const pcode = municipality.pcode || municipality.id
@@ -89,6 +101,26 @@ function applyRecoveryScores(municipalities, records, startDate, endDate) {
       (cleanName ? worstByName.get(cleanName) : null)
 
     if (!score) {
+      // Dynamic distance-decay radiance fallback if active event has coordinates
+      if (hasEventCoords) {
+        const centroid = extractCentroid(municipality)
+        const dist = centroid ? calculateHaversineDistance(centroid[0], centroid[1], evtLat, evtLng) : 999
+        const { recovery_ratio, status } = computeDistanceDecayRatio(dist)
+        const recoveryScore = Math.max(0, Math.min(100, Math.round(recovery_ratio * 100)))
+        const baselineRadiance = municipality.baselineRadiance && municipality.baselineRadiance > 0 ? municipality.baselineRadiance : 15.0
+        const currentRadiance = Number((baselineRadiance * recovery_ratio).toFixed(2))
+        return {
+          ...municipality,
+          recoveryScore,
+          status,
+          baselineRadiance,
+          currentRadiance,
+          daysSinceEvent: activeEvent?.date ? Math.max(0, Math.round((Date.now() - new Date(activeEvent.date).getTime()) / 86400000)) : 0,
+          estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
+          recoveryDate: activeEvent?.date || null,
+        }
+      }
+
       return {
         ...municipality,
         recoveryScore: municipality.recoveryScore ?? 100,
@@ -452,6 +484,7 @@ function App() {
       })
     }
     setLatestObservationDate(null)
+    setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, temporaryEvent))
     setIsMapLoading(true)
 
     // Toast feedback
@@ -638,9 +671,13 @@ function App() {
     setMunicipalities((prev) => {
       const existing = new Set(prev.map((m) => m.id))
       const toAdd = newItems.filter((m) => !existing.has(m.id))
-      return toAdd.length > 0 ? [...prev, ...toAdd] : prev
+      if (toAdd.length === 0) return prev
+      const scoredToAdd = activeEvent
+        ? applyRecoveryScores(toAdd, recoveryRecords || [], null, null, activeEvent)
+        : toAdd
+      return [...prev, ...scoredToAdd]
     })
-  }, [])
+  }, [activeEvent, recoveryRecords])
 
   // Dynamically keep events list updated with current affected population calculation
   useEffect(() => {
@@ -694,32 +731,30 @@ function App() {
 
         const baseMunicipalities = createMunicipalities(features)
 
-        if (radiancePayload?.data && radiancePayload.data.length > 0) {
-          const records = radiancePayload.data.map((item) => ({
-            ...item,
-            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
-            date: item.observation_date,
-          }))
+        const records = (radiancePayload?.data && radiancePayload.data.length > 0)
+          ? radiancePayload.data.map((item) => ({
+              ...item,
+              daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+              date: item.observation_date,
+            }))
+          : []
 
-          const mapped = applyRecoveryScores(baseMunicipalities, records)
-          setMunicipalities(mapped)
-          setRecoveryDate(radiancePayload.data[0]?.observation_date ?? null)
+        const mapped = applyRecoveryScores(baseMunicipalities, records, null, null, activeEvent)
+        setMunicipalities(mapped)
+        setRecoveryDate(radiancePayload?.data?.[0]?.observation_date ?? activeEvent?.date ?? null)
 
-          if (radiancePayload?.event?.affected_population || radiancePayload?.event?.critical_municipalities) {
-            setEvents((prev) =>
-              prev.map((e) =>
-                e.id === activeEventId
-                  ? {
-                      ...e,
-                      ...(radiancePayload.event.affected_population ? { affectedPopulation: radiancePayload.event.affected_population } : {}),
-                      ...(radiancePayload.event.critical_municipalities ? { critical_municipalities: radiancePayload.event.critical_municipalities } : {}),
-                    }
-                  : e
-              )
+        if (radiancePayload?.event?.affected_population || radiancePayload?.event?.critical_municipalities) {
+          setEvents((prev) =>
+            prev.map((e) =>
+              e.id === activeEventId
+                ? {
+                    ...e,
+                    ...(radiancePayload.event.affected_population ? { affectedPopulation: radiancePayload.event.affected_population } : {}),
+                    ...(radiancePayload.event.critical_municipalities ? { critical_municipalities: radiancePayload.event.critical_municipalities } : {}),
+                  }
+                : e
             )
-          }
-        } else {
-          setMunicipalities(baseMunicipalities)
+          )
         }
         setIsMapLoading(false)
       })
@@ -802,7 +837,7 @@ function App() {
           date: item.observation_date,
         }))
         setMunicipalities((current) => {
-          const mapped = applyRecoveryScores(current, records, sDate, eDate)
+          const mapped = applyRecoveryScores(current, records, sDate, eDate, activeEvent)
           setRecoveryDate(payload.data[0]?.observation_date ?? sDate)
           return mapped
         })
@@ -812,7 +847,7 @@ function App() {
         // Fall back gracefully if spatial data is not available for this event
       }
     }
-  }, [])
+  }, [activeEvent])
 
   useEffect(() => {
     if (!activeEventId || !recoveryStartDate) return
@@ -844,13 +879,13 @@ function App() {
         if (maxDate) setLatestObservationDate(maxDate)
 
         // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
-        setMunicipalities((current) => applyRecoveryScores(current, payload.data, sDate, eDate))
+        setMunicipalities((current) => applyRecoveryScores(current, payload.data, sDate, eDate, activeEvent))
         setRecoveryDate(sDate)
       }
     } catch (error) {
       if (error.name !== 'AbortError') setEventsError(error.message)
     }
-  }, [])
+  }, [activeEvent])
 
   useEffect(() => {
     if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
