@@ -325,7 +325,7 @@ The FastAPI backend runs at `http://localhost:8000`. All endpoints are also brow
 
 | Method | Endpoint                 | Key Query Params              | Description                                                                                                          |
 | ------ | ------------------------ | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/api/v1/municipalities` | `scope`, `region`, `province` | Returns monitored LGU list with ADM3_PCODE for Leaflet binding. Defaults to 93 Panay municipalities (`scope=panay`). |
+| `GET`  | `/api/v1/municipalities` | `scope`, `region`, `province` | Returns monitored LGU list with ADM3_PCODE for Leaflet binding. Defaults to 95 Panay LGUs (`scope=panay`). |
 | `GET`  | `/api/v1/regions`        | —                             | Returns nationwide regional centre coordinates and province metadata.                                                |
 
 ## Events

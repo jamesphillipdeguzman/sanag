@@ -789,7 +789,7 @@ def get_nationwide_municipal_features() -> List[Dict[str, Any]]:
     return features
 
 def generate_boundaries():
-    # 1. Load the original high-resolution Panay Island municipalities (93 LGUs)
+    # 1. Load the original high-resolution Panay Island municipalities (95 LGUs)
     panay_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "panay_municipalities.geojson")
     with open(panay_path, "r", encoding="utf-8") as f:
         panay_data = json.load(f)
