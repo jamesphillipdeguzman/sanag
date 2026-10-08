@@ -159,7 +159,7 @@ export default function Overview({
                 label="Critical"
                 value={criticalCount.toString()}
                 accent="text-rose-500 dark:text-rose-300"
-                badge="Outages < 30%"
+                badge="Outages < 60%"
               />
               <StatCard
                 icon={<Users className="h-4 w-4" />}

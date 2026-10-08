@@ -760,6 +760,11 @@ def get_recovery_scores(
     Computes and returns R(t) recovery scores with both municipality_name and pcode
     for direct Leaflet map binding without string-matching errors.
     Supports full monthly and custom date ranges, plus safe event-window fallbacks.
+
+    Harmonized 3-tier operational benchmarks:
+      * Near-Full Recovery: >= 90% baseline radiance (R(t) >= 0.90)
+      * Active Restoration: 60% to 89% baseline radiance (0.60 <= R(t) < 0.90)
+      * Critical Deficit: < 60% baseline radiance (R(t) < 0.60)
     """
     try:
         filtered = compute_recovery_index(
@@ -924,6 +929,11 @@ def get_timeline_query(
     """
     Query-param based recovery timeline endpoint supporting full date ranges and event views.
     Example: /api/v1/resilience/timeline?muniId=iloilo_city&eventId=panay-blackout-2024
+
+    Harmonized 3-tier operational benchmarks:
+      * Near-Full Recovery: >= 90% baseline radiance (R(t) >= 0.90)
+      * Active Restoration: 60% to 89% baseline radiance (0.60 <= R(t) < 0.90)
+      * Critical Deficit: < 60% baseline radiance (R(t) < 0.60)
     """
     target_mun = municipality or muniId
     if not target_mun:
@@ -953,6 +963,11 @@ def get_municipality_timeline(
     Returns the day-by-day recovery timeline for a specific municipality.
     Accepts either municipality name (e.g. 'Altavas') or ADM3_PCODE (e.g. 'PH0600401').
     Supports full monthly and custom date ranges, plus safe event-window fallbacks.
+
+    Harmonized 3-tier operational benchmarks:
+      * Near-Full Recovery: >= 90% baseline radiance (R(t) >= 0.90)
+      * Active Restoration: 60% to 89% baseline radiance (0.60 <= R(t) < 0.90)
+      * Critical Deficit: < 60% baseline radiance (R(t) < 0.60)
     """
     # Verify municipality exists
     conn = sqlite3.connect(DB_PATH)

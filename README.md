@@ -60,13 +60,14 @@ Where:
 ---
 
 ## 2. Status Benchmarks & Interpretation
-The resulting ratio $R(t)$ is classified into three operational categories:
+The resulting ratio $R(t)$ is classified into three official operational benchmarks:
 
-| Range                    | Status Category                     | Interpretation                                                                     |
-| :----------------------- | :---------------------------------- | :--------------------------------------------------------------------------------- |
-| **$R(t) \ge 0.9$**       | **Normal Operating Conditions**     | Power grid has fully or near-fully recovered to pre-disaster baseline levels.      |
-| **$0.3 \le R(t) < 0.9$** | **Partial Power / Brownouts**       | Active recovery underway; partial grid stability or rolling brownouts experienced. |
-| **$R(t) < 0.3$**         | **Severe Grid Collapse / Blackout** | Major grid failure resulting in catastrophic loss of nighttime luminosity.         |
+| Range                      | Status Category                     | Interpretation                                                                      |
+| :------------------------- | :---------------------------------- | :---------------------------------------------------------------------------------- |
+| **$R(t) \ge 0.90$** (≥90%) | **Normal Operating Conditions** / **Near-Full Recovery** | Power grid has fully or near-fully recovered to pre-disaster baseline levels.       |
+| **$0.60 \le R(t) < 0.90$** (60%–89%) | **Active Restoration**               | Active recovery underway; partial grid re-energization and feeder restoration.     |
+| **$R(t) < 0.60$** (<60%)   | **Critical Deficit** / **Severe Blackout** | Major grid failure resulting in catastrophic loss of nighttime luminosity (<60%).  |
+| **$R(t)$ is None**         | **No Data / Cloud Masked**          | Satellite observation obscured by persistent cloud cover or missing tile.           |
 
 
 ---

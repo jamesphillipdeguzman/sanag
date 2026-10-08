@@ -101,7 +101,7 @@ function applyRecoveryScores(municipalities, records, startDate, endDate) {
     }
 
     const recoveryScore = Math.max(0, Math.min(100, Math.round(score.r_t * 100)))
-    const status = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : recoveryScore >= 40 ? 'warning' : 'critical'
+    const status = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : 'critical'
 
     return {
       ...municipality,

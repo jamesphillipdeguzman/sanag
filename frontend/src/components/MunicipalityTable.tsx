@@ -77,9 +77,8 @@ export default function MunicipalityTable({ municipalities, selectedId, onSelect
                         backgroundColor: `${getRecoveryStatusColor(m.status)}15`,
                       }}
                     >
-                      {m.status === 'restored' ? 'Restored' :
-                       m.status === 'recovering' ? 'Recovering' :
-                       m.status === 'warning' ? 'Limited' : 'Critical'}
+                      {m.recoveryScore >= 90 ? 'Near-Full Recovery' :
+                       m.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit'}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-right">

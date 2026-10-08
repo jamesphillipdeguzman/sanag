@@ -5,3 +5,8 @@ search_path = [
     ".venv/Lib/site-packages"
 ]
 python_interpreter_path = ".venv/Scripts/python.exe"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".*", "pytest-cache-files*", "frontend", "node_modules", ".venv", "backend/pytest-cache-files*"]
+addopts = "-p no:cacheprovider"
