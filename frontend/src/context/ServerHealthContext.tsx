@@ -11,9 +11,25 @@ import {
   subscribeServerStatus,
   getServerStatus,
   checkServerHealth,
+  fetchSystemStatus,
   type ServerStatusDetail,
   type ServerWakeStatus,
 } from '@/services/apiService';
+import {
+  getActiveStationsCount,
+  getStationsByProvince,
+  type ProvinceStationGroup,
+} from '@/data/transmissionStations';
+
+export interface SystemTelemetryData {
+  activeStationsCount: number;
+  totalStationsCount: number;
+  panayLgus: number;
+  totalLgus: number;
+  nationwideHubs: number;
+  activeEventsCount?: number;
+  stationsByProvince: ProvinceStationGroup[];
+}
 
 export interface ServerHealthContextType {
   status: ServerWakeStatus;
@@ -29,6 +45,7 @@ export interface ServerHealthContextType {
   statusCode?: number;
   message?: string;
   error?: string | null;
+  systemTelemetry: SystemTelemetryData;
   checkHealth: () => Promise<boolean>;
   refetchAll: () => Promise<boolean>;
   registerRefetchHandler: (id: string, handler: () => Promise<void> | void) => () => void;
@@ -43,6 +60,14 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
   const [statusDetail, setStatusDetail] = useState<ServerStatusDetail>(() => getServerStatus());
   const [isRefetching, setIsRefetching] = useState<boolean>(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState<boolean>(false);
+  const [systemTelemetry, setSystemTelemetry] = useState<SystemTelemetryData>(() => ({
+    activeStationsCount: getActiveStationsCount(),
+    totalStationsCount: 14,
+    panayLgus: 95,
+    totalLgus: 95,
+    nationwideHubs: 187,
+    stationsByProvince: getStationsByProvince(),
+  }));
 
   const refetchHandlersRef = useRef<Map<string, () => Promise<void> | void>>(new Map());
 
@@ -64,6 +89,32 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
     });
     return unsubscribe;
   }, []);
+
+  const refreshTelemetry = useCallback(async () => {
+    try {
+      const data = await fetchSystemStatus();
+      if (data) {
+        setSystemTelemetry((prev) => ({
+          activeStationsCount: data.active_stations_count ?? prev.activeStationsCount,
+          totalStationsCount: data.total_stations_count ?? prev.totalStationsCount,
+          panayLgus: data.panay_lgus_count ?? prev.panayLgus,
+          totalLgus: data.total_lgus ?? prev.totalLgus,
+          nationwideHubs: data.nationwide_hubs_count ?? prev.nationwideHubs,
+          activeEventsCount: data.active_events_count ?? prev.activeEventsCount,
+          stationsByProvince:
+            data.stations_by_province && Array.isArray(data.stations_by_province) && data.stations_by_province.length > 0
+              ? data.stations_by_province
+              : prev.stationsByProvince,
+        }));
+      }
+    } catch {
+      // Safe fallback maintained
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshTelemetry();
+  }, [refreshTelemetry]);
 
   const registerRefetchHandler = useCallback(
     (id: string, handler: () => Promise<void> | void) => {
@@ -91,8 +142,8 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
     resetErrors();
 
     try {
-      // 1. Checks the backend health check endpoint (GET /api/health)
-      const isHealthy = await checkServerHealth();
+      // 1. Checks the backend health check endpoint (GET /api/health) and telemetry
+      const [isHealthy] = await Promise.all([checkServerHealth(), refreshTelemetry()]);
 
       // 2. Resets error states across all data layers and triggers a refetch of active event data
       const handlerPromises = Array.from(refetchHandlersRef.current.values()).map(async (fn) => {
@@ -113,7 +164,7 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
     } finally {
       setIsRefetching(false);
     }
-  }, [resetErrors]);
+  }, [resetErrors, refreshTelemetry]);
 
   const dismissBanner = useCallback(() => {
     setIsBannerDismissed(true);
@@ -143,6 +194,7 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
       statusCode: statusDetail.statusCode,
       message: statusDetail.message,
       error: statusDetail.error,
+      systemTelemetry,
       checkHealth,
       refetchAll,
       registerRefetchHandler,
@@ -158,6 +210,7 @@ export function ServerHealthProvider({ children }: { children: React.ReactNode }
       isReconnecting,
       isRefetching,
       hasConnectionError,
+      systemTelemetry,
       checkHealth,
       refetchAll,
       registerRefetchHandler,

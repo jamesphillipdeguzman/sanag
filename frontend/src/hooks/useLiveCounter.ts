@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { checkServerHealth, isBackendMarkedWoke } from '@/services/apiService';
+import { PANAY_TRANSMISSION_STATIONS, getActiveStationsCount } from '@/data/transmissionStations';
 
 /**
  * Real-world infrastructure baseline for Panay Island power grid monitoring:
- * 14 primary high-voltage transmission substation and grid telemetry nodes
+ * High-voltage transmission substation and grid telemetry nodes
  * operated across the 4 provinces (Iloilo, Capiz, Aklan, Antique)
  * supplying the 95 local government units (LGUs).
  */
-export const PANAY_GRID_TRANSMISSION_NODES = 14;
+export const PANAY_GRID_TRANSMISSION_NODES = getActiveStationsCount(PANAY_TRANSMISSION_STATIONS);
 export const PANAY_TOTAL_LGUS = 95;
 
 export interface SystemTelemetryState {

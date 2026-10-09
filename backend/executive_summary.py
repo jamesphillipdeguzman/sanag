@@ -573,8 +573,17 @@ Physical Grid Impact: {infra_impact}
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-            models_to_try = [gemini_model]
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+            
+            # Prioritize 2.0-flash for immediate response speed while 3.8 demand normalizes
+            models_to_try = [
+                "gemini-2.0-flash",
+                gemini_model,
+                "gemini-2.0-flash-lite",
+                "gemini-3.8-flash",
+            ]
+            # Deduplicate while preserving sequence
+            models_to_try = list(dict.fromkeys(models_to_try))
             
             for model_name in models_to_try:
                 for attempt in range(max_retries):
@@ -659,7 +668,6 @@ Physical Grid Impact: {infra_impact}
 
     # Dynamic contextual fallback synthesis reflecting the passed event data
     return generate_fallback_briefing(clean_event_context)
-
 
 # Alias for compatibility with executive_summary generator naming
 generate_executive_summary = generate_recovery_briefing

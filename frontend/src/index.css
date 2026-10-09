@@ -72,8 +72,11 @@ html.dark {
   background: var(--bg);
 }
 
+html,
 body {
   margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
   background-color: var(--bg);
   color: var(--text);
   transition: background-color 0.25s ease, color 0.25s ease;
@@ -128,10 +131,18 @@ html.dark .dot-bg {
   height: clamp(360px, 46vh, 500px);
   min-height: 360px;
   width: 100%;
+  max-width: 100%;
   border-radius: 12px;
   overflow: hidden;
+  overflow-x: hidden;
   background: #f1f5f9;
   transition: background-color 0.25s ease;
+}
+
+.leaflet-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
 }
 
 html.dark .leaflet-map {

@@ -453,12 +453,12 @@ export default function PanayMap({
   const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.panay;
 
   return (
-    <div className={isMaximized ? 'relative w-full' : 'grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch'}>
+    <div className={isMaximized ? 'relative w-full max-w-full overflow-x-hidden' : 'grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch w-full max-w-full min-w-0 overflow-x-hidden'}>
       {/* Map */}
-      <div className={isMaximized ? 'w-full' : 'lg:col-span-8 flex flex-col'}>
+      <div className={isMaximized ? 'w-full max-w-full' : 'lg:col-span-8 flex flex-col w-full max-w-full min-w-0'}>
         {/* Keep the panel chrome on the app theme; night glow darkens only the map viewport. */}
         <div className={isMaximized
-          ? 'fixed inset-0 z-[1500] w-screen h-screen rounded-none m-0 p-0 overflow-hidden flex flex-col bg-slate-950'
+          ? 'fixed inset-0 z-[1500] w-full max-w-full h-screen rounded-none m-0 p-0 overflow-hidden flex flex-col bg-slate-950'
           : `relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-white/95 dark:bg-ink-900/60 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`
         }>
           {/* Map header with Region Selector */}
@@ -500,14 +500,14 @@ export default function PanayMap({
             {/* Region selection dropdown and Live Hazards indicator badge directly underneath */}
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
               {/* Region Navigator Selector */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-700 dark:text-ocean-200">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-700 dark:text-ocean-200 max-w-full">
                 <Compass className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
                 <label htmlFor="panay-map-region-selector" className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 hidden sm:inline">Region:</label>
                 <select
                   id="panay-map-region-selector"
                   value={currentRegionKey}
                   onChange={(e) => handleRegionChange(e.target.value)}
-                  className="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1"
+                  className="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1 max-w-[160px] xs:max-w-[210px] sm:max-w-none truncate"
                   aria-label="Select Philippine Region or Province"
                 >
                   <optgroup label="Primary Scope" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
@@ -836,11 +836,11 @@ export default function PanayMap({
               </div>
 
               {/* Row 2: Anchored 3-Tier RAG Recovery Severity Guide directly beneath numbered scale */}
-              <div className="flex items-center gap-3 text-[11px] whitespace-nowrap overflow-hidden select-none py-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none py-1 max-w-full">
                 {/* 1. Critical Deficit (< 60%) */}
                 <div
                   id="rag-red"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 ${
+                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
                     hoveredRagStatus != null && hoveredRagStatus !== 'critical'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
@@ -863,7 +863,7 @@ export default function PanayMap({
                 {/* 2. Active Restoration (60%–89%) */}
                 <div
                   id="rag-amber"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 ${
+                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
                     hoveredRagStatus != null && hoveredRagStatus !== 'restoration'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
@@ -886,7 +886,7 @@ export default function PanayMap({
                 {/* 3. Near-Full Recovery (≥ 90%) */}
                 <div
                   id="rag-green"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 ${
+                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
                     hoveredRagStatus != null && hoveredRagStatus !== 'recovered'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
@@ -913,7 +913,7 @@ export default function PanayMap({
 
       {/* Detail side panel */}
       {!isMaximized && (
-        <div className="lg:col-span-4 flex flex-col">
+        <div className="lg:col-span-4 flex flex-col w-full max-w-full min-w-0">
         {selected ? (
           <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
             <div>
@@ -3218,7 +3218,7 @@ function LeafletMap({
       {selectedGdacsAlert && (
         <div
           id="active-gdacs-alert-card"
-          className="absolute top-20 left-6 sm:left-8 z-[1200] w-[340px] max-w-[90vw] max-h-[calc(100vh-140px)] flex flex-col rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in duration-200 text-slate-100"
+          className="absolute top-20 left-3 right-3 sm:right-auto sm:left-8 z-[1200] sm:w-[340px] max-w-[calc(100%-24px)] max-h-[calc(100vh-140px)] flex flex-col rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md overflow-hidden animate-in fade-in duration-200 text-slate-100"
         >
           {/* Header with status badges and close button */}
           <div className="flex items-center justify-between gap-2 p-3.5 pb-2.5 border-b border-slate-800 shrink-0">
@@ -3425,7 +3425,7 @@ function MapLockOverlay({
   };
 
   return (
-    <div className="absolute top-3 right-3 z-[1000] flex items-center gap-2">
+    <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 sm:gap-2 max-w-[calc(100%-24px)] overflow-x-auto no-scrollbar">
       {onToggleNightGlow && (
         <button
           type="button"
@@ -3473,12 +3473,12 @@ function MapLockOverlay({
         {isMapLocked ? (
           <>
             <Lock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Locked</span>
+            <span className="hidden sm:inline">Locked</span>
           </>
         ) : (
           <>
             <Unlock className="w-3.5 h-3.5 text-slate-400" />
-            <span>Lock Map</span>
+            <span className="hidden sm:inline">Lock Map</span>
           </>
         )}
       </button>

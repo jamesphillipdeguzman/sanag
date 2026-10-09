@@ -1010,6 +1010,46 @@ function GdacsPanel({
     });
   }, [alerts]);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter alerts dynamically by search query (name, type, alert level, description, country, date)
+  const filteredAlerts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sortedAlerts;
+
+    return sortedAlerts.filter((alert) => {
+      const name = (alert.name || alert.eventname || alert.title || '').toLowerCase();
+      const type = (alert.eventtype || alert.type || '').toLowerCase();
+      const level = (alert.alert_level || alert.severity || '').toLowerCase();
+      const desc = (alert.description || '').toLowerCase();
+      const country = (alert.country || '').toLowerCase();
+      const rawDate = String(alert.fromdate || alert.startDate || alert.date || alert.pubDate || '').toLowerCase();
+      const formattedDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate).toLowerCase();
+
+      return (
+        name.includes(q) ||
+        type.includes(q) ||
+        level.includes(q) ||
+        desc.includes(q) ||
+        country.includes(q) ||
+        rawDate.includes(q) ||
+        formattedDate.includes(q)
+      );
+    });
+  }, [sortedAlerts, searchQuery]);
+
+  // Identify which alert matches the currently active event
+  const activeAlertId = useMemo(() => {
+    if (!activeEvent) return '';
+    const match = sortedAlerts.find((a) => {
+      const importedId = resolveImportedId(a);
+      if (importedId && String(importedId) === String(activeEvent.id)) return true;
+      const rawId = String(a.event_id ?? a.id ?? '');
+      return rawId === String(activeEvent.id) || `gdacs-${rawId}` === String(activeEvent.id);
+    });
+    return match ? String(match.event_id ?? match.id ?? '') : '';
+  }, [activeEvent, sortedAlerts, events, importedEventIds]);
+
   const lastFetchLabel = lastFetch
     ? lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
@@ -1031,24 +1071,102 @@ function GdacsPanel({
   return (
     <div>
       {/* Sub-header */}
-      <div className="flex items-center justify-between mb-2.5 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
         <p className="text-[11px] text-slate-500 dark:text-ink-400">
-          Real-time GDACS natural hazard alerts filtered for the Philippines. Click{' '}
+          Real-time GDACS natural hazard alerts filtered for the Philippines. Select an alert from the dropdown or click{' '}
           <span className="font-semibold text-amber-600 dark:text-amber-300">Simulate</span>{' '}
           to load a live event into the recovery engine.
         </p>
+      </div>
+
+      {/* Event Selector Dropdown Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+        {/* Primary Control Cluster: Event Dropdown & Search Input */}
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+          {/* Event Dropdown */}
+          <div className="flex items-center gap-2 shrink-0">
+            <label htmlFor="gdacs-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
+              Event Dropdown:
+            </label>
+            <div className="relative min-w-[200px] sm:min-w-[230px]">
+              <select
+                id="gdacs-event-select"
+                value={filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) ? activeAlertId : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const chosen = filteredAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val)
+                    || sortedAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val);
+                  if (chosen) {
+                    handleCardClick(chosen);
+                    const el = document.getElementById(`gdacs-alert-card-${val}`);
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                  }
+                }}
+                disabled={loading || sortedAlerts.length === 0}
+                className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer disabled:opacity-50"
+              >
+                {!filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) && (
+                  <option value="" disabled>
+                    {loading ? 'Loading live hazards...' : filteredAlerts.length === 0 ? 'No matching live hazards' : 'Choose a live hazard...'}
+                  </option>
+                )}
+                {filteredAlerts.map((alert) => {
+                  const alertId = String(alert.event_id ?? alert.id ?? '');
+                  const alertName = alert.name || alert.eventname || alert.title || 'Live Hazard';
+                  const alertLevel = (alert.alert_level || alert.severity || 'Alert').toUpperCase();
+                  const alertDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate);
+                  return (
+                    <option key={alertId} value={alertId} className="text-slate-900 dark:text-white font-medium">
+                      {alertName} ({alertLevel} · {alertDate})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {/* Search Input Field */}
+          <div className="relative flex-1 min-w-[200px] max-w-xs sm:max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              id="gdacs-event-search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search live hazards by name, type, or alert level..."
+              disabled={loading || sortedAlerts.length === 0}
+              className="w-full text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none transition-colors disabled:opacity-50"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                title="Clear search filter"
+                aria-label="Clear search filter"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Refresh button with last fetch timestamp */}
         <button
           type="button"
           onClick={fetchAlerts}
           disabled={loading}
           title="Refresh live GDACS alerts"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-ink-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-ink-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0 shadow-sm"
         >
           {loading
             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
             : <RefreshCw className="h-3.5 w-3.5" />
           }
-          <span className="hidden sm:inline">Refresh</span>
+          <span className="hidden sm:inline">Refresh Alerts</span>
           {lastFetchLabel && !loading && (
             <span className="text-[10px] text-slate-400 dark:text-ink-500 hidden md:inline">
               · {lastFetchLabel}
@@ -1085,7 +1203,7 @@ function GdacsPanel({
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state (No alerts fetched from backend) */}
       {!loading && !error && sortedAlerts.length === 0 && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
           <Radio className="h-8 w-8 text-ink-500" />
@@ -1096,10 +1214,32 @@ function GdacsPanel({
         </div>
       )}
 
+      {/* Search Filter Empty State */}
+      {!loading && !error && sortedAlerts.length > 0 && filteredAlerts.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 text-center">
+          <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
+            <Search className="h-5 w-5" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            No live hazards match &ldquo;{searchQuery}&rdquo;
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+            Try adjusting your search query, or search by hazard type (e.g., cyclone, earthquake) or alert level.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="mt-3.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer"
+          >
+            Clear Search Filter
+          </button>
+        </div>
+      )}
+
       {/* Alert cards */}
-      {sortedAlerts.length > 0 && (
+      {filteredAlerts.length > 0 && (
         <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" : "flex flex-col gap-2.5"}>
-          {sortedAlerts.map((alert) => {
+          {filteredAlerts.map((alert) => {
             const alertId      = String(alert.event_id ?? alert.id ?? '');
             const isImporting  = importingGdacsId === alertId;
             const importedId   = resolveImportedId(alert);
@@ -1163,6 +1303,7 @@ function GdacsAlertCard({
   if (viewMode === 'list') {
     return (
       <div
+        id={`gdacs-alert-card-${alertId}`}
         role="button"
         tabIndex={0}
         onClick={(e) => {
@@ -1309,6 +1450,7 @@ function GdacsAlertCard({
 
   return (
     <div
+      id={`gdacs-alert-card-${alertId}`}
       role="button"
       tabIndex={0}
       onClick={(e) => {

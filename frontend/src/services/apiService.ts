@@ -650,4 +650,76 @@ export async function pingBackend(options?: PingBackendOptions): Promise<boolean
   return false;
 }
 
+import { type ProvinceStationGroup } from '@/data/transmissionStations';
+export type { ProvinceStationGroup };
+
+export interface SystemStatusResponse {
+  status: string;
+  service?: string;
+  timestamp?: string;
+  version?: string;
+  active_stations_count?: number;
+  total_stations_count?: number;
+  panay_lgus_count?: number;
+  total_lgus?: number;
+  nationwide_hubs_count?: number;
+  active_events_count?: number;
+  stations?: Array<{
+    id: string;
+    name: string;
+    province: string;
+    voltage: string;
+    status: string;
+  }>;
+  stations_by_province?: ProvinceStationGroup[];
+}
+
+/**
+ * Fetches dynamic system status & telemetry metrics from backend status endpoints.
+ */
+export async function fetchSystemStatus(): Promise<SystemStatusResponse | null> {
+  const endpoints = ['/api/status', '/api/v1/status', '/api/summary', '/api/v1/summary'];
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (res.ok) {
+        return (await res.json()) as SystemStatusResponse;
+      }
+    } catch {
+      // Continue to next endpoint fallback
+    }
+  }
+  return null;
+}
+
+/**
+ * Fetches transmission grid stations grouped and aggregated by province.
+ */
+export async function fetchStationsByProvince(): Promise<ProvinceStationGroup[] | null> {
+  const endpoints = [
+    '/api/v1/stations/by-province',
+    '/api/stations/by-province',
+    '/stations/by-province',
+  ];
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (res.ok) {
+        return (await res.json()) as ProvinceStationGroup[];
+      }
+    } catch {
+      // Continue to next endpoint fallback
+    }
+  }
+  return null;
+}
+
 export default apiFetch;
