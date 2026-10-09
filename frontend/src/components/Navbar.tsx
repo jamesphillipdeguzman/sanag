@@ -20,6 +20,8 @@ import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
 import { useSettings } from '@/context/SettingsContext';
 import { PANAY_GRID_TRANSMISSION_NODES, PANAY_TOTAL_LGUS } from '@/hooks/useLiveCounter';
+import { getStationsByProvince, type ProvinceStationGroup } from '@/data/transmissionStations';
+import StationProvinceBreakdownPopover from './StationProvinceBreakdownPopover';
 import packageInfo from '../../package.json';
 
 export const APP_VERSION = packageInfo?.version || '1.2.0';
@@ -81,7 +83,39 @@ export default function Navbar({
   const [showProvinceBreakdown, setShowProvinceBreakdown] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const mobilePopoverRef = useRef<HTMLDivElement>(null);
-  const stationsByProvince = systemTelemetry?.stationsByProvince || [];
+
+  // Normalize stations array safely across various payload shapes (grouped or flat)
+  const stationsByProvince: ProvinceStationGroup[] = React.useMemo(() => {
+    const tel = systemTelemetry as any;
+    const candidates = [
+      systemTelemetry?.stationsByProvince,
+      tel?.stations_by_province,
+      tel?.breakdown,
+      tel?.provinces,
+      tel?.items,
+    ];
+
+    for (const cand of candidates) {
+      if (Array.isArray(cand) && cand.length > 0) {
+        if (cand[0]?.province && (cand[0]?.stations || cand[0]?.items)) {
+          return cand.map((g: any) => ({
+            province: g.province,
+            count: g.count ?? (g.stations || g.items || []).length,
+            active_count:
+              g.active_count ??
+              (g.stations || g.items || []).filter((s: any) => s.status === 'active').length,
+            stations: g.stations || g.items || [],
+          }));
+        }
+      }
+    }
+
+    if (Array.isArray(tel?.stations) && tel.stations.length > 0) {
+      return getStationsByProvince(tel.stations);
+    }
+
+    return getStationsByProvince();
+  }, [systemTelemetry]);
 
   // Determine grounded telemetry status based on genuine API status probe
   const isServerWakingState = isWaking || (isReconnecting && !isOffline);
@@ -122,10 +156,15 @@ export default function Navbar({
     if (!showProvinceBreakdown) return;
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (
-        popoverRef.current && !popoverRef.current.contains(target) &&
-        mobilePopoverRef.current && !mobilePopoverRef.current.contains(target)
-      ) {
+      const isInsideDesktop = popoverRef.current?.contains(target);
+      const isInsideMobile = mobilePopoverRef.current?.contains(target);
+      const triggerBtn = document.getElementById('navbar-station-province-trigger');
+      const mobileTriggerBtn = document.getElementById('mobile-station-province-trigger');
+      const isTrigger =
+        (triggerBtn && triggerBtn.contains(target)) ||
+        (mobileTriggerBtn && mobileTriggerBtn.contains(target));
+
+      if (!isInsideDesktop && !isInsideMobile && !isTrigger) {
         setShowProvinceBreakdown(false);
       }
     };
@@ -168,7 +207,7 @@ export default function Navbar({
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 overflow-hidden transition-all duration-300 ${scrolled || mobileOpen
+      className={`fixed top-0 left-0 right-0 z-[100] overflow-visible transition-all duration-300 ${scrolled || mobileOpen
           ? 'bg-white/90 dark:bg-slate-950/85 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
           : 'bg-transparent'
         }`}
@@ -240,7 +279,10 @@ export default function Navbar({
               <button
                 type="button"
                 id="navbar-station-province-trigger"
-                onClick={() => setShowProvinceBreakdown((prev) => !prev)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProvinceBreakdown((prev) => !prev);
+                }}
                 className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition-colors cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${badgeBorderBg}`}
                 title="Click to view transmission station breakdown per province"
                 aria-expanded={showProvinceBreakdown}
@@ -260,70 +302,20 @@ export default function Navbar({
 
               {/* Province Breakdown Popover Modal */}
               {showProvinceBreakdown && (
-                <div
-                  id="station-province-breakdown-popover"
-                  className="absolute top-full mt-2 right-0 w-[320px] sm:w-[350px] rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-xl p-3.5 z-[1600] animate-in fade-in zoom-in-95 duration-150 text-slate-800 dark:text-slate-100"
-                >
-                  <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                        <Zap className="h-4 w-4 fill-current" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
-                          Active Transmission Stations
-                        </h4>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Grouped across 4 Panay provinces
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                      {stationsCount} Active
-                    </span>
-                  </div>
-
-                  {/* Province Grid */}
-                  <div className="flex flex-col gap-2 my-1 max-h-[280px] overflow-y-auto pr-0.5">
-                    {stationsByProvince.map((group) => (
-                      <div
-                        key={group.province}
-                        className="p-2.5 rounded-xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/70 dark:border-white/5 hover:border-emerald-500/30 transition-colors"
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
-                            {group.province}
-                          </span>
-                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                            {group.active_count ?? group.count} Active Station{(group.active_count ?? group.count) > 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {group.stations.map((st) => (
-                            <span
-                              key={st.id}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/70 text-slate-700 dark:text-slate-300 flex items-center gap-1 shadow-xs"
-                              title={`${st.name} (${st.voltage}) · Status: ${st.status}`}
-                            >
-                              <span className="font-medium text-slate-800 dark:text-slate-200">
-                                {st.name.replace(' Substation', '').replace(' Switching Station', '')}
-                              </span>
-                              <span className="font-mono text-[9px] font-bold text-ocean-600 dark:text-ocean-400">
-                                {st.voltage}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-2 mt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
-                    <span>Total grid baseline: {stationsCount} stations</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">95 LGUs covered</span>
-                  </div>
-                </div>
+                <>
+                  <div
+                    className="fixed inset-0 z-[9998] bg-transparent cursor-default"
+                    onClick={() => setShowProvinceBreakdown(false)}
+                    aria-hidden="true"
+                  />
+                  <StationProvinceBreakdownPopover
+                    stationsCount={stationsCount}
+                    stationsByProvince={stationsByProvince}
+                    onClose={() => setShowProvinceBreakdown(false)}
+                    popoverRef={popoverRef}
+                    isMobile={false}
+                  />
+                </>
               )}
             </div>
 
@@ -407,11 +399,14 @@ export default function Navbar({
 
           <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
             {/* Mobile Live Activity Pill with Province Breakdown Popover */}
-            <div className="relative" ref={mobilePopoverRef}>
+            <div className="relative">
               <button
                 type="button"
                 id="mobile-station-province-trigger"
-                onClick={() => setShowProvinceBreakdown((prev) => !prev)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowProvinceBreakdown((prev) => !prev);
+                }}
                 className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold select-none transition-colors cursor-pointer ${badgeBorderBg}`}
                 title={badgeTooltip}
                 aria-expanded={showProvinceBreakdown}
@@ -430,57 +425,20 @@ export default function Navbar({
 
               {/* Mobile Province Breakdown Popover */}
               {showProvinceBreakdown && (
-                <div
-                  id="mobile-station-province-breakdown-popover"
-                  className="fixed sm:absolute top-14 left-3 right-3 sm:top-full sm:mt-2 sm:left-auto sm:right-0 sm:w-[320px] rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-xl p-3 z-[1600] animate-in fade-in zoom-in-95 duration-150 text-slate-800 dark:text-slate-100"
-                >
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/80 dark:border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-3.5 w-3.5 text-emerald-500 fill-current" />
-                      <span className="text-xs font-bold text-slate-900 dark:text-white">
-                        Panay Transmission Stations
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
-                      {stationsCount} Active
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-0.5">
-                    {stationsByProvince.map((group) => (
-                      <div
-                        key={group.province}
-                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-white/5"
-                      >
-                        <div className="flex items-center justify-between mb-1 text-[11px]">
-                          <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            {group.province}
-                          </span>
-                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                            {group.active_count ?? group.count} Active
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {group.stations.map((st) => (
-                            <span
-                              key={st.id}
-                              className="text-[9px] px-1 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 flex items-center gap-1"
-                            >
-                              <span>{st.name.replace(' Substation', '').replace(' Switching Station', '')}</span>
-                              <span className="font-mono text-[8px] font-bold text-ocean-600 dark:text-ocean-400">{st.voltage}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-2 mt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400">
-                    <span>Accounted across 4 provinces</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">95 LGUs covered</span>
-                  </div>
-                </div>
+                <>
+                  <div
+                    className="fixed inset-0 z-[9998] bg-transparent cursor-default"
+                    onClick={() => setShowProvinceBreakdown(false)}
+                    aria-hidden="true"
+                  />
+                  <StationProvinceBreakdownPopover
+                    stationsCount={stationsCount}
+                    stationsByProvince={stationsByProvince}
+                    onClose={() => setShowProvinceBreakdown(false)}
+                    popoverRef={mobilePopoverRef}
+                    isMobile={true}
+                  />
+                </>
               )}
             </div>
 

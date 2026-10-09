@@ -4,18 +4,27 @@
  * Provides canonical coordinate centers, bounding boxes, and GeoJSON chunk keys.
  */
 
+import lguQuickLookupData from '@/data/lgu_quick_lookup.json';
+
 export interface RegionTreeNode {
   id: string;
   name: string;
   shortName?: string;
-  type: 'nationwide' | 'island_group' | 'region' | 'province';
+  type: 'nationwide' | 'island_group' | 'region' | 'province' | 'municipality';
   chunkKey: string;
   parentPath?: string;
   center: [number, number];
   zoom: number;
   bounds?: [[number, number], [number, number]]; // [[minLat, minLng], [maxLat, maxLng]]
   children?: RegionTreeNode[];
+  pcode?: string;
+  province?: string;
 }
+
+export const PHILIPPINES_BOUNDS: [[number, number], [number, number]] = [
+  [4.5, 116.5],
+  [21.5, 127.5],
+];
 
 export const PHILIPPINES_REGION_TREE: RegionTreeNode[] = [
   {
@@ -26,10 +35,7 @@ export const PHILIPPINES_REGION_TREE: RegionTreeNode[] = [
     chunkKey: 'philippines',
     center: [12.8797, 121.7740],
     zoom: 6,
-    bounds: [
-      [4.5, 116.5],
-      [21.5, 127.5],
-    ],
+    bounds: PHILIPPINES_BOUNDS,
   },
   {
     id: 'luzon',
@@ -1587,9 +1593,130 @@ export const PHILIPPINES_REGION_TREE: RegionTreeNode[] = [
 // Flat lookup map for quick O(1) resolution by ID
 const FLAT_TREE_MAP: Map<string, RegionTreeNode> = new Map();
 
+function normalizeGeoKey(str: string): string {
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Enriches provinces in the hierarchy tree with their constituent municipalities
+ */
+function populateMunicipalityChildren(tree: RegionTreeNode[]) {
+  const lguMap = new Map<string, any>();
+  const lookup = (lguQuickLookupData as Record<string, any>) || {};
+
+  for (const entry of Object.values(lookup)) {
+    if (!entry || !entry.name || !entry.province) continue;
+    const normName = normalizeGeoKey(entry.name).replace(/capital/g, '');
+    const normProv = normalizeGeoKey(entry.province);
+    const key = `${normProv}_${normName}`;
+
+    if (!lguMap.has(key)) {
+      lguMap.set(key, entry);
+    } else {
+      const existing = lguMap.get(key);
+      if (entry.pcode && entry.pcode.length === 9 && existing.pcode?.length !== 9) {
+        lguMap.set(key, entry);
+      } else if (!entry.name.includes('(Capital)') && existing.name.includes('(Capital)')) {
+        lguMap.set(key, entry);
+      }
+    }
+  }
+
+  const lgusByProvince = new Map<string, any[]>();
+  for (const lgu of lguMap.values()) {
+    const provKey = normalizeGeoKey(lgu.province);
+    if (!lgusByProvince.has(provKey)) {
+      lgusByProvince.set(provKey, []);
+    }
+    lgusByProvince.get(provKey)!.push(lgu);
+  }
+
+  function recurse(nodeList: RegionTreeNode[]) {
+    for (const node of nodeList) {
+      if (node.type === 'province') {
+        const cleanName = node.name.replace(/Province|City|\(.*?\)/gi, '').trim();
+        const normClean = normalizeGeoKey(cleanName);
+        const normId = normalizeGeoKey(node.id);
+        const normShort = node.shortName ? normalizeGeoKey(node.shortName) : '';
+
+        let matchedLgus: any[] = [];
+        for (const [provKey, lgus] of lgusByProvince.entries()) {
+          if (
+            provKey === normClean ||
+            provKey === normId ||
+            provKey === normShort ||
+            (normClean.length >= 4 && provKey.startsWith(normClean)) ||
+            (normId.length >= 4 && provKey.startsWith(normId)) ||
+            (provKey.length >= 4 && normClean.startsWith(provKey))
+          ) {
+            matchedLgus = lgus;
+            break;
+          }
+        }
+
+        if (matchedLgus.length === 0) {
+          if (node.id === 'davao') {
+            matchedLgus = lgusByProvince.get('davaodelsur') || [];
+          } else if (node.id === 'maguindanao') {
+            matchedLgus = [
+              ...(lgusByProvince.get('maguindanao') || []),
+              ...(lgusByProvince.get('maguindanaodelnorte') || []),
+            ];
+          } else if (normClean.includes('manila') || node.chunkKey === 'ncr') {
+            const ncrLgus = [
+              ...(lgusByProvince.get('metromanila') || []),
+              ...(lgusByProvince.get('ncrseconddistrict') || []),
+            ];
+            matchedLgus = ncrLgus.filter((l) => {
+              const lNorm = normalizeGeoKey(l.name);
+              return lNorm.includes(normClean) || normClean.includes(lNorm);
+            });
+          }
+        }
+
+        if (matchedLgus.length > 0) {
+          const sorted = [...matchedLgus].sort((a, b) => a.name.localeCompare(b.name));
+          const parentBreadcrumb = node.parentPath ? `${node.parentPath} > ${node.name}` : node.name;
+
+          node.children = sorted.map((lgu) => {
+            const muniId = lgu.pcode || lgu.name.toLowerCase().replace(/\s+/g, '_');
+            return {
+              id: muniId,
+              name: lgu.name,
+              shortName: lgu.name,
+              type: 'municipality',
+              chunkKey: node.chunkKey || lgu.region_code || 'panay',
+              parentPath: parentBreadcrumb,
+              center: lgu.center,
+              zoom: 13,
+              bounds: lgu.bbox,
+              pcode: lgu.pcode,
+              province: lgu.province,
+            };
+          });
+        }
+      } else if (node.children) {
+        recurse(node.children);
+      }
+    }
+  }
+
+  recurse(tree);
+}
+
+// Automatically populate municipality children into all provinces
+populateMunicipalityChildren(PHILIPPINES_REGION_TREE);
+
 function buildFlatMap(nodes: RegionTreeNode[]) {
   nodes.forEach((node) => {
     FLAT_TREE_MAP.set(node.id.toLowerCase(), node);
+    if (node.pcode) {
+      FLAT_TREE_MAP.set(node.pcode.toLowerCase(), node);
+    }
+    const cleanName = node.name.toLowerCase().trim();
+    if (!FLAT_TREE_MAP.has(cleanName)) {
+      FLAT_TREE_MAP.set(cleanName, node);
+    }
     if (node.children) {
       buildFlatMap(node.children);
     }
@@ -1598,7 +1725,7 @@ function buildFlatMap(nodes: RegionTreeNode[]) {
 buildFlatMap(PHILIPPINES_REGION_TREE);
 
 /**
- * Resolves any region or province node by key
+ * Resolves any region, province, or municipality node by key or PCODE
  */
 export function findRegionTreeNode(id: string | null | undefined): RegionTreeNode | null {
   if (!id) return null;
@@ -1608,7 +1735,7 @@ export function findRegionTreeNode(id: string | null | undefined): RegionTreeNod
 
 /**
  * Returns full path breadcrumb string for trigger button display
- * e.g., "Western Visayas > Iloilo Province"
+ * e.g., "Western Visayas > Iloilo Province > Ajuy"
  */
 export function getRegionNodePath(id: string | null | undefined): string {
   const node = findRegionTreeNode(id);
@@ -1621,7 +1748,7 @@ export function getRegionNodePath(id: string | null | undefined): string {
 }
 
 /**
- * Resolves bounds for a given region/province key
+ * Resolves bounds for a given region, province, or municipality key
  */
 export function getRegionNodeBounds(id: string | null | undefined): [[number, number], [number, number]] | null {
   const node = findRegionTreeNode(id);
