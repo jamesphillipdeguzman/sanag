@@ -16,11 +16,106 @@ import {
   findRegionTreeNode,
   getRegionNodePath,
 } from '@/utils/philippinesHierarchy';
-import { getAllIndexedLgus, type LguLookupEntry } from '@/utils/lguQuickLookup';
+import findLguQuickLookup, { getAllIndexedLgus, type LguLookupEntry } from '@/utils/lguQuickLookup';
 
-interface RegionTreeSelectorProps {
+/**
+ * Resilient fallback helper for searching LGU nodes within the region hierarchy tree
+ */
+const findLguTreeFallback = (query: string, dataTree: RegionTreeNode[]): RegionTreeNode | null => {
+  if (!query || !dataTree) return null;
+  const normalized = query.toLowerCase().trim();
+  for (const node of dataTree) {
+    if (
+      node.name?.toLowerCase() === normalized ||
+      node.id?.toLowerCase() === normalized ||
+      (node.pcode && node.pcode.toLowerCase() === normalized)
+    ) {
+      return node;
+    }
+    if (node.children) {
+      const match = findLguTreeFallback(query, node.children);
+      if (match) return match;
+    }
+  }
+  return null;
+};
+
+export type GeographicLevel =
+  | 'country'
+  | 'island'
+  | 'island_group'
+  | 'region'
+  | 'province'
+  | 'city'
+  | 'municipality';
+
+export interface SelectedBoundary {
+  id: string;
+  name: string;
+  level: GeographicLevel;
+}
+
+export const formatLevelPrefix = (level: GeographicLevel): string => {
+  switch (level) {
+    case 'municipality': return 'Municipality';
+    case 'city': return 'City';
+    case 'province': return 'Province';
+    case 'region': return 'Region';
+    case 'island_group': return 'Island Group';
+    case 'island': return 'Scope';
+    case 'country': return 'Scope';
+    default: return 'Scope';
+  }
+};
+
+export const DEFAULT_BOUNDARY: SelectedBoundary = {
+  id: 'panay-cluster',
+  name: 'Panay Island (Default)',
+  level: 'island',
+};
+
+export const formatBadgeText = (boundary: SelectedBoundary): string => {
+  if (boundary.id === 'panay' || boundary.id === 'panay-cluster' || boundary.id === 'panay_cluster') {
+    return 'PANAY GRID';
+  }
+  switch (boundary.level) {
+    case 'municipality': return 'MUNICIPALITY';
+    case 'city': return 'CITY';
+    case 'province': return 'PROVINCE';
+    case 'region': return 'REGION';
+    case 'island_group': return 'ISLAND GROUP';
+    case 'island': return 'PANAY GRID';
+    case 'country': return 'NATIONWIDE';
+    default: return 'SCOPE';
+  }
+};
+
+export const getBadgeStyle = (boundary: SelectedBoundary): string => {
+  if (boundary.id === 'panay' || boundary.id === 'panay-cluster' || boundary.level === 'island') {
+    return 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/35';
+  }
+  switch (boundary.level) {
+    case 'municipality':
+      return 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border-teal-500/35';
+    case 'city':
+      return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/35';
+    case 'province':
+      return 'bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border-ocean-500/35';
+    case 'region':
+      return 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/35';
+    case 'island_group':
+      return 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/35';
+    case 'country':
+      return 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/35';
+    default:
+      return 'bg-slate-500/20 text-slate-700 dark:text-slate-300 border-slate-500/35';
+  }
+};
+
+export interface RegionTreeSelectorProps {
   currentRegionKey: string;
   selectedMunicipalityId?: string | null;
+  selectedMunicipalityName?: string | null;
   onSelectRegion: (key: string) => void;
   onSelectMunicipality?: (id: string) => void;
   className?: string;
@@ -29,6 +124,7 @@ interface RegionTreeSelectorProps {
 export default function RegionTreeSelector({
   currentRegionKey,
   selectedMunicipalityId,
+  selectedMunicipalityName,
   onSelectRegion,
   onSelectMunicipality,
   className = '',
@@ -139,6 +235,9 @@ export default function RegionTreeSelector({
 
   const handleSelect = (nodeId: string) => {
     onSelectRegion(nodeId);
+    if (onSelectMunicipality) {
+      onSelectMunicipality(''); // Clear municipality selection so scope switches to selected region/province
+    }
     setIsOpen(false);
   };
 
@@ -154,14 +253,122 @@ export default function RegionTreeSelector({
     setIsOpen(false);
   };
 
-  // Determine full display path for the trigger button
+  // Determine full display path for breadcrumb info
   const currentPathLabel = useMemo(() => {
     return getRegionNodePath(currentRegionKey);
   }, [currentRegionKey]);
 
-  const currentNode = useMemo(() => {
-    return findRegionTreeNode(currentRegionKey);
-  }, [currentRegionKey]);
+  // Dynamically resolve active boundary, level, and display name
+  const activeBoundary: SelectedBoundary = useMemo(() => {
+    // 1. If an individual municipality is explicitly selected:
+    if (selectedMunicipalityId) {
+      const targetName = selectedMunicipalityName || undefined;
+
+      // Try quick lookup index
+      let lgu: LguLookupEntry | null = null;
+      try {
+        if (typeof findLguQuickLookup === 'function') {
+          lgu = findLguQuickLookup(selectedMunicipalityId) || (targetName ? findLguQuickLookup(targetName) : null);
+        }
+      } catch {}
+
+      if (lgu) {
+        const name = lgu.name;
+        const isCity = name.toLowerCase().includes('city');
+        return {
+          id: lgu.pcode || selectedMunicipalityId,
+          name,
+          level: isCity ? 'city' : 'municipality',
+        };
+      }
+
+      // Try hierarchical tree fallback
+      const treeFallback =
+        findLguTreeFallback(selectedMunicipalityId, PHILIPPINES_REGION_TREE) ||
+        (targetName ? findLguTreeFallback(targetName, PHILIPPINES_REGION_TREE) : null);
+      if (treeFallback) {
+        const isCity = treeFallback.name.toLowerCase().includes('city');
+        return {
+          id: treeFallback.pcode || treeFallback.id,
+          name: treeFallback.name,
+          level: isCity ? 'city' : (treeFallback.type as GeographicLevel) || 'municipality',
+        };
+      }
+
+      // Try tree node map
+      const treeNode =
+        findRegionTreeNode(selectedMunicipalityId) ||
+        (targetName ? findRegionTreeNode(targetName) : null);
+      if (treeNode) {
+        const isCity = treeNode.name.toLowerCase().includes('city');
+        return {
+          id: treeNode.id,
+          name: treeNode.name,
+          level: isCity ? 'city' : (treeNode.type as GeographicLevel) || 'municipality',
+        };
+      }
+
+      if (targetName) {
+        const isCity = targetName.toLowerCase().includes('city');
+        return {
+          id: selectedMunicipalityId,
+          name: targetName,
+          level: isCity ? 'city' : 'municipality',
+        };
+      }
+
+      const isCity = selectedMunicipalityId.toLowerCase().includes('city');
+      return {
+        id: selectedMunicipalityId,
+        name: selectedMunicipalityId
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase()),
+        level: isCity ? 'city' : 'municipality',
+      };
+    }
+
+    // 2. Defaulting or regional scope selected:
+    if (!currentRegionKey || currentRegionKey === 'panay' || currentRegionKey === 'panay-cluster') {
+      return DEFAULT_BOUNDARY;
+    }
+
+    if (currentRegionKey === 'philippines' || currentRegionKey === 'nationwide') {
+      return {
+        id: 'philippines',
+        name: 'Nationwide (Philippines)',
+        level: 'country',
+      };
+    }
+
+    if (currentRegionKey === 'panay_guimaras') {
+      return {
+        id: 'panay_guimaras',
+        name: 'Western Visayas (Region VI)',
+        level: 'region',
+      };
+    }
+
+    const node = findRegionTreeNode(currentRegionKey);
+    if (node) {
+      let level: GeographicLevel = 'region';
+      if (node.type === 'nationwide') level = 'country';
+      else if (node.type === 'island_group') level = 'island_group';
+      else if (node.type === 'region') level = 'region';
+      else if (node.type === 'province') {
+        level = node.name.toLowerCase().includes('city') ? 'city' : 'province';
+      } else if (node.type === 'municipality') {
+        level = node.name.toLowerCase().includes('city') ? 'city' : 'municipality';
+      }
+
+      return {
+        id: node.id,
+        name: node.name,
+        level,
+      };
+    }
+
+    return DEFAULT_BOUNDARY;
+  }, [selectedMunicipalityId, selectedMunicipalityName, currentRegionKey]);
 
   // Filter tree nodes if search query is present
   const { filteredTree, autoExpandedIds } = useMemo(() => {
@@ -235,7 +442,7 @@ export default function RegionTreeSelector({
 
   return (
     <div ref={containerRef} className={`relative inline-block text-left ${className}`}>
-      {/* Trigger Button */}
+      {/* Trigger Button with Dynamic Administrative Prefix and Badge */}
       <button
         type="button"
         id="panay-map-region-selector-trigger"
@@ -243,28 +450,25 @@ export default function RegionTreeSelector({
         className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-ocean-500/35 bg-ocean-500/10 hover:bg-ocean-500/20 text-ocean-700 dark:text-ocean-200 transition-all cursor-pointer shadow-sm backdrop-blur-md max-w-full text-left active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-ocean-500/40"
         aria-haspopup="tree"
         aria-expanded={isOpen}
-        title={`Active Region: ${currentPathLabel}`}
+        title={`Active ${formatLevelPrefix(activeBoundary.level)}: ${activeBoundary.name} (${formatBadgeText(activeBoundary)})`}
       >
         <Compass className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
-        
+
         <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 hidden md:inline shrink-0">
-          Region:
+          {formatLevelPrefix(activeBoundary.level)}:
         </span>
 
         <span className="text-xs font-semibold text-slate-800 dark:text-white truncate max-w-[170px] xs:max-w-[210px] sm:max-w-[280px]">
-          {currentNode?.name || currentPathLabel}
+          {activeBoundary.name}
         </span>
 
-        {currentNode?.type === 'province' && (
-          <span className="text-[9.5px] px-1.5 py-0.2 rounded-md bg-ocean-500/20 text-ocean-600 dark:text-ocean-300 font-bold uppercase tracking-wider hidden sm:inline shrink-0">
-            Province
-          </span>
-        )}
+        <span className={`text-[9.5px] px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider hidden sm:inline shrink-0 border ${getBadgeStyle(activeBoundary)}`}>
+          {formatBadgeText(activeBoundary)}
+        </span>
 
         <ChevronDown
-          className={`h-3.5 w-3.5 text-slate-400 dark:text-slate-300 transition-transform duration-200 shrink-0 ml-0.5 ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`h-3.5 w-3.5 text-slate-400 dark:text-slate-300 transition-transform duration-200 shrink-0 ml-0.5 ${isOpen ? 'rotate-180' : ''
+            }`}
         />
       </button>
 
@@ -324,9 +528,27 @@ export default function RegionTreeSelector({
               </div>
 
               {/* Breadcrumb Indicator of Active Target */}
-              <div className="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1 truncate font-mono">
-                <span className="text-sky-600 dark:text-sky-400 font-semibold">Active:</span>
-                <span className="truncate">{currentPathLabel}</span>
+              <div className="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-1 truncate font-mono">
+                <div className="flex items-center gap-1 min-w-0 truncate">
+                  <span className="text-sky-600 dark:text-sky-400 font-semibold shrink-0">Active:</span>
+                  <span className="truncate">{activeBoundary.name}</span>
+                  <span className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase shrink-0 border ${getBadgeStyle(activeBoundary)}`}>
+                    {formatBadgeText(activeBoundary)}
+                  </span>
+                </div>
+                {selectedMunicipalityId && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectMunicipality?.('');
+                    }}
+                    className="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shrink-0 cursor-pointer"
+                    title="Clear selected municipality and return to regional scope"
+                  >
+                    Clear LGU
+                  </button>
+                )}
               </div>
             </div>
 
@@ -431,13 +653,13 @@ function TreeNodeItem({
   const isSelected =
     node.type === 'municipality'
       ? Boolean(
-          selectedMunicipalityId &&
-          (node.id.toLowerCase() === selectedMunicipalityId.toLowerCase() ||
-           (node.pcode && node.pcode.toLowerCase() === selectedMunicipalityId.toLowerCase()) ||
-           node.name.toLowerCase() === selectedMunicipalityId.toLowerCase())
-        )
+        selectedMunicipalityId &&
+        (node.id.toLowerCase() === selectedMunicipalityId.toLowerCase() ||
+          (node.pcode && node.pcode.toLowerCase() === selectedMunicipalityId.toLowerCase()) ||
+          node.name.toLowerCase() === selectedMunicipalityId.toLowerCase())
+      )
       : node.id.toLowerCase() === currentRegionKey.toLowerCase() ||
-        (node.id === 'panay' && currentRegionKey === 'panay_guimaras');
+      (node.id === 'panay' && currentRegionKey === 'panay_guimaras');
 
   const paddingLeft = `${depth * 14 + 6}px`;
 
@@ -469,11 +691,10 @@ function TreeNodeItem({
     <div className="space-y-0.5 select-none" role="treeitem" aria-expanded={hasChildren ? isExpanded : undefined}>
       <div
         style={{ paddingLeft }}
-        className={`group flex items-center justify-between py-1.5 pr-2 rounded-xl text-xs transition-all cursor-pointer ${
-          isSelected
-            ? 'bg-ocean-500/20 text-ocean-900 dark:text-white font-bold border border-ocean-500/40 shadow-sm'
-            : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
-        }`}
+        className={`group flex items-center justify-between py-1.5 pr-2 rounded-xl text-xs transition-all cursor-pointer ${isSelected
+          ? 'bg-ocean-500/20 text-ocean-900 dark:text-white font-bold border border-ocean-500/40 shadow-sm'
+          : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+          }`}
         onClick={() => {
           // If island group, toggling expand feels more natural than selecting root
           if (node.type === 'island_group') {

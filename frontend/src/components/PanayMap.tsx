@@ -412,7 +412,12 @@ export default function PanayMap({
   }, [allMunicipalities, extraMunicipalities, currentRegionKey]);
 
   const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
-  const selected = allMunicipalities.find((m: Municipality) => m.id === selectedId);
+  const selected = allMunicipalities.find(
+    (m: Municipality) =>
+      m.id === selectedId ||
+      (m.pcode && m.pcode === selectedId) ||
+      (m.name && selectedId && m.name.toLowerCase() === selectedId.toLowerCase())
+  );
 
   // Audio-Spatial Emergency Indicator: dynamically resolve target municipality
   // Prioritizes hovered municipality first for instant spatial acoustic feedback,
@@ -534,6 +539,7 @@ export default function PanayMap({
               <RegionTreeSelector
                 currentRegionKey={currentRegionKey}
                 selectedMunicipalityId={selectedId}
+                selectedMunicipalityName={selected?.name}
                 onSelectRegion={handleRegionChange}
                 onSelectMunicipality={onSelect}
               />
@@ -2436,6 +2442,7 @@ function LeafletMap({
 
         layersRef.current[id] = featureLayer;
         const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
+        if (pcode) layersRef.current[pcode] = featureLayer;
         const rawName = String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
         const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -3148,12 +3155,14 @@ function LeafletMap({
         tileLayerRef.current.redraw();
       }
 
-      // 3. Reset leaflet pane origin transform offsets and redraw all vector/tile layers
+      // 3. Reset leaflet pane origin transform offsets and safely redraw mounted vector/tile layers
       map.eachLayer((layer: any) => {
-        if (layer && typeof layer.redraw === 'function') {
-          layer.redraw();
-        } else if (layer && typeof layer._updatePath === 'function') {
-          layer._updatePath();
+        try {
+          if (layer && layer._map && typeof layer.redraw === 'function') {
+            layer.redraw();
+          }
+        } catch {
+          // Suppress unmounted layer bounds errors safely
         }
       });
 
@@ -3189,18 +3198,18 @@ function LeafletMap({
       if (selectedId && layersRef.current[selectedId]) {
         try {
           const b = layersRef.current[selectedId].getBounds?.();
-          if (b && b.isValid && b.isValid()) {
+          if (b && typeof b.isValid === 'function' && b.isValid()) {
             selectedEntityBounds = b;
           }
         } catch {}
       }
-      if (!selectedEntityBounds && activeRegionBoundsRef.current && activeRegionBoundsRef.current.isValid && activeRegionBoundsRef.current.isValid()) {
+      if (!selectedEntityBounds && activeRegionBoundsRef.current && typeof activeRegionBoundsRef.current.isValid === 'function' && activeRegionBoundsRef.current.isValid()) {
         selectedEntityBounds = activeRegionBoundsRef.current;
       }
       if (!selectedEntityBounds && geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
         try {
           const b = (geoJsonLayerRef.current as any).getBounds();
-          if (b && b.isValid && b.isValid()) {
+          if (b && typeof b.isValid === 'function' && b.isValid()) {
             selectedEntityBounds = b;
           }
         } catch {}
@@ -3217,10 +3226,14 @@ function LeafletMap({
         }
       }
 
-      if (selectedEntityBounds && selectedEntityBounds.isValid && selectedEntityBounds.isValid()) {
-        map.fitBounds(selectedEntityBounds, { padding: [30, 30], animate: false });
-      } else if (PANAY_BOUNDS) {
-        map.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: false });
+      if (selectedEntityBounds && typeof selectedEntityBounds.isValid === 'function' && selectedEntityBounds.isValid()) {
+        try {
+          map.fitBounds(selectedEntityBounds, { padding: [30, 30], animate: false });
+        } catch {}
+      } else if (PANAY_BOUNDS && typeof PANAY_BOUNDS.isValid === 'function' && PANAY_BOUNDS.isValid()) {
+        try {
+          map.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: false });
+        } catch {}
       }
 
       // Synchronize active hazard event simulation
