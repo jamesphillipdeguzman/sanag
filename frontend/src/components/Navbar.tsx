@@ -1,5 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, Menu, Moon, RefreshCw, Satellite, Sun, X, BookOpen, Compass, BarChart3, Calendar, Map as MapIcon, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Activity,
+  Menu,
+  Moon,
+  RefreshCw,
+  Satellite,
+  Sun,
+  X,
+  BookOpen,
+  Compass,
+  BarChart3,
+  Calendar,
+  Map as MapIcon,
+  Settings,
+  ChevronDown,
+  Zap,
+} from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
 import { useSettings } from '@/context/SettingsContext';
@@ -50,10 +66,22 @@ export default function Navbar({
     isRefetching,
     hasConnectionError,
     refetchAll,
+    systemTelemetry,
   } = useServerHealth();
 
-  const stationsCount = reportingStationsCount ?? PANAY_GRID_TRANSMISSION_NODES;
-  const lgusCount = totalLgus ?? PANAY_TOTAL_LGUS;
+  const stationsCount =
+    reportingStationsCount ??
+    systemTelemetry?.activeStationsCount ??
+    PANAY_GRID_TRANSMISSION_NODES;
+  const lgusCount =
+    totalLgus ??
+    systemTelemetry?.totalLgus ??
+    PANAY_TOTAL_LGUS;
+
+  const [showProvinceBreakdown, setShowProvinceBreakdown] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const mobilePopoverRef = useRef<HTMLDivElement>(null);
+  const stationsByProvince = systemTelemetry?.stationsByProvince || [];
 
   // Determine grounded telemetry status based on genuine API status probe
   const isServerWakingState = isWaking || (isReconnecting && !isOffline);
@@ -62,7 +90,7 @@ export default function Navbar({
   let badgeBorderBg = 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   let badgeLabel = `${stationsCount} Active Stations · ${lgusCount} LGUs`;
   let badgeMobileLabel = `${stationsCount} Active Stations`;
-  let badgeTooltip = `Panay Grid Telemetry: ${stationsCount} Active Monitoring Stations · ${lgusCount} LGUs Monitored (API Status: Online)`;
+  let badgeTooltip = `Panay Grid Telemetry: ${stationsCount} Active Monitoring Stations · ${lgusCount} LGUs Monitored (Click to view breakdown per province)`;
   let hasPingDot = true;
   let dotPingClass = 'bg-emerald-400 opacity-75';
   let dotSolidClass = 'bg-emerald-500';
@@ -89,6 +117,28 @@ export default function Navbar({
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  useEffect(() => {
+    if (!showProvinceBreakdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current && !popoverRef.current.contains(target) &&
+        mobilePopoverRef.current && !mobilePopoverRef.current.contains(target)
+      ) {
+        setShowProvinceBreakdown(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowProvinceBreakdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showProvinceBreakdown]);
 
   const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
@@ -185,20 +235,96 @@ export default function Navbar({
           </div>
 
           <div className="hidden md:flex items-center gap-2.5">
-            {/* Live Monitoring Activity Counter Pill */}
-            <div
-              className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition-colors ${badgeBorderBg}`}
-              title={badgeTooltip}
-            >
-              <span className="relative flex h-2 w-2">
-                {hasPingDot && (
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
-                )}
-                <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
-              </span>
-              <span className="whitespace-nowrap font-medium text-[11px] lg:text-xs">
-                {badgeLabel}
-              </span>
+            {/* Live Monitoring Activity Counter Pill with Province Breakdown Popover */}
+            <div className="relative" ref={popoverRef}>
+              <button
+                type="button"
+                id="navbar-station-province-trigger"
+                onClick={() => setShowProvinceBreakdown((prev) => !prev)}
+                className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition-colors cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${badgeBorderBg}`}
+                title="Click to view transmission station breakdown per province"
+                aria-expanded={showProvinceBreakdown}
+                aria-haspopup="dialog"
+              >
+                <span className="relative flex h-2 w-2">
+                  {hasPingDot && (
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
+                </span>
+                <span className="whitespace-nowrap font-medium text-[11px] lg:text-xs">
+                  {badgeLabel}
+                </span>
+                <ChevronDown className={`h-3 w-3 transition-transform duration-200 opacity-70 ${showProvinceBreakdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Province Breakdown Popover Modal */}
+              {showProvinceBreakdown && (
+                <div
+                  id="station-province-breakdown-popover"
+                  className="absolute top-full mt-2 right-0 w-[320px] sm:w-[350px] rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-xl p-3.5 z-[1600] animate-in fade-in zoom-in-95 duration-150 text-slate-800 dark:text-slate-100"
+                >
+                  <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-200/80 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                        <Zap className="h-4 w-4 fill-current" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                          Active Transmission Stations
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Grouped across 4 Panay provinces
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                      {stationsCount} Active
+                    </span>
+                  </div>
+
+                  {/* Province Grid */}
+                  <div className="flex flex-col gap-2 my-1 max-h-[280px] overflow-y-auto pr-0.5">
+                    {stationsByProvince.map((group) => (
+                      <div
+                        key={group.province}
+                        className="p-2.5 rounded-xl bg-slate-50/90 dark:bg-slate-800/50 border border-slate-200/70 dark:border-white/5 hover:border-emerald-500/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
+                            {group.province}
+                          </span>
+                          <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                            {group.active_count ?? group.count} Active Station{(group.active_count ?? group.count) > 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {group.stations.map((st) => (
+                            <span
+                              key={st.id}
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/70 text-slate-700 dark:text-slate-300 flex items-center gap-1 shadow-xs"
+                              title={`${st.name} (${st.voltage}) · Status: ${st.status}`}
+                            >
+                              <span className="font-medium text-slate-800 dark:text-slate-200">
+                                {st.name.replace(' Substation', '').replace(' Switching Station', '')}
+                              </span>
+                              <span className="font-mono text-[9px] font-bold text-ocean-600 dark:text-ocean-400">
+                                {st.voltage}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 mt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                    <span>Total grid baseline: {stationsCount} stations</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">95 LGUs covered</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Version Badge */}
@@ -280,20 +406,82 @@ export default function Navbar({
           </div>
 
           <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
-            {/* Mobile Live Activity Pill */}
-            <div
-              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold select-none transition-colors ${badgeBorderBg}`}
-              title={badgeTooltip}
-            >
-              <span className="relative flex h-1.5 w-1.5">
-                {hasPingDot && (
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
-                )}
-                <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotSolidClass}`} />
-              </span>
-              <span>
-                {isServerWakingState ? 'Waking' : isServerOfflineState ? 'Offline' : `${stationsCount} Stations`}
-              </span>
+            {/* Mobile Live Activity Pill with Province Breakdown Popover */}
+            <div className="relative" ref={mobilePopoverRef}>
+              <button
+                type="button"
+                id="mobile-station-province-trigger"
+                onClick={() => setShowProvinceBreakdown((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold select-none transition-colors cursor-pointer ${badgeBorderBg}`}
+                title={badgeTooltip}
+                aria-expanded={showProvinceBreakdown}
+              >
+                <span className="relative flex h-1.5 w-1.5">
+                  {hasPingDot && (
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotSolidClass}`} />
+                </span>
+                <span>
+                  {isServerWakingState ? 'Waking' : isServerOfflineState ? 'Offline' : `${stationsCount} Stations`}
+                </span>
+                <ChevronDown className={`h-2.5 w-2.5 transition-transform duration-200 opacity-70 ${showProvinceBreakdown ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Mobile Province Breakdown Popover */}
+              {showProvinceBreakdown && (
+                <div
+                  id="mobile-station-province-breakdown-popover"
+                  className="fixed sm:absolute top-14 left-3 right-3 sm:top-full sm:mt-2 sm:left-auto sm:right-0 sm:w-[320px] rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-xl p-3 z-[1600] animate-in fade-in zoom-in-95 duration-150 text-slate-800 dark:text-slate-100"
+                >
+                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/80 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-3.5 w-3.5 text-emerald-500 fill-current" />
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Panay Transmission Stations
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300">
+                      {stationsCount} Active
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-0.5">
+                    {stationsByProvince.map((group) => (
+                      <div
+                        key={group.province}
+                        className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-white/5"
+                      >
+                        <div className="flex items-center justify-between mb-1 text-[11px]">
+                          <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            {group.province}
+                          </span>
+                          <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                            {group.active_count ?? group.count} Active
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {group.stations.map((st) => (
+                            <span
+                              key={st.id}
+                              className="text-[9px] px-1 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 flex items-center gap-1"
+                            >
+                              <span>{st.name.replace(' Substation', '').replace(' Switching Station', '')}</span>
+                              <span className="font-mono text-[8px] font-bold text-ocean-600 dark:text-ocean-400">{st.voltage}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 mt-2 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400">
+                    <span>Accounted across 4 provinces</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">95 LGUs covered</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Mobile Theme Toggle */}

@@ -15,6 +15,7 @@ import { apiFetch, setHasLocalFallbackData, safeJsonParse } from './services/api
 import { useServerHealth } from './context/ServerHealthContext.tsx'
 import { useSettings } from './context/SettingsContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
+import { PANAY_TRANSMISSION_STATIONS } from './data/transmissionStations.ts'
 import {
   isPanayRegion,
   isNationwideRegion,
@@ -928,12 +929,23 @@ function App() {
     return () => window.removeEventListener('sanag:reset-errors', onReset)
   }, [])
 
+  // Dynamically calculate active transmission station telemetry nodes from grounded infrastructure dataset
+  const reportingStationsCount = useMemo(() => {
+    return PANAY_TRANSMISSION_STATIONS.filter((s) => s.status === 'active').length
+  }, [])
+
+  // Dynamically calculate total monitored LGUs based on loaded municipality dataset with safe fallback
+  const totalLgusCount = useMemo(() => {
+    return municipalities && municipalities.length > 0 ? municipalities.length : 95
+  }, [municipalities])
+
   return (
     <div id="top" className="min-h-screen flex flex-col bg-slate-50 dark:bg-ink-950 text-slate-900 dark:text-slate-100 transition-colors">
       <Navbar
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
-        totalLgus={municipalities?.length || 95}
+        reportingStationsCount={reportingStationsCount}
+        totalLgus={totalLgusCount}
       />
 
       {/* Floating Backend Sleep / Cold-Start Recovery Indicator */}
@@ -968,7 +980,7 @@ function App() {
       )}
 
       {/* Main Tabbed View Routing Container */}
-      <main className="flex-1 pt-16">
+      <main className="flex-1 pt-16 w-full max-w-full overflow-x-hidden">
         {/* Tab 1: Overview (#overview) */}
         {activeTab === 'overview' && (
           activeEvent ? (
@@ -1038,12 +1050,12 @@ function App() {
           id="map"
           className={
             activeTab === 'map'
-              ? 'h-full w-full'
+              ? 'h-full w-full max-w-full overflow-x-hidden'
               : 'fixed -left-[99999px] top-0 w-full pointer-events-none opacity-0 invisible -z-50 overflow-hidden'
           }
           aria-hidden={activeTab !== 'map'}
         >
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 sm:py-6 w-full max-w-full overflow-x-hidden">
             <ErrorBoundary name="Panay Spatial Map" resetKey={activeEventId}>
               <PanayMap
                 municipalities={municipalitiesWithRank}

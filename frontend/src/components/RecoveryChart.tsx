@@ -282,6 +282,17 @@ export default function RecoveryChart({
     return municipalities;
   }, [municipalities, scopeFilter]);
 
+  // Dynamic count of Panay Island LGUs within available dataset
+  const panayCount = useMemo(() => {
+    const count = municipalities.filter((m) => isPanayProvince(m.province)).length;
+    return count > 0 ? count : 95;
+  }, [municipalities]);
+
+  // Dynamic count of Nationwide Hubs within available dataset
+  const nationwideCount = useMemo(() => {
+    return municipalities.length > 0 ? municipalities.length : 187;
+  }, [municipalities]);
+
   // Determine which municipalities to display based on viewMode, scopeFilter, or selectedId
   const featured = useMemo(() => {
     if (selectedId) {
@@ -695,7 +706,7 @@ export default function RecoveryChart({
 
         {/* Scope & View Mode Toggle Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Regional Scope Toggle: Panay Island (95) vs Nationwide Hubs (187) */}
+          {/* Regional Scope Toggle: Panay Island (${panayCount}) vs Nationwide Hubs (${nationwideCount}) */}
           <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-ink-950/80 border border-slate-200 dark:border-white/10 shadow-inner">
             <button
               type="button"
@@ -708,10 +719,10 @@ export default function RecoveryChart({
                   ? 'bg-white dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-slate-200 dark:border-ocean-500/30 shadow-sm'
                   : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
               }`}
-              title="Filter comparative recovery curves to Panay Island LGUs (95)"
+              title={`Filter comparative recovery curves to Panay Island LGUs (${panayCount})`}
             >
               <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
-              <span>Panay Island (95)</span>
+              <span>Panay Island ({panayCount})</span>
             </button>
             <button
               type="button"
@@ -724,10 +735,10 @@ export default function RecoveryChart({
                   ? 'bg-white dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 border border-slate-200 dark:border-ocean-500/30 shadow-sm'
                   : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
               }`}
-              title="Filter comparative recovery curves to Nationwide Hubs (187)"
+              title={`Filter comparative recovery curves to Nationwide Hubs (${nationwideCount})`}
             >
               <Globe className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
-              <span>Nationwide Hubs (187)</span>
+              <span>Nationwide Hubs ({nationwideCount})</span>
             </button>
           </div>
 
