@@ -1,39 +1,117 @@
 import React from 'react';
 import { X, Lock, Radio } from 'lucide-react';
-import type { GdacsAlert } from '@/types';
+import type { GdacsAlert, DisasterEvent } from '@/types';
 
 export interface GDACSModalProps {
-  alert: GdacsAlert | null;
+  alert?: GdacsAlert | DisasterEvent | any | null;
+  event?: GdacsAlert | DisasterEvent | any | null;
   onClose: () => void;
   activeEventId?: string | null;
-  onSimulate?: (alert: GdacsAlert) => void;
+  activeSimulatedEvent?: any;
+  onSimulate?: (event: any) => void;
+  setActiveSimulatedEvent?: (event: any) => void;
   className?: string;
 }
 
 export default function GDACSModal({
   alert,
+  event: eventProp,
   onClose,
   activeEventId = null,
+  activeSimulatedEvent,
   onSimulate,
+  setActiveSimulatedEvent,
   className = '',
 }: GDACSModalProps) {
-  if (!alert) return null;
+  const event = alert || eventProp;
+  if (!event) return null;
 
-  const alertLevel = (alert.alert_level || 'Green').toLowerCase();
+  const rawLevel = (event.alert_level || event.severity || 'Green').toString().toLowerCase();
   let alertBadgeStyle = 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-700/50';
-  if (alertLevel === 'red') {
+  if (rawLevel === 'red' || rawLevel === 'severe') {
     alertBadgeStyle = 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-700/50';
-  } else if (alertLevel === 'orange') {
+  } else if (rawLevel === 'orange' || rawLevel === 'high') {
     alertBadgeStyle = 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-400 dark:border-amber-700/50';
   }
 
-  const isCurrentActiveSimulation =
-    activeEventId === alert.id ||
-    activeEventId === `gdacs-${alert.event_id}` ||
-    activeEventId === String(alert.event_id);
+  const eventName = (event.name || event.eventname || event.title || '').toLowerCase().trim();
+  const rawAlertId = event.event_id != null ? String(event.event_id) : undefined;
 
-  const lat = alert.latitude ?? alert.coordinates?.[0];
-  const lng = alert.longitude ?? alert.coordinates?.[1];
+  // A. Standardize Active State Matching:
+  // Handles both live alerts and historical incident objects
+  const isCurrentSimulated = Boolean(
+    (activeSimulatedEvent || activeEventId) &&
+    (
+      (activeSimulatedEvent && (
+        (typeof activeSimulatedEvent === 'object' && (
+          (activeSimulatedEvent.id && (
+            activeSimulatedEvent.id === event.id ||
+            activeSimulatedEvent.id === event.eventId ||
+            activeSimulatedEvent.id === event.event_id ||
+            activeSimulatedEvent.id === `gdacs-${event.event_id}` ||
+            activeSimulatedEvent.id === String(event.event_id)
+          )) ||
+          (activeSimulatedEvent.eventId && (
+            activeSimulatedEvent.eventId === (event.eventId || event.id || event.event_id)
+          )) ||
+          (activeSimulatedEvent.name && eventName && (
+            activeSimulatedEvent.name.toLowerCase().trim() === eventName
+          ))
+        )) ||
+        (typeof activeSimulatedEvent === 'string' && (
+          activeSimulatedEvent === event.id ||
+          activeSimulatedEvent === event.eventId ||
+          activeSimulatedEvent === event.event_id ||
+          activeSimulatedEvent === `gdacs-${event.event_id}` ||
+          activeSimulatedEvent === String(event.event_id) ||
+          (eventName && activeSimulatedEvent.toLowerCase().trim() === eventName)
+        ))
+      )) ||
+      (activeEventId && (
+        activeEventId === event.id ||
+        activeEventId === event.eventId ||
+        activeEventId === event.event_id ||
+        activeEventId === `gdacs-${event.event_id}` ||
+        activeEventId === String(event.event_id) ||
+        (rawAlertId && (activeEventId === rawAlertId || activeEventId === `gdacs-${rawAlertId}`)) ||
+        (eventName && activeEventId.toLowerCase().trim() === eventName)
+      ))
+    )
+  );
+
+  // B. Universal Simulation Handler:
+  // Works uniformly regardless of whether event comes from live GDACS or historical archives
+  const handleSimulate = () => {
+    if (isCurrentSimulated) {
+      // Option to stop/reset simulation
+      setActiveSimulatedEvent?.(null);
+      onSimulate?.(null);
+    } else {
+      const simulatedPayload = {
+        id: event.id || event.eventId || (event.event_id != null ? `gdacs-${event.event_id}` : event.name),
+        eventId: event.eventId || event.id,
+        event_id: event.event_id,
+        name: event.name || event.eventname || event.title || 'Simulated Event',
+        date: event.date || event.startDate || event.fromdate,
+        startDate: event.startDate || event.date,
+        endDate: event.endDate,
+        type: event.type || "historical",
+        severity: event.severity || event.severity_text || event.alert_level || 'Severe',
+        alert_level: event.alert_level || (event.severity === 'Severe' ? 'Red' : event.severity === 'High' ? 'Orange' : 'Green'),
+        coordinates: event.coordinates || (event.latitude != null && event.longitude != null ? [event.latitude, event.longitude] : undefined),
+        latitude: event.latitude ?? event.coordinates?.[0],
+        longitude: event.longitude ?? event.coordinates?.[1],
+        isHistorical: !event.isLive && !event.is_live_simulated && (event.event_id == null || event.type === 'grid_failure'),
+        viirs_data_available: event.viirs_data_available !== false,
+      };
+
+      setActiveSimulatedEvent?.(simulatedPayload);
+      onSimulate?.(simulatedPayload);
+    }
+  };
+
+  const lat = event.latitude ?? event.coordinates?.[0];
+  const lng = event.longitude ?? event.coordinates?.[1];
 
   return (
     <div
@@ -48,18 +126,18 @@ export default function GDACSModal({
           <span
             className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${alertBadgeStyle}`}
           >
-            {alert.alert_level || 'Green'} Alert
+            {event.alert_level || event.severity || 'Green Alert'}
           </span>
-          {alert.type && (
+          {event.type && (
             <span className="rounded-md bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-700 dark:text-slate-300">
-              {alert.type}
+              {event.type}
             </span>
           )}
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white transition-colors p-1 rounded-lg cursor-pointer shrink-0"
+          className="text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:white transition-colors p-1 rounded-lg cursor-pointer shrink-0"
           aria-label="Close alert card"
         >
           <X className="w-4 h-4" />
@@ -70,12 +148,12 @@ export default function GDACSModal({
       <div className="space-y-3 overflow-hidden">
         <div>
           <h3 id="gdacs-alert-title" className="text-base font-bold text-slate-900 dark:text-white mb-1 leading-snug">
-            {alert.name}
+            {event.name}
           </h3>
-          {alert.description && (
+          {event.description && (
             <div className="max-h-24 overflow-y-auto pr-1 text-xs scrollbar-none">
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                {alert.description}
+                {event.description}
               </p>
             </div>
           )}
@@ -94,15 +172,15 @@ export default function GDACSModal({
           <div className="flex items-center justify-between">
             <span className="text-slate-500 dark:text-slate-400 text-xs">Date:</span>
             <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-              {alert.date || 'Active Event'}
+              {event.date || event.startDate || 'Active Event'}
             </span>
           </div>
 
-          {alert.severity_text && (
+          {(event.severity_text || event.severity) && (
             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
               <span className="text-slate-500 dark:text-slate-400 text-xs">Severity:</span>
               <span className="truncate ml-1 font-semibold text-amber-700 dark:text-amber-300">
-                {alert.severity_text}
+                {event.severity_text || event.severity}
               </span>
             </div>
           )}
@@ -111,12 +189,12 @@ export default function GDACSModal({
             <span className="text-slate-500 dark:text-slate-400 text-xs">VIIRS Radiance:</span>
             <span
               className={
-                alert.viirs_data_available !== false
+                event.viirs_data_available !== false
                   ? 'text-emerald-700 dark:text-emerald-400 font-semibold'
                   : 'text-amber-700 dark:text-amber-400 font-semibold'
               }
             >
-              {alert.viirs_data_available !== false
+              {event.viirs_data_available !== false
                 ? '✓ Ready to Simulate'
                 : '⏳ VIIRS Data Pending'}
             </span>
@@ -124,17 +202,13 @@ export default function GDACSModal({
         </div>
 
         {/* Action / Simulation Trigger (Guaranteed no-scrollbar trigger) */}
-        {onSimulate && (
+        {(onSimulate || setActiveSimulatedEvent) && (
           <div className="pt-1 shrink-0 overflow-hidden">
-            {isCurrentActiveSimulation ? (
-              <div className="w-full py-2.5 px-3 rounded-xl text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 flex items-center justify-center gap-1.5 cursor-default">
-                <span>✓ Active Simulation</span>
-              </div>
-            ) : alert.viirs_data_available === false ? (
+            {event.viirs_data_available === false && !isCurrentSimulated ? (
               <button
                 type="button"
                 disabled
-                className="w-full py-2.5 px-3 rounded-xl text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center gap-1.5 cursor-not-allowed opacity-75 pointer-events-none"
+                className="w-full py-2.5 px-4 rounded-xl text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center gap-2 cursor-not-allowed opacity-75 pointer-events-none"
                 title="Simulation disabled: Live hazard pending NASA VIIRS nightlight radiance data"
               >
                 <Lock className="w-3.5 h-3.5" />
@@ -143,12 +217,24 @@ export default function GDACSModal({
             ) : (
               <button
                 type="button"
-                onClick={() => onSimulate(alert)}
-                className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 hover:brightness-105 shadow-md shadow-ocean-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-                title="Ready to Simulate: Confirmed NASA VIIRS radiance data available"
+                onClick={handleSimulate}
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  isCurrentSimulated
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950/40 border border-emerald-400/50"
+                    : "bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-950/30"
+                }`}
               >
-                <Radio className="w-3.5 h-3.5 text-white" />
-                <span>Simulate Event</span>
+                {isCurrentSimulated ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                    <span>Active Simulation</span>
+                  </>
+                ) : (
+                  <>
+                    <Radio className="w-3.5 h-3.5" />
+                    <span>Simulate Event</span>
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -159,3 +245,4 @@ export default function GDACSModal({
 }
 
 export { GDACSModal as EventAlertCard };
+

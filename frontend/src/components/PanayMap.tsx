@@ -26,6 +26,7 @@ import {
   type ActiveSimulationMap,
 } from '@/services/simulation';
 import GDACSModal from '@/components/GDACSModal';
+import { PANAY_TRANSMISSION_STATIONS } from '@/data/transmissionStations';
 
 export interface PanayMapProps {
   municipalities: Municipality[];
@@ -76,6 +77,8 @@ export interface LeafletMapProps {
   onSelectGdacsAlert?: (alert: GdacsAlert | null) => void;
   isLoading?: boolean;
   loadingMessage?: string;
+  showImpactBuffers?: boolean;
+  onToggleImpactBuffers?: (enabled: boolean) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -83,6 +86,43 @@ const statusLabels: Record<string, string> = {
   recovering: 'Active Restoration',
   warning: 'Active Restoration',
   critical: 'Critical Deficit',
+};
+
+export interface AlertColorTheme {
+  dot: string;
+  badgeBg: string;
+  badgeText: string;
+  badgeBorder: string;
+}
+
+export const getAlertTheme = (level?: string, severity?: string): AlertColorTheme => {
+  const normalized = `${level || ''} ${severity || ''}`.toLowerCase();
+
+  if (normalized.includes('red') || normalized.includes('severe')) {
+    return {
+      dot: 'bg-rose-500 shadow-rose-500/50',
+      badgeBg: 'bg-rose-950/80 dark:bg-rose-950/80',
+      badgeText: 'text-rose-300 dark:text-rose-300',
+      badgeBorder: 'border-rose-700/60 dark:border-rose-700/60',
+    };
+  }
+
+  if (normalized.includes('orange') || normalized.includes('amber') || normalized.includes('high')) {
+    return {
+      dot: 'bg-amber-500 shadow-amber-500/50',
+      badgeBg: 'bg-amber-950/80 dark:bg-amber-950/80',
+      badgeText: 'text-amber-300 dark:text-amber-300',
+      badgeBorder: 'border-amber-700/60 dark:border-amber-700/60',
+    };
+  }
+
+  // Green / Default fallback
+  return {
+    dot: 'bg-emerald-500 shadow-emerald-500/50',
+    badgeBg: 'bg-emerald-950/80 dark:bg-emerald-950/80',
+    badgeText: 'text-emerald-300 dark:text-emerald-300',
+    badgeBorder: 'border-emerald-700/60 dark:border-emerald-700/60',
+  };
 };
 
 const TILE_LAYER_OPTIONS: L.TileLayerOptions = {
@@ -192,6 +232,7 @@ export default function PanayMap({
   const [showGrid, setShowGrid] = useState<boolean>(false);
   const [mapZoom, setMapZoom] = useState(8);
   const [hasRenderedFeatures, setHasRenderedFeatures] = useState<boolean>(true);
+  const [showImpactBuffers, setShowImpactBuffers] = useState<boolean>(true);
 
   // Handle ESC key to dismiss fullscreen map mode
   useEffect(() => {
@@ -612,6 +653,8 @@ export default function PanayMap({
                       ? 'Connecting / Calibrating radiance...'
                       : undefined
                   }
+                  showImpactBuffers={showImpactBuffers}
+                  onToggleImpactBuffers={setShowImpactBuffers}
                 />
 
                 {/* Night Glow Fallback Notification Toast — positioned top-16 so it never collides with top-3 toolbar */}
@@ -723,6 +766,28 @@ export default function PanayMap({
               >
                 <Ruler className={`h-3.5 w-3.5 ${showScaleRuler ? 'text-sky-500 dark:text-sky-300' : 'text-slate-500 dark:text-slate-400'}`} />
                 <span>Scale Ruler</span>
+              </button>
+
+              {/* Impact Buffers & Infrastructure Toggle */}
+              <button
+                type="button"
+                id="impact-buffers-toggle"
+                onClick={() => setShowImpactBuffers(!showImpactBuffers)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${showImpactBuffers
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/30'
+                  : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                title={showImpactBuffers ? 'Hide Radial Impact Buffers & Substation Hubs' : 'Show Radial Impact Buffers & Substation Hubs'}
+                aria-pressed={showImpactBuffers}
+              >
+                <Radio className={`h-3.5 w-3.5 ${showImpactBuffers ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                <span>Impact Buffers</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${showImpactBuffers
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'
+                  }`}>
+                  {showImpactBuffers ? 'ON' : 'OFF'}
+                </span>
               </button>
 
               {/* Spatial Audio Emergency Indicator Toggle */}
@@ -905,6 +970,22 @@ export default function PanayMap({
                   <span className="font-medium text-slate-700 dark:text-slate-300">≥ 90% Near-Full</span>
                 </div>
               </div>
+
+              {/* Row 3: Radial Buffers & Infrastructure Legend */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none pt-1 border-t border-slate-200/80 dark:border-slate-800/80 text-slate-600 dark:text-slate-300">
+                <div className="flex items-center gap-1.5 shrink-0" title="Immediate Outage Zone with <60% restoration level">
+                  <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/30"></span>
+                  <span>Critical Outage Core (&lt;60%)</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0" title="Secondary Warning & Grid Stress Buffer (35km monitored perimeter)">
+                  <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400"></span>
+                  <span>Warning &amp; Grid Buffer (35km)</span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0" title="High-voltage transmission substation node (230kV / 138kV / 69kV)">
+                  <span className="w-2.5 h-2.5 rounded-full border border-emerald-400 bg-emerald-400/30"></span>
+                  <span>Energized Substation Hub</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -913,9 +994,52 @@ export default function PanayMap({
       {/* Detail side panel */}
       {!isMaximized && (
         <div className="lg:col-span-4 flex flex-col w-full max-w-full min-w-0">
-        {selected ? (
-          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
-            <div>
+          {selected ? (
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
+              <div>
+                {/* Active Event Context Header */}
+                <div className="p-3 mb-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-2 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {(() => {
+                        const alertLvl = (activeEvent as any)?.alertLevel || activeEvent?.alert_level;
+                        const theme = getAlertTheme(alertLvl, activeEvent?.severity);
+                        return (
+                          <span
+                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${theme.dot} animate-pulse`}
+                          />
+                        );
+                      })()}
+                      <div className="min-w-0">
+                        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                          Selected Incident (Step 1)
+                        </div>
+                        <div className="text-xs font-bold text-slate-100 truncate">
+                          {activeEvent?.name || 'Panay Island Grid Collapse'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                        {activeEvent?.date || '2024-01-02'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {Boolean(activeEvent) && (
+                    <div className="mt-1 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                      <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Active Baseline Simulation
+                      </span>
+                      <span className="text-slate-400 text-[10px]">
+                        {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '95'} LGUs calibrated
+                      </span>
+                    </div>
+                  )}
+                </div>
+
               <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10">
                 <div>
                   <div className="flex items-center gap-1.5 mb-1">
@@ -1044,7 +1168,50 @@ export default function PanayMap({
               </span>
             </div>
 
-            <div className="flex flex-col items-center justify-center text-center py-8">
+            {/* Active Event Context Header */}
+            <div className="p-3 my-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-2 shadow-sm text-left">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                      activeEvent?.severity === 'Severe' || (activeEvent?.severity as string) === 'red' || (activeEvent as any)?.alertLevel === 'Red' || activeEvent?.alert_level === 'Red'
+                        ? 'bg-rose-500 animate-pulse'
+                        : activeEvent?.severity === 'High' || (activeEvent?.severity as string) === 'orange' || (activeEvent as any)?.alertLevel === 'Orange' || activeEvent?.alert_level === 'Orange'
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                      Selected Incident (Step 1)
+                    </div>
+                    <div className="text-xs font-bold text-slate-100 truncate">
+                      {activeEvent?.name || 'Panay Island Grid Collapse'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
+                    {activeEvent?.date || '2024-01-02'}
+                  </span>
+                </div>
+              </div>
+
+              {Boolean(activeEvent) && (
+                <div className="mt-1 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Active Baseline Simulation
+                  </span>
+                  <span className="text-slate-400 text-[10px]">
+                    {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '95'} LGUs calibrated
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center justify-center text-center py-6">
               <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-3 shadow-inner">
                 <MapPin className="h-6 w-6 text-ocean-500 dark:text-ocean-400 animate-bounce" />
               </div>
@@ -1492,6 +1659,8 @@ function LeafletMap({
   onSelectGdacsAlert,
   isLoading = false,
   loadingMessage,
+  showImpactBuffers = true,
+  onToggleImpactBuffers,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const { settings } = useSettings();
@@ -1512,6 +1681,9 @@ function LeafletMap({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const layersRef = useRef<Record<string, any>>({});
   const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
+  const bufferGroupRef = useRef<L.LayerGroup | null>(null);
+  const showImpactBuffersRef = useRef<boolean>(showImpactBuffers);
+  showImpactBuffersRef.current = showImpactBuffers;
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
   const activeRegionBoundsRef = useRef<L.LatLngBounds | null>(null);
   const isProgrammaticMoveRef = useRef<boolean>(false);
@@ -1534,13 +1706,15 @@ function LeafletMap({
   const regionCacheRef = useRef<Map<string, GeoJSON.FeatureCollection>>(new Map());
   const geojsonCacheRef = useRef<Map<string, any>>(new Map());
   const activeChunkKeyRef = useRef<string>(selectedRegionKey || 'panay');
-  const epicenterBufferRef = useRef<L.Circle | null>(null);
+  const epicenterBufferRef = useRef<L.LayerGroup | L.Circle | null>(null);
   const onFeaturesInViewChangeRef = useRef(onFeaturesInViewChange);
   onFeaturesInViewChangeRef.current = onFeaturesInViewChange;
 
   const activeStreakLayerRef = useRef<L.GeoJSON | null>(null);
   const streakTimerRef = useRef<any>(null);
   const lastFocusedIdRef = useRef<string | null>(null);
+  const savedViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null);
+  const lastFlownEventIdRef = useRef<string | null>(null);
 
   const activeSimulationMapRef = useRef<ActiveSimulationMap>({});
   const [, setActiveSimulationMapState] = useState<ActiveSimulationMap>({});
@@ -1706,27 +1880,251 @@ function LeafletMap({
     }
   }, [onChunkLoaded]);
 
-  const clearEpicenterBuffer = () => {
+  // Synchronize baseline radiance across all layers whenever active disaster event changes
+  useEffect(() => {
+    if (activeEvent) {
+      activeEventRef.current = activeEvent;
+      runSimulationForCurrentRegion(activeEvent);
+    }
+  }, [activeEvent, runSimulationForCurrentRegion]);
+
+  const clearEpicenterBuffer = useCallback(() => {
     if (epicenterBufferRef.current && mapRef.current) {
       try {
-        mapRef.current.removeLayer(epicenterBufferRef.current);
+        if (typeof (epicenterBufferRef.current as any).clearLayers === 'function') {
+          (epicenterBufferRef.current as any).clearLayers();
+        }
+        mapRef.current.removeLayer(epicenterBufferRef.current as any);
       } catch { }
       epicenterBufferRef.current = null;
     }
-  };
+  }, []);
 
-  const drawEpicenterBuffer = (lat: number, lng: number) => {
+  const drawEpicenterBuffer = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;
     if (!map) return;
     clearEpicenterBuffer();
-    const buffer = L.circle([lat, lng], {
-      radius: 45000,
-      color: '#f59e0b',
+    if (!showImpactBuffersRef.current) return;
+
+    const group = L.layerGroup().addTo(map);
+
+    // Primary Impact Corridor (<60% Deficit)
+    const primaryBuffer = L.circle([lat, lng], {
+      radius: 20000,
+      color: '#ef4444',
       dashArray: '6, 6',
-      fillOpacity: 0.15,
-    }).addTo(map);
-    epicenterBufferRef.current = buffer;
-  };
+      weight: 2,
+      fillColor: '#ef4444',
+      fillOpacity: 0.08,
+      interactive: true,
+    });
+    primaryBuffer.bindTooltip(
+      `
+      <div class="px-2 py-1 text-xs font-sans">
+        <div class="font-bold text-rose-400 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+          Primary Impact Corridor · Immediate Outage Zone (&lt;60% Deficit)
+        </div>
+        <div class="text-[11px] text-slate-300 mt-0.5">
+          Radius: 20 km · Severe Grid Disruptions & Infrastructure Strain
+        </div>
+        <div class="text-[10px] text-slate-400 mt-0.5">
+          Immediate restoration priority; transmission & feeder lines de-energized.
+        </div>
+      </div>
+      `,
+      {
+        sticky: true,
+        className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+      }
+    );
+
+    // Secondary Warning & Grid Stress Buffer (60%–89% Restoration Risk Zone)
+    const secondaryBuffer = L.circle([lat, lng], {
+      radius: 35000,
+      color: '#f59e0b',
+      dashArray: '8, 8',
+      weight: 2,
+      fillColor: '#f59e0b',
+      fillOpacity: 0.08,
+      interactive: true,
+    });
+    secondaryBuffer.bindTooltip(
+      `
+      <div class="px-2 py-1 text-xs font-sans">
+        <div class="font-bold text-amber-400 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>
+          Secondary Warning & Grid Stress Buffer
+        </div>
+        <div class="text-[11px] text-slate-300 mt-0.5">
+          Radius: 35 km · 60%–89% Restoration Risk Zone
+        </div>
+        <div class="text-[10px] text-slate-400 mt-0.5">
+          Monitored for load-shedding and transmission feeder isolation.
+        </div>
+      </div>
+      `,
+      {
+        sticky: true,
+        className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+      }
+    );
+
+    group.addLayer(secondaryBuffer);
+    group.addLayer(primaryBuffer);
+    epicenterBufferRef.current = group;
+  }, [clearEpicenterBuffer]);
+
+  // Render high-voltage substations and radial impact buffers across the map
+  const renderBufferRingsAndSubstations = useCallback(() => {
+    const group = bufferGroupRef.current;
+    if (!group || !mapRef.current) return;
+    group.clearLayers();
+
+    if (!showImpactBuffers) return;
+
+    // 1. High-Voltage Transmission Substation Nodes (Panay Grid Infrastructure)
+    PANAY_TRANSMISSION_STATIONS.forEach((station) => {
+      if (!station.coordinates) return;
+      const [stLat, stLng] = station.coordinates;
+      const isEnergized = station.operationalStatus === 'Energized';
+      const isIslanded = station.operationalStatus === 'Islanded';
+      const color = isEnergized ? '#10b981' : isIslanded ? '#f59e0b' : '#ef4444';
+      const statusLabel = isEnergized ? 'Energized' : isIslanded ? 'Islanded' : 'Offline';
+
+      const iconHtml = `
+        <div class="substation-node-pin" style="position:relative; width:18px; height:18px; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+          <span style="position:absolute; width:100%; height:100%; border-radius:9999px; background-color:${color}; opacity:0.35; animation:ping 2.2s cubic-bezier(0,0,0.2,1) infinite;"></span>
+          <span style="position:relative; width:9px; height:9px; border-radius:9999px; background-color:${color}; border:2px solid #0f172a; box-shadow:0 0 8px ${color};"></span>
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: iconHtml,
+        className: 'custom-substation-node-icon',
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      });
+
+      const marker = L.marker([stLat, stLng], {
+        icon: customIcon,
+        zIndexOffset: 750,
+        interactive: true,
+      });
+
+      marker.bindTooltip(
+        `
+        <div class="px-2 py-1 text-xs font-sans">
+          <div class="font-bold flex items-center gap-1.5" style="color: ${color};">
+            <span class="w-2 h-2 rounded-full" style="background-color: ${color}; box-shadow: 0 0 8px ${color};"></span>
+            ${station.name} (${station.voltage})
+          </div>
+          <div class="text-[11px] text-slate-300 mt-0.5">
+            Substation Node · ${statusLabel} · ${station.operator}
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">
+            Feeder Coverage: ${station.coverage.join(', ')}
+          </div>
+        </div>
+        `,
+        {
+          sticky: true,
+          direction: 'top',
+          offset: [0, -10],
+          className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+        }
+      );
+
+      group.addLayer(marker);
+    });
+
+    // 2. Incident / Hazard Epicenter Radial Buffers if active event or selected hazard
+    let epicLat: number | null = null;
+    let epicLng: number | null = null;
+
+    if (activeEvent) {
+      epicLat = activeEvent.latitude ?? activeEvent.coordinates?.[0] ?? null;
+      epicLng = activeEvent.longitude ?? activeEvent.coordinates?.[1] ?? null;
+    } else if (selectedGdacsAlert) {
+      epicLat = selectedGdacsAlert.latitude ?? selectedGdacsAlert.coordinates?.[0] ?? null;
+      epicLng = selectedGdacsAlert.longitude ?? selectedGdacsAlert.coordinates?.[1] ?? null;
+    }
+
+    if (epicLat != null && epicLng != null && !isNaN(epicLat) && !isNaN(epicLng)) {
+      // Primary Impact Corridor (<60% Deficit)
+      const primaryRadius = 20000;
+      const primaryBuffer = L.circle([epicLat, epicLng], {
+        radius: primaryRadius,
+        color: '#ef4444',
+        dashArray: '6, 6',
+        weight: 2,
+        fillColor: '#ef4444',
+        fillOpacity: 0.08,
+        interactive: true,
+      });
+
+      primaryBuffer.bindTooltip(
+        `
+        <div class="px-2 py-1 text-xs font-sans">
+          <div class="font-bold text-rose-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+            Primary Impact Corridor · Immediate Outage Zone (&lt;60% Deficit)
+          </div>
+          <div class="text-[11px] text-slate-300 mt-0.5">
+            Radius: ${Math.round(primaryRadius / 1000)} km · Severe Grid Disruptions & Infrastructure Strain
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">
+            Immediate restoration priority; transmission & feeder lines de-energized.
+          </div>
+        </div>
+        `,
+        {
+          sticky: true,
+          className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+        }
+      );
+
+      // Secondary Warning & Grid Stress Buffer (60%–89% Restoration Risk Zone)
+      const secondaryRadius = 35000;
+      const secondaryBuffer = L.circle([epicLat, epicLng], {
+        radius: secondaryRadius,
+        color: '#f59e0b',
+        dashArray: '8, 8',
+        weight: 2,
+        fillColor: '#f59e0b',
+        fillOpacity: 0.08,
+        interactive: true,
+      });
+
+      secondaryBuffer.bindTooltip(
+        `
+        <div class="px-2 py-1 text-xs font-sans">
+          <div class="font-bold text-amber-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></span>
+            Secondary Warning & Grid Stress Buffer
+          </div>
+          <div class="text-[11px] text-slate-300 mt-0.5">
+            Radius: ${Math.round(secondaryRadius / 1000)} km · 60%–89% Restoration Risk Zone
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">
+            Monitored for load-shedding and transmission feeder isolation.
+          </div>
+        </div>
+        `,
+        {
+          sticky: true,
+          className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+        }
+      );
+
+      group.addLayer(secondaryBuffer);
+      group.addLayer(primaryBuffer);
+    }
+  }, [showImpactBuffers, activeEvent, selectedGdacsAlert]);
+
+  useEffect(() => {
+    renderBufferRingsAndSubstations();
+  }, [renderBufferRingsAndSubstations]);
 
   const checkViewportFeatures = () => {
     const map = mapRef.current;
@@ -1769,7 +2167,13 @@ function LeafletMap({
       if (!map || !(map as any)._loaded || !(map as any)._panes) return;
 
       try {
-        (map.invalidateSize as any)({ pan: false });
+        (map.invalidateSize as any)({ animate: false, pan: false });
+
+        if (savedViewRef.current) {
+          map.setView(savedViewRef.current.center, savedViewRef.current.zoom, {
+            animate: false,
+          });
+        }
 
         const currentTileLayer = tileLayerRef.current;
         const tileUrl = getBaseTileUrl(isLightRef.current, nightGlowModeRef.current, settings?.basemapSource);
@@ -1817,6 +2221,7 @@ function LeafletMap({
     window.addEventListener('resize', handleInvalidate);
 
     if (isActiveTab) {
+      handleInvalidate();
       const timer1 = setTimeout(handleInvalidate, 50);
       const timer2 = setTimeout(handleInvalidate, 150);
       const timer3 = setTimeout(handleInvalidate, 350);
@@ -2859,6 +3264,10 @@ function LeafletMap({
     const gdacsGroup = L.layerGroup().addTo(map);
     gdacsGroupRef.current = gdacsGroup;
 
+    // Dedicated layer group for radial buffers and grid infrastructure
+    const bufferGroup = L.layerGroup().addTo(map);
+    bufferGroupRef.current = bufferGroup;
+
     // Viewport-driven dynamic regional GeoJSON chunk loading with debouncing
     let moveTimeout: any = null;
     const handleViewportChange = () => {
@@ -2888,7 +3297,18 @@ function LeafletMap({
       }, 250);
     };
 
+    const handleCameraStateChange = () => {
+      if (mapRef.current) {
+        savedViewRef.current = {
+          center: mapRef.current.getCenter(),
+          zoom: mapRef.current.getZoom(),
+        };
+      }
+    };
+
     map.on('moveend', handleViewportChange);
+    map.on('moveend', handleCameraStateChange);
+    map.on('zoomend', handleCameraStateChange);
 
     let disposed = false;
 
@@ -2896,7 +3316,11 @@ function LeafletMap({
       .then((geojson) => {
         if (disposed || mapRef.current !== map || !geojson) return;
         renderRegionGeoJson(initialRegionKey, geojson);
-        map.setView(initialPreset.center, initialPreset.zoom);
+        if (savedViewRef.current) {
+          map.setView(savedViewRef.current.center, savedViewRef.current.zoom, { animate: false });
+        } else {
+          map.setView(initialPreset.center, initialPreset.zoom, { animate: false });
+        }
       })
       .catch(() => {
         // Ignore aborted or unavailable map data during component cleanup.
@@ -2906,7 +3330,16 @@ function LeafletMap({
       disposed = true;
       clearTimeout(moveTimeout);
       map.off('moveend', handleViewportChange);
+      map.off('moveend', handleCameraStateChange);
+      map.off('zoomend', handleCameraStateChange);
       clearEpicenterBuffer();
+      if (bufferGroupRef.current && mapRef.current) {
+        try {
+          bufferGroupRef.current.clearLayers();
+          mapRef.current.removeLayer(bufferGroupRef.current);
+        } catch {}
+        bufferGroupRef.current = null;
+      }
       if (activeStreakLayerRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(activeStreakLayerRef.current);
@@ -2939,6 +3372,22 @@ function LeafletMap({
       gdacsGroupRef.current = null;
     };
   }, []);
+
+  // Statically restore camera state and recalculate container dimensions when returning to Map tab
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isActiveTab) return;
+
+    // Immediately recalculate container dimensions without animation
+    (map.invalidateSize as any)({ pan: false, debounceMoveend: false, animate: false });
+
+    // Statically restore camera position without drifting or animated re-centering
+    if (savedViewRef.current) {
+      map.setView(savedViewRef.current.center, savedViewRef.current.zoom, {
+        animate: false,
+      });
+    }
+  }, [isActiveTab]);
 
   // Dynamically swap Leaflet base tile layer and polygon borders when theme changes
   useEffect(() => {
@@ -3402,15 +3851,15 @@ function LeafletMap({
         if (!selectedIdRef.current) {
           if (selectedRegionKey === 'philippines') {
             activeRegionBoundsRef.current = L.latLngBounds(PHILIPPINES_BOUNDS);
-            currentMap.fitBounds(PHILIPPINES_BOUNDS, { padding: [20, 20], animate: true });
+            currentMap.fitBounds(PHILIPPINES_BOUNDS, { padding: [20, 20], animate: false });
           } else if (selectedRegionKey === 'panay') {
             activeRegionBoundsRef.current = PANAY_BOUNDS;
-            currentMap.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: true });
+            currentMap.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: false });
           } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
             activeRegionBoundsRef.current = provinceBounds;
-            currentMap.fitBounds(provinceBounds, { padding: [20, 20], maxZoom: 11, animate: true });
+            currentMap.fitBounds(provinceBounds, { padding: [20, 20], maxZoom: 11, animate: false });
           } else if (preset) {
-            currentMap.flyTo(preset.center, preset.zoom, { duration: 1.0 });
+            currentMap.setView(preset.center, preset.zoom, { animate: false });
           }
         } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
           activeRegionBoundsRef.current = provinceBounds;
@@ -3680,8 +4129,28 @@ function LeafletMap({
         fillColor: color,
         fillOpacity: 0.07,
         dashArray: '4, 6',
-        interactive: false,
+        interactive: true,
       });
+      circle.bindTooltip(
+        `
+        <div class="px-2 py-1 text-xs font-sans">
+          <div class="font-bold flex items-center gap-1.5" style="color: ${color};">
+            <span class="w-2 h-2 rounded-full" style="background-color: ${color}; box-shadow: 0 0 6px ${color};"></span>
+            ${alert.name} Hazard Perimeter
+          </div>
+          <div class="text-[11px] text-slate-300 mt-0.5">
+            Radius: ${Math.round(circleRadius / 1000)} km · GDACS ${(alert.alert_level || 'Green').toUpperCase()} Alert
+          </div>
+          <div class="text-[10px] text-slate-400 mt-0.5">
+            Active monitored hazard radius and atmospheric influence zone.
+          </div>
+        </div>
+        `,
+        {
+          sticky: true,
+          className: 'custom-leaflet-buffer-tooltip bg-slate-900/95 border border-slate-700 rounded-xl shadow-xl',
+        }
+      );
       group.addLayer(circle);
 
       group.addLayer(marker);
@@ -3736,27 +4205,30 @@ function LeafletMap({
           runSimulationForCurrentRegion(currentEvt);
         }
 
-        // Concurrently attempt regional chunk loading; fallback to epicenter buffer circle if no chunk covers it
-        loadRegionByCoordinates(targetLat, targetLng).then((loaded) => {
-          if (!loaded) {
-            drawEpicenterBuffer(targetLat, targetLng);
-          } else {
-            clearEpicenterBuffer();
-          }
-          if (currentEvt) {
-            runSimulationForCurrentRegion(currentEvt);
-          }
-          checkViewportFeatures();
-        });
+        if (lastFlownEventIdRef.current !== activeEventId) {
+          lastFlownEventIdRef.current = activeEventId;
 
-        const rawZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
-        const currentZoom = typeof rawZoom === 'number' && isFinite(rawZoom) ? rawZoom : 8;
-        const targetZoom = Math.max(currentZoom, 8);
+          // Concurrently attempt regional chunk loading; fallback to epicenter buffer circle if no chunk covers it
+          loadRegionByCoordinates(targetLat, targetLng).then((loaded) => {
+            if (!loaded) {
+              drawEpicenterBuffer(targetLat, targetLng);
+            } else {
+              clearEpicenterBuffer();
+            }
+            if (currentEvt) {
+              runSimulationForCurrentRegion(currentEvt);
+            }
+            checkViewportFeatures();
+          });
 
-        map.flyTo([targetLat, targetLng], targetZoom, {
-          animate: true,
-          duration: 1.2,
-        });
+          const rawZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
+          const currentZoom = typeof rawZoom === 'number' && isFinite(rawZoom) ? rawZoom : 8;
+          const targetZoom = Math.max(currentZoom, 8);
+
+          map.setView([targetLat, targetLng], targetZoom, {
+            animate: false,
+          });
+        }
       }
     } catch (err) {
       // Suppress any silent Leaflet canvas/tile animation exceptions
@@ -3784,7 +4256,12 @@ function LeafletMap({
           alert={selectedGdacsAlert}
           onClose={() => setSelectedGdacsAlert(null)}
           activeEventId={activeEventId}
+          activeSimulatedEvent={activeEvent}
           onSimulate={async (alert) => {
+            if (!alert) {
+              setSelectedGdacsAlert(null);
+              return;
+            }
             const alertLat = alert.latitude ?? alert.coordinates?.[0];
             const alertLng = alert.longitude ?? alert.coordinates?.[1];
 
@@ -3839,6 +4316,8 @@ function LeafletMap({
         isRefreshing={isRefreshingMap}
         nightGlowMode={nightGlowMode}
         onToggleNightGlow={onNightGlowModeChange ? () => onNightGlowModeChange(!nightGlowMode) : undefined}
+        showImpactBuffers={showImpactBuffers}
+        onToggleImpactBuffers={onToggleImpactBuffers ? () => onToggleImpactBuffers(!showImpactBuffers) : undefined}
         isMaximized={isMaximized}
         onToggleMaximize={onToggleMaximize}
         isHeaderCollapsed={isHeaderCollapsed}
@@ -3846,6 +4325,41 @@ function LeafletMap({
         isLoading={Boolean(isLoading || isRefreshingMap)}
         loadingMessage={isRefreshingMap ? 'Refreshing basemap tiles...' : loadingMessage}
       />
+
+      {/* Maximized / Fullscreen Floating Active Disaster Event Contextual Pill */}
+      {isMaximized && activeEvent && (() => {
+        const alertLvl = (activeEvent as any).alertLevel || activeEvent.alert_level;
+        const theme = getAlertTheme(alertLvl, activeEvent.severity);
+        const alertLabel = (alertLvl || activeEvent.severity || 'Active Baseline').toUpperCase();
+
+        return (
+          <div className="absolute top-3 left-14 z-[1000] pointer-events-auto">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-xl text-xs text-slate-200">
+              {/* Status Dot */}
+              <span className={`w-2 h-2 rounded-full shrink-0 ${theme.dot} animate-pulse`} />
+
+              {/* Event Name */}
+              <span className="font-semibold text-white truncate max-w-[220px]">
+                {activeEvent.name}
+              </span>
+
+              {/* Event Date */}
+              {activeEvent.date && (
+                <span className="text-slate-400 font-mono text-[10px] border-l border-slate-700 pl-2">
+                  {activeEvent.date}
+                </span>
+              )}
+
+              {/* Dynamic Alert Level Badge */}
+              <span
+                className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wide border ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
+              >
+                {alertLabel}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -3863,6 +4377,8 @@ interface MapLockOverlayProps {
   isRefreshing?: boolean;
   nightGlowMode?: boolean;
   onToggleNightGlow?: () => void;
+  showImpactBuffers?: boolean;
+  onToggleImpactBuffers?: () => void;
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   isHeaderCollapsed?: boolean;
@@ -3880,6 +4396,8 @@ function MapLockOverlay({
   isRefreshing = false,
   nightGlowMode = true,
   onToggleNightGlow,
+  showImpactBuffers = true,
+  onToggleImpactBuffers,
   isMaximized = false,
   onToggleMaximize,
   isHeaderCollapsed = false,
@@ -3928,6 +4446,23 @@ function MapLockOverlay({
         >
           <Sparkles className={`w-3.5 h-3.5 ${nightGlowMode ? 'text-amber-900 dark:text-amber-300 animate-pulse' : 'text-slate-300'}`} />
           <span className="hidden sm:inline">{nightGlowMode ? 'Night Glow' : 'Vector Map'}</span>
+        </button>
+      )}
+
+      {onToggleImpactBuffers && (
+        <button
+          type="button"
+          id="impact-buffers-overlay-toggle"
+          onClick={onToggleImpactBuffers}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${showImpactBuffers
+            ? 'bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/40 shadow-sm'
+            : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700'
+            }`}
+          aria-label={showImpactBuffers ? 'Hide Impact Buffer Rings & Substations' : 'Show Impact Buffer Rings & Substations'}
+          title="Toggle Hazard Impact Buffers & Grid Substations"
+        >
+          <Radio className={`w-3.5 h-3.5 ${showImpactBuffers ? 'text-amber-600 dark:text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+          <span className="hidden sm:inline">Buffers</span>
         </button>
       )}
 
@@ -4061,35 +4596,7 @@ function VIIRSScaleRuler({
   zoom = 8,
   scaleCalibration = 1.0,
 }: VIIRSScaleRulerProps) {
-  const visible = pinned || mapHovered || showGrid;
-
-  // Track viewport width for responsive mobile layout adaptation
-  const [isMobile, setIsMobile] = useState<boolean>(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 640 : false
-  );
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const axisColor = nightGlow ? 'rgba(251,191,36,0.70)' : 'rgba(51,65,85,0.50)';
-  const tickColor = nightGlow ? 'rgba(251,191,36,0.55)' : 'rgba(51,65,85,0.40)';
-  const labelColor = nightGlow ? 'rgba(251,191,36,0.80)' : 'rgba(51,65,85,0.70)';
-  const noteColor = nightGlow ? 'rgba(251,191,36,0.50)' : 'rgba(100,116,139,0.70)';
-  const bgColor = nightGlow ? 'rgba(9,13,24,0.92)' : 'rgba(255,255,255,0.96)';
-  const borderColor = showGrid
-    ? (nightGlow ? 'rgba(245,158,11,0.55)' : 'rgba(14,165,233,0.55)')
-    : (nightGlow ? 'rgba(255,170,51,0.22)' : 'rgba(15,23,42,0.12)');
-  const shadowVal = nightGlow
-    ? '0 2px 14px rgba(0,0,0,0.65), 0 0 10px rgba(255,170,51,0.08)'
-    : '0 2px 10px rgba(0,0,0,0.10)';
-
   // ── NASA VIIRS Day/Night Band (DNB) Spatial Scale Math (1 DNB = 500m Nominal) ──
-  // Calibrated ground meter distance for 1 DNB pixel (default: 500m)
   const effectiveCalibration = typeof scaleCalibration === 'number' && isFinite(scaleCalibration) && scaleCalibration > 0
     ? scaleCalibration
     : 1.0;
@@ -4099,202 +4606,83 @@ function VIIRSScaleRuler({
   const latRad = (11 * Math.PI) / 180;
   const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, zoom);
 
-  // Target on-screen pixel width (smaller on mobile to prevent clipping)
-  const targetPx = isMobile ? 80 : 105;
-  const targetMeters = targetPx * metersPerPixel;
+  // Target on-screen pixel width (~140px-180px for the widget ruler bar)
+  const targetPx = 160;
 
   // Standard cartographic round distances in meters
   const NICE_DISTANCES = [
     250, 500, 1000, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 30000, 50000, 75000, 100000, 150000, 200000
   ];
 
-  // Select optimal distance that produces an unwarped bar between min and max pixel constraints
   let chosenDistance = NICE_DISTANCES[0];
   let minDiff = Infinity;
   for (const dist of NICE_DISTANCES) {
     const px = dist / metersPerPixel;
     const diff = Math.abs(px - targetPx);
-    if (diff < minDiff && px >= (isMobile ? 55 : 75) && px <= (isMobile ? 105 : 135)) {
+    if (diff < minDiff && px >= 90 && px <= 240) {
       minDiff = diff;
       chosenDistance = dist;
     }
   }
 
-  // Exact screen width in pixels: mathematically exact, no stretch or warp
-  const RULER_W = Math.max(isMobile ? 60 : 75, Math.round(chosenDistance / metersPerPixel));
-  const RULER_H = isMobile ? 26 : 30;
-
   // Exact DNB pixel count represented by this distance
-  const totalDnbPixels = chosenDistance / calibratedDnbMeters;
-  const dnbLabel = totalDnbPixels >= 1
-    ? (Number.isInteger(totalDnbPixels) ? `${totalDnbPixels}` : totalDnbPixels.toFixed(1))
-    : totalDnbPixels.toFixed(2);
+  const totalDnbPixels = Math.round(chosenDistance / calibratedDnbMeters);
+  const dnbLabel = totalDnbPixels >= 1 ? `${totalDnbPixels}` : (chosenDistance / calibratedDnbMeters).toFixed(1);
 
   // Human-readable metric labels
   let maxLabel: string;
   let midLabel: string;
   if (chosenDistance >= 1000) {
     const totalKm = chosenDistance / 1000;
-    maxLabel = `${totalKm >= 10 ? Math.round(totalKm) : totalKm.toFixed(1)}km`;
+    maxLabel = `${totalKm >= 10 ? Math.round(totalKm) : totalKm.toFixed(1)} km`;
     const midKm = totalKm / 2;
-    midLabel = `${midKm >= 10 ? Math.round(midKm) : midKm.toFixed(1)}km`;
+    midLabel = `${midKm >= 10 ? Math.round(midKm) : midKm.toFixed(1)} km`;
   } else {
-    maxLabel = `${chosenDistance}m`;
-    midLabel = `${Math.round(chosenDistance / 2)}m`;
+    maxLabel = `${chosenDistance} m`;
+    midLabel = `${Math.round(chosenDistance / 2)} m`;
   }
 
-  const TICK_LABELS = ['0', midLabel, maxLabel];
-
-  // Alternating dual-color segment fill for clear scale subdivision
-  const segmentFills = nightGlow
-    ? ['#ffaa33', '#4a2f0a', '#ffaa33', '#4a2f0a']
-    : ['#1e293b', '#cbd5e1', '#1e293b', '#cbd5e1'];
-
   return (
-    <div
-      onClick={onToggleGrid}
-      aria-label={`VIIRS scale indicator: 1 DNB = ${Math.round(calibratedDnbMeters)}m, total span ${maxLabel}`}
-      className="absolute bottom-16 right-6 z-[1200] pointer-events-auto cursor-pointer"
-      style={{
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0) scale(1)' : 'translateY(5px) scale(0.97)',
-        transition: 'opacity 0.25s ease, transform 0.25s ease, border-color 0.2s ease',
-        maxWidth: 'calc(100% - 24px)',
-      }}
-      title="Click to toggle 500m VIIRS spatial grid overlay"
-    >
-      <div
-        style={{
-          padding: isMobile ? '5px 7px 6px 7px' : '7px 9px 8px 8px',
-          borderRadius: '10px',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          background: bgColor,
-          border: `1px solid ${borderColor}`,
-          boxShadow: shadowVal,
-          display: 'inline-flex',
-          flexDirection: 'column',
-          gap: isMobile ? '3px' : '5px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Ruler style={{ width: isMobile ? 9 : 10, height: isMobile ? 9 : 10, flexShrink: 0, color: nightGlow ? '#f59e0b' : '#475569' }} />
-            <span style={{
-              fontSize: isMobile ? '8px' : '9px',
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              color: labelColor,
-              whiteSpace: 'nowrap',
-            }}>
-              {Math.round(calibratedDnbMeters)}m VIIRS Scale
-            </span>
-          </div>
-          <span style={{
-            fontSize: isMobile ? '7px' : '7.5px',
-            fontWeight: 700,
-            padding: '1px 4px',
-            borderRadius: '4px',
-            background: showGrid
-              ? (nightGlow ? 'rgba(245,158,11,0.30)' : 'rgba(14,165,233,0.20)')
-              : (nightGlow ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)'),
-            border: showGrid
-              ? (nightGlow ? '1px solid rgba(245,158,11,0.60)' : '1px solid rgba(14,165,233,0.50)')
-              : '1px solid transparent',
-            color: showGrid
-              ? (nightGlow ? '#fcd34d' : '#0284c7')
-              : (nightGlow ? 'rgba(255,255,255,0.40)' : 'rgba(100,116,139,0.60)'),
-            letterSpacing: '0.06em',
-          }}>
-            {showGrid ? 'GRID ON' : 'GRID OFF'}
+    <div className="absolute bottom-4 right-4 z-[500] w-64 sm:w-72 p-3.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-md">
+      {/* Header */}
+      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-1.5">
+          <Ruler className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+            500m VIIRS Scale
           </span>
         </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleGrid?.();
+          }}
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            showGrid
+              ? "bg-sky-500 text-white shadow-sm"
+              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+          }`}
+        >
+          {showGrid ? "GRID ON" : "GRID OFF"}
+        </button>
+      </div>
 
-        <div style={{ position: 'relative', width: RULER_W + 8, height: RULER_H + 8 }}>
-          {/* Vertical axis marker */}
-          <div style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: '2px',
-            height: RULER_H,
-            background: `linear-gradient(to bottom, ${axisColor}, transparent)`,
-            borderRadius: '2px',
-          }} />
-
-          {/* Scale bar with alternating segments */}
-          <div style={{
-            position: 'absolute',
-            left: 0,
-            top: RULER_H - 6,
-            width: RULER_W,
-            height: 6,
-            borderRadius: '0 3px 3px 0',
-            overflow: 'hidden',
-            display: 'flex',
-            border: `1px solid ${nightGlow ? 'rgba(251,191,36,0.25)' : 'rgba(51,65,85,0.20)'}`,
-          }}>
-            {segmentFills.map((c, i) => (
-              <div key={i} style={{ flex: 1, background: c }} />
-            ))}
-          </div>
-
-          {/* Origin tick dot and end ticks */}
-          <div style={{ position: 'absolute', left: '-2px', top: RULER_H - 8, width: '5px', height: '5px', borderRadius: '50%', background: axisColor }} />
-          <div style={{ position: 'absolute', left: RULER_W - 1, top: RULER_H - 9, width: '2px', height: '8px', background: axisColor, borderRadius: '1px' }} />
-          <div style={{ position: 'absolute', left: Math.floor(RULER_W / 2) - 1, top: RULER_H - 8, width: '1px', height: '5px', background: tickColor }} />
-
-          {TICK_LABELS.map((label, i) => {
-            const positions = [0, Math.floor(RULER_W / 2), RULER_W];
-            const aligns: React.CSSProperties['textAlign'][] = ['left', 'center', 'right'];
-            return (
-              <span
-                key={i}
-                style={{
-                  position: 'absolute',
-                  left: i === 0 ? 0 : i === 2 ? undefined : positions[i],
-                  right: i === 2 ? 0 : undefined,
-                  top: RULER_H + 2,
-                  fontSize: isMobile ? '7.5px' : '8px',
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-                  fontWeight: i === 2 ? 700 : 500,
-                  color: labelColor,
-                  textAlign: aligns[i],
-                  lineHeight: 1,
-                  transform: i === 1 ? 'translateX(-50%)' : 'none',
-                }}
-              >
-                {label}
-              </span>
-            );
-          })}
-
-          <span style={{
-            position: 'absolute',
-            left: '4px',
-            top: 0,
-            fontSize: isMobile ? '7px' : '8px',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            fontWeight: 600,
-            color: tickColor,
-            lineHeight: 1,
-          }}>
-            N↑
-          </span>
+      {/* Ruler Visual */}
+      <div className="pt-1">
+        <div className="flex justify-between items-end text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-300 mb-1">
+          <span>0</span>
+          <span>{midLabel}</span>
+          <span>{maxLabel}</span>
         </div>
-
-        <span style={{
-          fontSize: isMobile ? '7.5px' : '8px',
-          color: noteColor,
-          fontStyle: 'italic',
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-          letterSpacing: '0.01em',
-          whiteSpace: 'nowrap',
-        }}>
-          1 DNB = {Math.round(calibratedDnbMeters)}m · {dnbLabel} DNB ({maxLabel})
-        </span>
+        <div className="flex w-full h-2.5 rounded border border-slate-400 dark:border-slate-600 overflow-hidden bg-slate-200 dark:bg-slate-800">
+          <div className="w-1/2 h-full bg-sky-500" />
+          <div className="w-1/2 h-full bg-slate-400 dark:bg-slate-600" />
+        </div>
+        <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
+          <span>1 DNB Pixel ≈ {Math.round(calibratedDnbMeters)}m</span>
+          <span className="font-mono font-medium">{dnbLabel} DNB ({maxLabel})</span>
+        </div>
       </div>
     </div>
   );

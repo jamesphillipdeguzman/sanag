@@ -3,7 +3,8 @@ import EventTimeline from './components/EventTimeline.tsx'
 import Footer from './components/Footer.tsx'
 import MunicipalityTable from './components/MunicipalityTable.tsx'
 import Navbar from './components/Navbar.tsx'
-import Overview from './pages/Overview.tsx'
+import HomeView from './pages/HomeView.tsx'
+import SummaryView from './pages/SummaryView.tsx'
 import PanayMap from './components/PanayMap.tsx'
 import EventSelectorPanel from './components/EventSelectorPanel.tsx'
 import GuideGlossary from './components/GuideGlossary.tsx'
@@ -29,12 +30,13 @@ import {
 } from './services/simulation.ts'
 import './App.css'
 
-const VALID_TABS = ['overview', 'map', 'recovery', 'events', 'guide']
+const VALID_TABS = ['home', 'events', 'map', 'recovery', 'summary', 'guide', 'overview']
 
 function getTabFromHash() {
-  if (typeof window === 'undefined') return 'overview'
+  if (typeof window === 'undefined') return 'home'
   const hash = window.location.hash.replace(/^#/, '').toLowerCase().trim()
-  return VALID_TABS.includes(hash) ? hash : 'overview'
+  if (hash === 'overview' || hash === '') return 'home'
+  return VALID_TABS.includes(hash) ? (hash === 'overview' ? 'home' : hash) : 'home'
 }
 
 function normalizeMunicipalityName(name) {
@@ -260,10 +262,11 @@ function App() {
 
   // Synchronize tab state with URL hash
   const handleSelectTab = useCallback((tab) => {
-    if (!VALID_TABS.includes(tab)) return
-    setActiveTab(tab)
-    if (typeof window !== 'undefined' && window.location.hash !== `#${tab}`) {
-      window.history.replaceState(null, '', `#${tab}`)
+    const targetTab = tab === 'overview' ? 'home' : tab
+    if (!VALID_TABS.includes(targetTab)) return
+    setActiveTab(targetTab)
+    if (typeof window !== 'undefined' && window.location.hash !== `#${targetTab}`) {
+      window.history.replaceState(null, '', `#${targetTab}`)
     }
   }, [])
 
@@ -342,15 +345,23 @@ function App() {
 
   const handleSelectEvent = useCallback((eventId) => {
     setActiveEventId(eventId)
-    const targetEvent = events.find((e) => String(e.id) === String(eventId))
+    const targetEvent = events.find((e) =>
+      String(e.id) === String(eventId) ||
+      (e.eventId && String(e.eventId) === String(eventId)) ||
+      (e.name && e.name.toLowerCase().trim() === String(eventId).toLowerCase().trim())
+    )
     if (targetEvent) {
+      setActiveEventId(targetEvent.id)
       const sDate = formatIsoDate(targetEvent.startDate || targetEvent.date)
       if (sDate) {
         // Automatically set Start date to event's recorded start date,
         // and End date to targetEvent.endDate or exactly 30 days after start date
         const eDate = targetEvent.endDate ? formatIsoDate(targetEvent.endDate) : formatIsoDate(addDays(sDate, 30))
         setRecoveryDateRange({ eventId: targetEvent.id, startDate: sDate, endDate: eDate })
+        setRecoveryDate(sDate)
       }
+      setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, targetEvent))
+      setIsMapLoading(true)
     }
   }, [events])
 
@@ -359,21 +370,24 @@ function App() {
 
     const rawAlertId = alert.event_id != null ? String(alert.event_id) : ''
     const alertId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : `gdacs-sim-${Date.now()}`)
-    const normAlertName = (alert.name || '').toLowerCase().trim()
+    const normAlertName = (alert.name || alert.eventname || alert.title || '').toLowerCase().trim()
 
-    // Guard: Check if event already exists in the active events list
+    // Guard: Check if event already exists in the active events list or matches historical archives
     const existingEvent = events.find((e) => {
       const eId = String(e.id)
+      const eEventId = e.eventId ? String(e.eventId) : ''
       const eNameNorm = (e.name || '').toLowerCase().trim()
       return (
-        (alertId && (eId === alertId || `gdacs-${eId}` === alertId)) ||
-        (rawAlertId && (eId === rawAlertId || eId === `gdacs-${rawAlertId}`)) ||
+        (alertId && (eId === alertId || `gdacs-${eId}` === alertId || eEventId === alertId)) ||
+        (rawAlertId && (eId === rawAlertId || eId === `gdacs-${rawAlertId}` || eEventId === rawAlertId)) ||
         (normAlertName && eNameNorm === normAlertName)
       )
     })
 
     if (existingEvent) {
       handleSelectEvent(existingEvent.id)
+      setToastMessage(`✓ Active event baseline set to "${existingEvent.name}". Historical disaster simulation calibrated.`)
+      setTimeout(() => setToastMessage(null), 5000)
       return
     }
 
@@ -570,10 +584,15 @@ function App() {
   const activeEvent = useMemo(() => {
     if (!baseActiveEvent) return null
     const defaultCoords = [11.0, 122.5]
+    const coords = baseActiveEvent.coordinates ?? (baseActiveEvent.latitude != null && baseActiveEvent.longitude != null ? [baseActiveEvent.latitude, baseActiveEvent.longitude] : defaultCoords)
+    const lat = baseActiveEvent.latitude ?? coords[0] ?? defaultCoords[0]
+    const lng = baseActiveEvent.longitude ?? coords[1] ?? defaultCoords[1]
     return {
       ...baseActiveEvent,
+      latitude: lat,
+      longitude: lng,
+      coordinates: [lat, lng],
       affectedPopulation: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
-      coordinates: baseActiveEvent.coordinates ?? (baseActiveEvent.latitude != null && baseActiveEvent.longitude != null ? [baseActiveEvent.latitude, baseActiveEvent.longitude] : defaultCoords),
       impact_metrics: {
         lgus: baseActiveEvent.critical_municipalities ?? [],
         affected_population: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
@@ -678,6 +697,15 @@ function App() {
     if (!selectedId || !municipalitiesWithRank.length) return null
     const found = municipalitiesWithRank.find((m) => m.id === selectedId || m.pcode === selectedId)
     return found?.resilienceRank ?? null
+  }, [municipalitiesWithRank, selectedId])
+
+  const selectedMunicipality = useMemo(() => {
+    if (!selectedId || !municipalitiesWithRank.length) return null
+    return (
+      municipalitiesWithRank.find(
+        (m) => m.id === selectedId || m.pcode === selectedId
+      ) || null
+    )
   }, [municipalitiesWithRank, selectedId])
 
   const handleDismissEvent = useCallback(() => {
@@ -999,77 +1027,101 @@ function App() {
 
       {/* Main Tabbed View Routing Container */}
       <main className="flex-1 pt-16 w-full max-w-full overflow-x-hidden">
-        {/* Tab 1: Overview (#overview) */}
-        {activeTab === 'overview' && (
-          activeEvent ? (
-            <Overview
-              municipalities={municipalitiesWithRank}
-              activeEvent={activeEvent}
-              events={events}
-              onSelectEvent={handleSelectEvent}
-              onDismissEvent={handleDismissEvent}
-              selectedId={selectedId}
-              globalRank={selectedGlobalRank}
-              onSelectMunicipality={selectMunicipality}
-              recoveryDate={recoveryDate}
-              isMapLoading={isMapLoading}
-              gdacsAlerts={gdacsAlerts}
-              onSimulateGdacs={handleImportGdacs}
-              isGdacsLoading={isGdacsLoading}
-              onRefreshGdacs={fetchGdacsAlerts}
-              importingGdacsId={importingId}
-              importedEventIds={importedEventIds}
-              onMunicipalitiesLoaded={handleMunicipalitiesLoaded}
-              selectedRegionKey={selectedRegionKey}
-              onRegionChange={handleRegionChange}
-              onNavigateTab={handleSelectTab}
-            />
-          ) : (
-            /* Empty state shown when no event is active */
-            <section className="relative pt-12 pb-16 overflow-hidden animate-fade-in">
-              <div className="absolute inset-0 bg-slate-50 dark:bg-ink-950 pointer-events-none transition-colors" />
-              <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
-              <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-white/5">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-400 dark:text-ink-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-3-3v6M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1">No Active Incident Selected</h2>
-                    <p className="text-sm text-slate-500 dark:text-ink-400 max-w-sm">Select an incident from the events catalog to load satellite radiance, recovery curves, and the situational briefing.</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectEvent(PRIMARY_EVENT_ID)}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-ocean-300 dark:border-ocean-500/40 bg-ocean-50 hover:bg-ocean-100 text-ocean-700 dark:bg-ocean-500/10 dark:hover:bg-ocean-500/20 text-sm font-semibold dark:text-ocean-200 transition-all cursor-pointer shadow-sm"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M5.635 15A9 9 0 1018.364 9" /></svg>
-                      Restore Default Event
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTab('events')}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold transition-all cursor-pointer shadow-sm"
-                    >
-                      Browse Events Catalog →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )
+        {/* Tab 1: Home (#home) - The landing launchpad & guided story arc */}
+        {(activeTab === 'home' || activeTab === 'overview') && (
+          <HomeView
+            activeEvent={activeEvent}
+            events={events}
+            onSelectEvent={handleSelectEvent}
+            onNavigateTab={handleSelectTab}
+            selectedRegionKey={selectedRegionKey}
+            selectedMunicipality={selectedMunicipality}
+            selectedId={selectedId}
+            gdacsAlerts={gdacsAlerts}
+            onSimulateGdacs={handleImportGdacs}
+            isGdacsLoading={isGdacsLoading}
+            onRefreshGdacs={fetchGdacsAlerts}
+            importingGdacsId={importingId}
+            importedEventIds={importedEventIds}
+            totalLgusCount={totalLgusCount}
+            activeStationsCount={reportingStationsCount}
+          />
         )}
 
-        {/* Tab 2: Map (#map) - Maintained mounted in DOM to preserve Leaflet instance & tile cache */}
+        {/* Tab 2: Events (#events) - Step 1: Incident Selection & Calibration */}
+        {activeTab === 'events' && (
+          <section id="events" className="relative pb-16 overflow-hidden animate-fade-in">
+            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 mb-2">
+                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-300 uppercase tracking-wider">
+                      Step 01 · Incident Selection & Calibration
+                    </span>
+                  </div>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Historical Incidents & Live Hazards
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
+                    Browse historical typhoons and grid collapses, inspect ground photography and news reports, or simulate real-time GDACS multi-hazard alerts.
+                  </p>
+                </div>
+              </div>
+
+              {activeEvent ? (
+                <div className="w-full">
+                  <ErrorBoundary name="Event Selector Panel" resetKey={activeEventId}>
+                    <EventSelectorPanel
+                      events={events}
+                      activeEvent={activeEvent}
+                      onSelectEvent={handleSelectEvent}
+                      onDismissEvent={handleDismissEvent}
+                      onSimulateGdacs={handleImportGdacs}
+                      importingGdacsId={importingId}
+                      importedEventIds={importedEventIds}
+                      selectedRegionKey={selectedRegionKey}
+                    />
+                  </ErrorBoundary>
+                </div>
+              ) : null}
+
+              <div className="w-full">
+                <ErrorBoundary name="Event Timeline" resetKey={activeEventId}>
+                  <EventTimeline
+                    events={events}
+                    activeEventId={activeEventId}
+                    onSelect={handleSelectEvent}
+                    onDismiss={handleDismissEvent}
+                  />
+                </ErrorBoundary>
+              </div>
+
+              {/* Step 1 -> Step 2 Forward Continuity Breadcrumb */}
+              <div className="pt-6 border-t border-slate-200/80 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Step 1 Complete</span>
+                  <span className="mx-2">·</span>
+                  <span>Baseline calibrated for {activeEvent?.name || 'Selected Incident'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('map')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shadow-md shadow-cyan-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <span>Proceed to Step 2: Inspect Satellite Map →</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Tab 3: Map (#map) - Step 2: Spatial Nightlight & LGU Inspection */}
         <div
           id="map"
           className={
             activeTab === 'map'
-              ? 'h-full w-full max-w-full overflow-x-hidden'
-              : 'fixed -left-[99999px] top-0 w-full pointer-events-none opacity-0 invisible -z-50 overflow-hidden'
+              ? 'block h-full w-full max-w-full overflow-x-hidden'
+              : 'hidden'
           }
           aria-hidden={activeTab !== 'map'}
         >
@@ -1092,18 +1144,34 @@ function App() {
                 isActiveTab={activeTab === 'map'}
               />
             </ErrorBoundary>
+
+            {/* Step 2 -> Step 3 Forward Continuity Breadcrumb */}
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shadow-sm">
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                <span className="font-semibold text-slate-900 dark:text-white">Finished inspecting spatial blackouts?</span>
+                <span className="mx-2 hidden sm:inline">·</span>
+                <span className="text-slate-500 dark:text-slate-400">Compare municipal trajectory trends against electric cooperatives.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('recovery')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs shadow-md shadow-violet-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+              >
+                <span>Proceed to Step 3: Compare Recovery Trajectories →</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Tab 3: Recovery (#recovery) */}
+        {/* Tab 4: Recovery (#recovery) - Step 3: Trajectory Curves & Deficit Targets */}
         {activeTab === 'recovery' && (
-          <section id="recovery" className="relative pb-12 overflow-hidden animate-fade-in">
+          <section id="recovery" className="relative pb-16 overflow-hidden animate-fade-in">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
                 <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2">
-                    <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
-                      Comparative Recovery Analytics
+                  <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 mb-2">
+                    <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wider">
+                      Step 03 · Trajectory Curves & Deficit Targets
                     </span>
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
@@ -1119,7 +1187,7 @@ function App() {
                     onClick={() => handleSelectTab('map')}
                     className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-all cursor-pointer shadow-sm"
                   >
-                    View Spatial Map →
+                    ← Back to Spatial Map
                   </button>
                 </div>
               </div>
@@ -1165,64 +1233,42 @@ function App() {
                   onSelect={selectMunicipality}
                 />
               </div>
-            </div>
-          </section>
-        )}
 
-        {/* Tab 4: Events (#events) */}
-        {activeTab === 'events' && (
-          <section id="events" className="relative pb-12 overflow-hidden animate-fade-in">
-            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200 dark:border-white/10">
-                <div>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 mb-2">
-                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-300 uppercase tracking-wider">
-                      Disaster Event Catalog & Monitoring
-                    </span>
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    Historical Incidents & Live Hazards
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
-                    Browse historical typhoons and grid collapses, inspect ground photography and news reports, or simulate real-time GDACS multi-hazard alerts.
-                  </p>
+              {/* Step 3 -> Step 4 Forward Continuity Breadcrumb */}
+              <div className="pt-6 border-t border-slate-200/80 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Step 3 Complete</span>
+                  <span className="mx-2">·</span>
+                  <span>Radiance restoration trajectories benchmarked</span>
                 </div>
-              </div>
-
-              {activeEvent ? (
-                <div className="w-full">
-                  <ErrorBoundary name="Event Selector Panel" resetKey={activeEventId}>
-                    <EventSelectorPanel
-                      events={events}
-                      activeEvent={activeEvent}
-                      onSelectEvent={handleSelectEvent}
-                      onDismissEvent={handleDismissEvent}
-                      onSimulateGdacs={handleImportGdacs}
-                      importingGdacsId={importingId}
-                      importedEventIds={importedEventIds}
-                      selectedRegionKey={selectedRegionKey}
-                    />
-                  </ErrorBoundary>
-                </div>
-              ) : null}
-
-              <div className="w-full">
-                <ErrorBoundary name="Event Timeline" resetKey={activeEventId}>
-                  <EventTimeline
-                    events={events}
-                    activeEventId={activeEventId}
-                    onSelect={handleSelectEvent}
-                    onDismiss={handleDismissEvent}
-                  />
-                </ErrorBoundary>
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('summary')}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <span>Proceed to Step 4: View Executive Summary & AI Briefing →</span>
+                </button>
               </div>
             </div>
           </section>
         )}
 
-        {/* Tab 5: Guide & Glossary (#guide) */}
+        {/* Tab 5: Summary (#summary) - Step 4: Executive KPIs & AI Situational Briefing */}
+        {activeTab === 'summary' && (
+          <SummaryView
+            municipalities={municipalitiesWithRank}
+            activeEvent={activeEvent}
+            events={events}
+            onSelectEvent={handleSelectEvent}
+            onNavigateTab={handleSelectTab}
+            selectedRegionKey={selectedRegionKey}
+            recoveryDate={recoveryDate}
+          />
+        )}
+
+        {/* Tab 6: Guide & Glossary (#guide) - Standalone Reference Documentation */}
         {activeTab === 'guide' && (
-          <section id="guide" className="relative pb-12 overflow-hidden animate-fade-in">
+          <section id="guide" className="relative pb-16 overflow-hidden animate-fade-in">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
               <GuideGlossary onNavigateTab={handleSelectTab} />
             </div>

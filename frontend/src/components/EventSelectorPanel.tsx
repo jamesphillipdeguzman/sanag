@@ -773,8 +773,28 @@ function HistoricalPanel({
                     </span>
                   </div>
 
-                  {/* Action Row: In-App Search Ground Images Button */}
-                  <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1 w-full">
+                  {/* Action Row: Simulation Toggle and In-App Search Ground Images */}
+                  <div className="mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-1 w-full flex-wrap">
+                    {isSelected ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 border border-emerald-400/50 shadow-md shadow-emerald-950/30">
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        <span>Active Simulation</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isCompatible) onSelectEvent(event.id);
+                        }}
+                        disabled={!isCompatible}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Radio className="w-3.5 h-3.5 text-white" />
+                        <span>Simulate Event</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={(e) => {
@@ -790,7 +810,7 @@ function HistoricalPanel({
                       title="Search ground images and damage photography in-app"
                     >
                       <Camera className="h-3.5 w-3.5" />
-                      <span>Search Ground Images</span>
+                      <span>Ground Images</span>
                     </button>
                   </div>
                 </div>
@@ -919,11 +939,24 @@ function HistoricalPanel({
                       <span className="sm:hidden">Images</span>
                     </button>
 
-                    {isSelected && (
-                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 pl-1 shrink-0">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-                        <span>Active</span>
+                    {isSelected ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 border border-emerald-400/50 shadow-md shadow-emerald-950/30 shrink-0">
+                        <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                        <span>Active Simulation</span>
                       </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isCompatible) onSelectEvent(event.id);
+                        }}
+                        disabled={!isCompatible}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                      >
+                        <Radio className="w-3.5 h-3.5 text-white" />
+                        <span>Simulate Event</span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1036,9 +1069,10 @@ function GdacsPanel({
     if (!q) return sortedAlerts;
 
     return sortedAlerts.filter((alert) => {
-      const name = (alert.name || alert.eventname || alert.title || '').toLowerCase();
-      const type = (alert.eventtype || alert.type || '').toLowerCase();
-      const level = (alert.alert_level || alert.severity || '').toLowerCase();
+      const alertAny = alert as any;
+      const name = (alert.name || alertAny.eventname || alertAny.title || '').toLowerCase();
+      const type = (alertAny.eventtype || alert.type || '').toLowerCase();
+      const level = (alert.alert_level || alertAny.severity || '').toLowerCase();
       const desc = (alert.description || '').toLowerCase();
       const country = (alert.country || '').toLowerCase();
       const rawDate = String(alert.fromdate || alert.startDate || alert.date || alert.pubDate || '').toLowerCase();
@@ -1132,9 +1166,10 @@ function GdacsPanel({
                   </option>
                 )}
                 {filteredAlerts.map((alert) => {
+                  const alertAny = alert as any;
                   const alertId = String(alert.event_id ?? alert.id ?? '');
-                  const alertName = alert.name || alert.eventname || alert.title || 'Live Hazard';
-                  const alertLevel = (alert.alert_level || alert.severity || 'Alert').toUpperCase();
+                  const alertName = alert.name || alertAny.eventname || alertAny.title || 'Live Hazard';
+                  const alertLevel = (alert.alert_level || alertAny.severity || 'Alert').toUpperCase();
                   const alertDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate);
                   return (
                     <option key={alertId} value={alertId} className="text-slate-900 dark:text-white font-medium">
@@ -1262,7 +1297,15 @@ function GdacsPanel({
             const isImporting  = importingGdacsId === alertId;
             const importedId   = resolveImportedId(alert);
             const isImported   = importedId !== null || !!alert.is_imported;
-            const isActiveCard = importedId !== null && !!activeEvent && String(importedId) === String(activeEvent.id);
+            const isActiveCard = Boolean(
+              activeEvent && (
+                (importedId !== null && String(importedId) === String(activeEvent.id)) ||
+                String(activeEvent.id) === alertId ||
+                String(activeEvent.id) === `gdacs-${alertId}` ||
+                String(activeEvent.id) === String(alert.id) ||
+                (alert.name && activeEvent.name?.toLowerCase().trim() === alert.name.toLowerCase().trim())
+              )
+            );
 
             return (
               <GdacsAlertCard
@@ -1387,9 +1430,9 @@ function GdacsAlertCard({
           )}
 
           {isActive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-              Active Simulation
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 border border-emerald-400/50 shadow-md shadow-emerald-950/30">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span>Active Simulation</span>
             </span>
           ) : isImported ? (
             <button
@@ -1412,7 +1455,7 @@ function GdacsAlertCard({
                 onCardClick();
               }}
               disabled={isImporting}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shadow-sm shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50"
             >
               {isImporting ? (
                 <>
@@ -1421,8 +1464,8 @@ function GdacsAlertCard({
                 </>
               ) : (
                 <>
-                  <Zap className="h-3.5 w-3.5 fill-current" />
-                  Simulate
+                  <Radio className="h-3.5 w-3.5 text-white" />
+                  <span>Simulate Event</span>
                 </>
               )}
             </button>
@@ -1548,9 +1591,9 @@ function GdacsAlertCard({
       <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex-wrap">
         <div className="flex items-center gap-2">
           {isActive ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-              Active Simulation
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 border border-emerald-400/50 shadow-md shadow-emerald-950/30">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span>Active Simulation</span>
             </span>
           ) : isImported ? (
             <button
@@ -1573,7 +1616,7 @@ function GdacsAlertCard({
                 onCardClick();
               }}
               disabled={isImporting}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 shadow-sm shadow-amber-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50"
             >
               {isImporting ? (
                 <>
@@ -1582,8 +1625,8 @@ function GdacsAlertCard({
                 </>
               ) : (
                 <>
-                  <Zap className="h-3.5 w-3.5 fill-current" />
-                  Simulate Event
+                  <Radio className="w-3.5 h-3.5 text-white" />
+                  <span>Simulate Event</span>
                 </>
               )}
             </button>

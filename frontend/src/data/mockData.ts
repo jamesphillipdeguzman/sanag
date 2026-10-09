@@ -18,6 +18,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles.',
     affectedPopulation: 1220000,
     description: 'Late-season typhoon causing gale-force wind damage and flash floods across coastal Antique and Aklan.',
+    latitude: 11.5000,
+    longitude: 122.3000,
+    coordinates: [11.5000, 122.3000],
+    viirs_data_available: true,
   },
   {
     id: 'sts-trami-2024',
@@ -34,6 +38,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Substation water-logging and precautionary sectional feeder isolations; rapid recovery as floodwaters recede followed by equipment drying.',
     affectedPopulation: 1350000,
     description: 'Broad circulation severe tropical storm bringing unprecedented continuous precipitation and submerged transmission substations.',
+    latitude: 11.2000,
+    longitude: 122.6000,
+    coordinates: [11.2000, 122.6000],
+    viirs_data_available: true,
   },
   {
     id: 'habagat-carina-2024',
@@ -50,6 +58,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Localized feeder trips and pole destabilization in saturated soils; moderate recovery timeline.',
     affectedPopulation: 980000,
     description: 'Enhanced Southwest Monsoon combined with Typhoon Gaemi triggering massive urban and agricultural flooding across lowland Panay plains.',
+    latitude: 10.9000,
+    longitude: 122.4000,
+    coordinates: [10.9000, 122.4000],
+    viirs_data_available: true,
   },
   {
     id: 'panay-blackout-2024',
@@ -66,6 +78,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate.',
     affectedPopulation: 4500000,
     description: 'Major transmission line trips and cascading plant shutdowns causing complete island-wide blackout across Panay and Guimaras.',
+    latitude: 11.0000,
+    longitude: 122.5000,
+    coordinates: [11.0000, 122.5000],
+    viirs_data_available: true,
   },
   {
     id: 'sts-nalgae-2022',
@@ -82,6 +98,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Physical feeder breaks and severed bridge crossings requiring line re-routing and bypass installation.',
     affectedPopulation: 1580000,
     description: 'Severe Tropical Storm Nalgae brought immense rainbands causing widespread riverine flooding and bridge washouts across Western Visayas.',
+    latitude: 11.1500,
+    longitude: 122.5500,
+    coordinates: [11.1500, 122.5500],
+    viirs_data_available: true,
   },
   {
     id: 'ts-megi-2022',
@@ -98,6 +118,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Waterlogged pad-mounted distribution transformers and mud deposit clearance across rural distribution lines.',
     affectedPopulation: 1120000,
     description: 'Stationary tropical storm inducing continuous heavy rains, catastrophic landslides, and severe lowland inundation across Capiz and Iloilo.',
+    latitude: 11.3500,
+    longitude: 122.7500,
+    coordinates: [11.3500, 122.7500],
+    viirs_data_available: true,
   },
   {
     id: 'typhoon-rai-2021',
@@ -114,6 +138,10 @@ export const events: DisasterEvent[] = [
     infrastructure_impact: 'Long-term grid reconstruction requiring emergency temporary bypass towers; persistent, weeks-long multi-LGU critical deficit.',
     affectedPopulation: 2450000,
     description: 'Super Typhoon Rai (Odette) devastated the Visayas corridor, inflicting major transmission line destruction and month-long restoration.',
+    latitude: 10.8000,
+    longitude: 123.0000,
+    coordinates: [10.8000, 123.0000],
+    viirs_data_available: true,
   },
   {
     id: 'typhoon-molave-2020',
@@ -125,6 +153,10 @@ export const events: DisasterEvent[] = [
     type: 'typhoon',
     affectedPopulation: 890000,
     description: 'Fast-moving typhoon triggering coastal storm surges, widespread agricultural flooding, and localized power disruptions.',
+    latitude: 11.4000,
+    longitude: 122.8000,
+    coordinates: [11.4000, 122.8000],
+    viirs_data_available: true,
   },
   {
     id: 'typhoon-phanfone-2019',
@@ -136,6 +168,10 @@ export const events: DisasterEvent[] = [
     type: 'typhoon',
     affectedPopulation: 1680000,
     description: 'Holiday typhoon causing widespread destructive winds, power pole collapses, and prolonged blackouts across Northern Panay.',
+    latitude: 11.6000,
+    longitude: 122.4000,
+    coordinates: [11.6000, 122.4000],
+    viirs_data_available: true,
   },
   {
     id: 'typhoon-hagupit-2014',
@@ -147,6 +183,10 @@ export const events: DisasterEvent[] = [
     type: 'typhoon',
     affectedPopulation: 1450000,
     description: 'Powerful typhoon bringing torrential rainfall, high winds, and severe power outages across Panay and Eastern Visayas.',
+    latitude: 11.7000,
+    longitude: 123.1000,
+    coordinates: [11.7000, 123.1000],
+    viirs_data_available: true,
   },
   {
     id: 'typhoon-haiyan-2013',
@@ -162,6 +202,7 @@ export const events: DisasterEvent[] = [
     coordinates: [11.1000, 125.3000],
     affectedPopulation: 4200000,
     description: 'Catastrophic Category 5 super typhoon crossing the Visayas region with unprecedented storm surge and widespread grid destruction.',
+    viirs_data_available: true,
   },
 ];
 

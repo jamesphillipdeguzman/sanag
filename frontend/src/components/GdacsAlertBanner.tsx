@@ -146,7 +146,8 @@ export default function GdacsAlertBanner({
                   activeEventId && (
                     activeEventId === resolvedEventId ||
                     (baseEventId && activeEventId === baseEventId) ||
-                    (rawAlertId && activeEventId === rawAlertId)
+                    (rawAlertId && activeEventId === rawAlertId) ||
+                    (alert.name && activeEventId.toLowerCase().trim() === alert.name.toLowerCase().trim())
                   )
                 );
                 const badgeClass = getAlertBadge(alert.alert_level);
@@ -221,9 +222,9 @@ export default function GdacsAlertBanner({
                       )}
 
                       {isActive ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/30 px-1.5 py-0.5 rounded">
-                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>Active</span>
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-emerald-600 border border-emerald-400/50 px-2 py-0.5 rounded shadow-sm">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          <span>Active Simulation</span>
                         </span>
                       ) : isImported ? (
                         <button
