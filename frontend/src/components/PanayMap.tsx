@@ -8,6 +8,8 @@ import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/aud
 import { useTheme } from '@/context/ThemeContext';
 import { useSettings, type BasemapSource } from '@/context/SettingsContext';
 import GisHierarchyReference from '@/components/GisHierarchyReference';
+import RegionTreeSelector from '@/components/RegionTreeSelector';
+import { findRegionTreeNode, getRegionNodeBounds } from '@/utils/philippinesHierarchy';
 import {
   findRegionByCoordinates,
   REGIONAL_CHUNKS,
@@ -67,6 +69,8 @@ export interface LeafletMapProps {
   isMaximized?: boolean;
   onToggleMaximize?: () => void;
   onHoverRagStatusChange?: (status: 'critical' | 'restoration' | 'recovered' | null) => void;
+  selectedGdacsAlert?: GdacsAlert | null;
+  onSelectGdacsAlert?: (alert: GdacsAlert | null) => void;
 }
 
 const statusLabels: Record<string, string> = {
@@ -166,6 +170,7 @@ export default function PanayMap({
   const [isRegionChunkLoading, setIsRegionChunkLoading] = useState<boolean>(false);
   const [isLoadingRegion, setIsLoadingRegion] = useState<boolean>(false);
   const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [selectedGdacsAlert, setSelectedGdacsAlert] = useState<GdacsAlert | null>(null);
   const [hoveredRagStatus, setHoveredRagStatus] = useState<'critical' | 'restoration' | 'recovered' | null>(null);
   const [showScaleRuler, setShowScaleRuler] = useState<boolean>(() => settings?.showScaleRuler || false);
   const [showGrid, setShowGrid] = useState<boolean>(false);
@@ -227,6 +232,21 @@ export default function PanayMap({
   const handleRegionChange = (newKey: string) => {
     setInternalRegionKey(newKey);
     externalOnRegionChange?.(newKey);
+    const preset = REGION_PRESETS[newKey];
+    const treeNode = findRegionTreeNode(newKey);
+    const center = preset?.center || treeNode?.center;
+    const name = preset?.name || treeNode?.label;
+    if (center && name) {
+      window.dispatchEvent(
+        new CustomEvent('sanag:select-weather-location', {
+          detail: {
+            lat: center[0],
+            lon: center[1],
+            name: name,
+          },
+        })
+      );
+    }
   };
 
   const handleChunkLoaded = (newItems: Municipality[]) => {
@@ -499,48 +519,11 @@ export default function PanayMap({
 
             {/* Region selection dropdown and Live Hazards indicator badge directly underneath */}
             <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
-              {/* Region Navigator Selector */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-ocean-500/35 bg-ocean-500/10 text-ocean-700 dark:text-ocean-200 max-w-full">
-                <Compass className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
-                <label htmlFor="panay-map-region-selector" className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 hidden sm:inline">Region:</label>
-                <select
-                  id="panay-map-region-selector"
-                  value={currentRegionKey}
-                  onChange={(e) => handleRegionChange(e.target.value)}
-                  className="bg-transparent text-xs font-semibold text-slate-800 dark:text-white focus:outline-none cursor-pointer pr-1 max-w-[160px] xs:max-w-[210px] sm:max-w-none truncate"
-                  aria-label="Select Philippine Region or Province"
-                >
-                  <optgroup label="Primary Scope" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
-                    <option value="panay" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Panay Island (Default)</option>
-                    <option value="iloilo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Iloilo Province</option>
-                    <option value="capiz" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Capiz Province</option>
-                    <option value="aklan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Aklan Province</option>
-                    <option value="antique" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">↳ Antique Province</option>
-                  </optgroup>
-                  <optgroup label="Nationwide" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
-                    <option value="philippines" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Nationwide (Philippines)</option>
-                  </optgroup>
-                  <optgroup label="Luzon" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
-                    <option value="ncr" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">NCR (Metro Manila)</option>
-                    <option value="car" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CAR (Cordillera Administrative Region)</option>
-                    <option value="ilocos_cagayan" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Luzon (Regions I & II - Ilocos / Cagayan)</option>
-                    <option value="central_luzon" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Luzon (Region III)</option>
-                    <option value="calabarzon_mimaropa" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">CALABARZON & MIMAROPA (Regions IV-A & IV-B)</option>
-                    <option value="bicol" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bicol Region (Region V)</option>
-                  </optgroup>
-                  <optgroup label="Visayas" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
-                    <option value="panay_guimaras" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Western Visayas (Panay, Guimaras, Negros)</option>
-                    <option value="central_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Central Visayas (Region VII - Cebu, Bohol)</option>
-                    <option value="eastern_visayas" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Eastern Visayas (Region VIII - Leyte, Samar)</option>
-                  </optgroup>
-                  <optgroup label="Mindanao" className="bg-slate-100 dark:bg-slate-950 text-sky-800 dark:text-sky-400 font-bold">
-                    <option value="zamboanga_peninsula" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Zamboanga Peninsula (Region IX)</option>
-                    <option value="northern_mindanao_caraga" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Northern Mindanao & Caraga (Regions X & XIII)</option>
-                    <option value="mindanao_south" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">South Mindanao (Regions XI & XII - Davao & SOCCSKSARGEN)</option>
-                    <option value="barmm" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-normal">Bangsamoro (BARMM)</option>
-                  </optgroup>
-                </select>
-              </div>
+              {/* Hierarchical Collapsible Tree Region Selector */}
+              <RegionTreeSelector
+                currentRegionKey={currentRegionKey}
+                onSelectRegion={handleRegionChange}
+              />
 
               {/* Primary Live Status: Live Hazards Badge Toggle */}
               {alertsWithCoords.length > 0 && (
@@ -598,6 +581,8 @@ export default function PanayMap({
                   isMaximized={isMaximized}
                   onToggleMaximize={() => setIsMaximized((v) => !v)}
                   onHoverRagStatusChange={setHoveredRagStatus}
+                  selectedGdacsAlert={selectedGdacsAlert}
+                  onSelectGdacsAlert={setSelectedGdacsAlert}
                 />
 
                 {/* Regional Mesh Streaming Loading Indicator */}
@@ -1487,6 +1472,8 @@ function LeafletMap({
   isMaximized = false,
   onToggleMaximize,
   onHoverRagStatusChange,
+  selectedGdacsAlert: selectedGdacsAlertProp,
+  onSelectGdacsAlert,
 }: LeafletMapProps) {
   const { theme } = useTheme();
   const { settings } = useSettings();
@@ -1497,12 +1484,19 @@ function LeafletMap({
   const nightGlowModeRef = useRef<boolean>(nightGlowMode);
   nightGlowModeRef.current = nightGlowMode;
 
+  const activeEventRef = useRef<DisasterEvent | GdacsAlert | null | undefined>(activeEvent);
+  activeEventRef.current = activeEvent;
+  const activeEventIdRef = useRef(activeEventId);
+  activeEventIdRef.current = activeEventId;
+
   const mapElement = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const layersRef = useRef<Record<string, any>>({});
   const gdacsGroupRef = useRef<L.LayerGroup | null>(null);
   const defaultBoundsRef = useRef<L.LatLngBounds | null>(null);
+  const activeRegionBoundsRef = useRef<L.LatLngBounds | null>(null);
+  const isProgrammaticMoveRef = useRef<boolean>(false);
   const municipalitiesByIdRef = useRef<Map<string, Municipality>>(new Map());
   const centroidsRef = useRef<Map<string, [number, number]>>(new Map());
   const nightLightOverlayRef = useRef<any>(null);
@@ -1528,7 +1522,15 @@ function LeafletMap({
 
   const activeSimulationMapRef = useRef<ActiveSimulationMap>({});
   const [, setActiveSimulationMapState] = useState<ActiveSimulationMap>({});
-  const [selectedGdacsAlert, setSelectedGdacsAlert] = useState<GdacsAlert | null>(null);
+  const [internalSelectedGdacsAlert, setInternalSelectedGdacsAlert] = useState<GdacsAlert | null>(null);
+  const selectedGdacsAlert = selectedGdacsAlertProp !== undefined ? selectedGdacsAlertProp : internalSelectedGdacsAlert;
+  const setSelectedGdacsAlert = useCallback((alert: GdacsAlert | null) => {
+    setInternalSelectedGdacsAlert(alert);
+    onSelectGdacsAlert?.(alert);
+  }, [onSelectGdacsAlert]);
+
+  const selectedGdacsAlertRef = useRef<GdacsAlert | null>(selectedGdacsAlert);
+  selectedGdacsAlertRef.current = selectedGdacsAlert;
 
   // Synchronize active hazard card with activeEventId if set
   useEffect(() => {
@@ -1561,7 +1563,7 @@ function LeafletMap({
     targetEvent?: DisasterEvent | GdacsAlert | null,
     featuresToUse?: GeoJSON.Feature[]
   ) => {
-    const evt = targetEvent || activeEvent;
+    const evt = targetEvent || activeEventRef.current || activeEvent;
     if (!evt) return;
 
     const lat = evt.latitude ?? (evt as any).coordinates?.[0];
@@ -1596,12 +1598,12 @@ function LeafletMap({
       }
     });
 
-    // Immediate re-render of the GeoJSON canvas layer
+    // Explicit and synchronous re-apply of GeoJSON styles immediately
     if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).setStyle === 'function') {
       (geoJsonLayerRef.current as any).setStyle((feature: any) => {
         const props = feature?.properties || {};
         const id = String(props.ADM3_PCODE ?? props.psgc_code ?? props.ADM2_PCODE ?? '');
-        const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+        const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
         const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
 
@@ -1611,7 +1613,12 @@ function LeafletMap({
           (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
           (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
-        const simRecord = simMap[pcode] || simMap[id] || (normName ? simMap[normName] : null);
+        const simRecord = (pcode && simMap[pcode])
+          || (id && simMap[id])
+          || (props.GID_2 && simMap[props.GID_2])
+          || (props.psgc_code && simMap[props.psgc_code])
+          || (normName && simMap[normName]);
+
         const isSelected = Boolean(id === selectedIdRef.current || (municipality && municipality.id === selectedIdRef.current));
 
         return {
@@ -1621,11 +1628,25 @@ function LeafletMap({
       });
     }
 
+    // Force canvas renderer redraw immediately so colors appear on the very first click
+    if (canvasRendererRef.current) {
+      if (typeof (canvasRendererRef.current as any)._update === 'function') {
+        try {
+          (canvasRendererRef.current as any)._update();
+        } catch {}
+      }
+      if (typeof (canvasRendererRef.current as any).requestRedraw === 'function') {
+        try {
+          (canvasRendererRef.current as any).requestRedraw();
+        } catch {}
+      }
+    }
+
     // Re-style individual feature layers in layersRef
     Object.entries(layersRef.current).forEach(([id, layer]) => {
       if (!layer || !(layer as any)._map) return;
       const props = (layer as any)?.feature?.properties || {};
-      const pcode = props.ADM3_PCODE || props.psgc_code || props.ADM2_PCODE;
+      const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
       const name = props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || '';
       const normName = name ? name.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
       const m =
@@ -1634,7 +1655,11 @@ function LeafletMap({
         (name ? municipalitiesByIdRef.current.get(name.toLowerCase().trim()) : null) ||
         (normName ? municipalitiesByIdRef.current.get(normName) : null);
 
-      const simRecord = simMap[pcode] || simMap[id] || (normName ? simMap[normName] : null);
+      const simRecord = (pcode && simMap[pcode])
+        || (id && simMap[id])
+        || (props.GID_2 && simMap[props.GID_2])
+        || (props.psgc_code && simMap[props.psgc_code])
+        || (normName && simMap[normName]);
       if (m) {
         updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current, simRecord);
         const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
@@ -1642,6 +1667,11 @@ function LeafletMap({
           ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
           : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
         layer.setTooltipContent(tip);
+      }
+      if (typeof (layer as any)._updatePath === 'function') {
+        try { (layer as any)._updatePath(); } catch {}
+      } else if (typeof (layer as any).redraw === 'function') {
+        try { (layer as any).redraw(); } catch {}
       }
     });
 
@@ -1652,7 +1682,7 @@ function LeafletMap({
     if (updatedList.length > 0) {
       onChunkLoaded?.(updatedList);
     }
-  }, [activeEvent, onChunkLoaded]);
+  }, [onChunkLoaded]);
 
   const clearEpicenterBuffer = () => {
     if (epicenterBufferRef.current && mapRef.current) {
@@ -1873,6 +1903,12 @@ function LeafletMap({
 
   // Asynchronous coordinate-to-region loader for on-demand chunk retrieval
   const loadRegionByCoordinates = async (lat: number, lng: number): Promise<boolean> => {
+    // Prevent reverse coordinate lookup from clobbering an explicitly selected sub-province or region
+    const currentKey = activeChunkKeyRef.current;
+    if (currentKey && currentKey !== 'philippines' && currentKey !== 'panay') {
+      return false;
+    }
+
     const chunk = findRegionByCoordinates(lat, lng);
     if (!chunk) return false;
 
@@ -2179,7 +2215,35 @@ function LeafletMap({
           direction: 'top',
         });
         featureLayer.on({
-          click: () => onSelectRef.current(id),
+          click: (e: any) => {
+            if (e) {
+              try { L.DomEvent.stopPropagation(e); } catch {}
+            }
+            onSelectRef.current(id);
+            const center = centroidsRef.current.get(id) || (pcode ? centroidsRef.current.get(pcode) : null);
+            const regionLabel = initialProvince ? `${initialName}, ${initialProvince}` : initialName;
+            if (center) {
+              window.dispatchEvent(
+                new CustomEvent('sanag:select-weather-location', {
+                  detail: {
+                    lat: center[0],
+                    lon: center[1],
+                    regionName: regionLabel,
+                    source: 'map-polygon',
+                  },
+                })
+              );
+            } else {
+              window.dispatchEvent(
+                new CustomEvent('sanag:select-weather-location', {
+                  detail: {
+                    regionName: regionLabel,
+                    source: 'map-polygon',
+                  },
+                })
+              );
+            }
+          },
           mouseover: () => {
             onHoverRef.current(id);
             const activeLight = isLightRef.current;
@@ -2317,9 +2381,8 @@ function LeafletMap({
       (map.invalidateSize as any)({ pan: false, reset: true });
 
       // 2. Identify the target bounds:
-      // Check if a specific polygon layer is loaded with valid bounds
-      let targetBounds: L.LatLngBounds | null = null;
-      if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
+      let targetBounds: L.LatLngBounds | null = activeRegionBoundsRef.current;
+      if (!targetBounds && geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
         try {
           const layerBounds = (geoJsonLayerRef.current as any).getBounds();
           if (layerBounds && layerBounds.isValid && layerBounds.isValid()) {
@@ -2328,32 +2391,36 @@ function LeafletMap({
         } catch {}
       }
 
-      // If no valid layer bounds, check active region's configured bbox from regionLookup.ts
+      // Check active region's configured hierarchy bounds or bbox
       const currentKey = activeChunkKeyRef.current || selectedRegionKey || getActiveDefaultRegion() || 'panay';
       if (!targetBounds) {
-        const chunk = REGIONAL_CHUNKS.find(
-          (c) => c.key === currentKey || c.key === REGION_PRESETS[currentKey]?.id
-        );
-        if (chunk) {
-          targetBounds = L.latLngBounds([
-            [chunk.minLat, chunk.minLng],
-            [chunk.maxLat, chunk.maxLng],
-          ]);
+        const treeNode = findRegionTreeNode(currentKey);
+        if (treeNode?.bounds) {
+          targetBounds = L.latLngBounds(treeNode.bounds);
+        } else {
+          const chunk = REGIONAL_CHUNKS.find(
+            (c) => c.key === currentKey || c.key === REGION_PRESETS[currentKey]?.id
+          );
+          if (chunk) {
+            targetBounds = L.latLngBounds([
+              [chunk.minLat, chunk.minLng],
+              [chunk.maxLat, chunk.maxLng],
+            ]);
+          }
         }
       }
 
-      // If Panay Island, fit to Panay's bounding box with appropriate viewport padding
-      if (!targetBounds || currentKey === 'panay' || ['iloilo', 'capiz', 'aklan', 'antique'].includes(currentKey)) {
-        if (!targetBounds || currentKey === 'panay') {
-          targetBounds = PANAY_BOUNDS;
-        }
+      // Only default to Panay Island if explicitly selected as 'panay' or no bounds could be determined
+      if (!targetBounds && currentKey === 'panay') {
+        targetBounds = PANAY_BOUNDS;
       }
 
       // 3. Fit cleanly to the calculated bounds with comfortable margins
       if (targetBounds && targetBounds.isValid && targetBounds.isValid()) {
+        activeRegionBoundsRef.current = targetBounds;
         map.fitBounds(targetBounds, {
-          padding: [40, 40],
-          maxZoom: 10,
+          padding: [30, 30],
+          maxZoom: 11,
           animate,
         });
       } else {
@@ -2508,6 +2575,19 @@ function LeafletMap({
       clearTimeout(moveTimeout);
       moveTimeout = setTimeout(() => {
         if (!mapRef.current) return;
+        // Guard against programmatic moves (fitBounds, flyTo)
+        if (isProgrammaticMoveRef.current) {
+          checkViewportFeatures();
+          return;
+        }
+
+        // Do not auto-revert if an explicit province or sub-region is selected
+        const currentKey = activeChunkKeyRef.current;
+        if (currentKey && currentKey !== 'philippines' && currentKey !== 'panay') {
+          checkViewportFeatures();
+          return;
+        }
+
         const center = mapRef.current.getCenter();
         const matched = findRegionByCoordinates(center.lat, center.lng);
         if (matched && matched.key !== activeChunkKeyRef.current) {
@@ -2766,8 +2846,8 @@ function LeafletMap({
     if (!map || !(map as any)._loaded || !(map as any)._panes) return;
 
     // Cache active region bounds / layer bounds prior to reflow
-    let activeRegionBounds: L.LatLngBounds | null = null;
-    if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
+    let activeRegionBounds: L.LatLngBounds | null = activeRegionBoundsRef.current;
+    if (!activeRegionBounds && geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
       try {
         const b = (geoJsonLayerRef.current as any).getBounds();
         if (b && b.isValid && b.isValid()) {
@@ -2777,16 +2857,23 @@ function LeafletMap({
     }
     if (!activeRegionBounds) {
       const currentKey = activeChunkKeyRef.current || selectedRegionKey || 'panay';
-      const chunk = REGIONAL_CHUNKS.find(
-        (c) => c.key === currentKey || c.key === REGION_PRESETS[currentKey]?.id
-      );
-      if (chunk) {
-        activeRegionBounds = L.latLngBounds([
-          [chunk.minLat, chunk.minLng],
-          [chunk.maxLat, chunk.maxLng],
-        ]);
+      const treeNode = findRegionTreeNode(currentKey);
+      if (treeNode?.bounds) {
+        activeRegionBounds = L.latLngBounds(treeNode.bounds);
       } else {
-        activeRegionBounds = PANAY_BOUNDS;
+        const chunk = REGIONAL_CHUNKS.find(
+          (c) => c.key === currentKey || c.key === REGION_PRESETS[currentKey]?.id
+        );
+        if (chunk) {
+          activeRegionBounds = L.latLngBounds([
+            [chunk.minLat, chunk.minLng],
+            [chunk.maxLat, chunk.maxLng],
+          ]);
+        } else if (currentKey === 'philippines') {
+          activeRegionBounds = L.latLngBounds(PHILIPPINES_BOUNDS);
+        } else {
+          activeRegionBounds = PANAY_BOUNDS;
+        }
       }
     }
 
@@ -2835,8 +2922,10 @@ function LeafletMap({
           }
         }
 
-        // Force repaint on GeoJSON layer vectors
-        if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).eachLayer === 'function') {
+        // Re-evaluate simulation styles synchronously if an active hazard event is present
+        if (activeEventRef.current) {
+          runSimulationForCurrentRegion(activeEventRef.current);
+        } else if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).eachLayer === 'function') {
           try {
             (geoJsonLayerRef.current as any).eachLayer((l: any) => {
               if (typeof l._updatePath === 'function') l._updatePath();
@@ -2889,7 +2978,7 @@ function LeafletMap({
     }
   }, [settings?.scaleCalibration]);
 
-  // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region
+  // Smoothly pan & zoom and lazy-load regional chunk when user selects a different Philippine region or province
   useEffect(() => {
     let isMounted = true;
     const map = mapRef.current;
@@ -2897,29 +2986,67 @@ function LeafletMap({
     activeChunkKeyRef.current = selectedRegionKey;
     clearEpicenterBuffer();
 
+    // Guard against viewport change moveend auto-loader interference
+    isProgrammaticMoveRef.current = true;
+
     fetchRegionChunk(selectedRegionKey).then((chunkData) => {
       if (!isMounted) return;
       const currentMap = mapRef.current;
-      if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) return;
+      if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) {
+        isProgrammaticMoveRef.current = false;
+        return;
+      }
 
       if (chunkData) {
         renderRegionGeoJson(selectedRegionKey, chunkData);
       }
 
-      const preset = REGION_PRESETS[selectedRegionKey];
-      if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
+      // Calculate isolated bounding box for this specific province or region
+      let provinceBounds: L.LatLngBounds | null = null;
+      const treeNode = findRegionTreeNode(selectedRegionKey);
+      if (treeNode?.bounds) {
+        provinceBounds = L.latLngBounds(treeNode.bounds);
+      } else if (geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
         try {
-          if (selectedRegionKey === 'philippines') {
-            currentMap.setView(preset.center, preset.zoom, { animate: true });
-          } else if (selectedRegionKey === 'panay') {
-            currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
-          } else {
-            currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
+          const b = (geoJsonLayerRef.current as any).getBounds();
+          if (b && b.isValid && b.isValid()) {
+            provinceBounds = b;
           }
-        } catch {
-          currentMap.setView(preset.center, preset.zoom);
+        } catch {}
+      }
+
+      if (!provinceBounds) {
+        const chunkMeta = REGIONAL_CHUNKS.find((c) => c.key === selectedRegionKey);
+        if (chunkMeta) {
+          provinceBounds = L.latLngBounds([
+            [chunkMeta.minLat, chunkMeta.minLng],
+            [chunkMeta.maxLat, chunkMeta.maxLng],
+          ]);
         }
       }
+
+      const preset = REGION_PRESETS[selectedRegionKey];
+
+      try {
+        if (selectedRegionKey === 'philippines') {
+          activeRegionBoundsRef.current = L.latLngBounds(PHILIPPINES_BOUNDS);
+          currentMap.fitBounds(PHILIPPINES_BOUNDS, { padding: [20, 20], animate: true });
+        } else if (selectedRegionKey === 'panay') {
+          activeRegionBoundsRef.current = PANAY_BOUNDS;
+          currentMap.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: true });
+        } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
+          activeRegionBoundsRef.current = provinceBounds;
+          currentMap.fitBounds(provinceBounds, { padding: [20, 20], maxZoom: 11, animate: true });
+        } else if (preset) {
+          currentMap.flyTo(preset.center, preset.zoom, { duration: 1.0 });
+        }
+      } catch (err) {
+        console.warn('[PanayMap] Error zooming to region/province:', err);
+      }
+
+      setTimeout(() => {
+        isProgrammaticMoveRef.current = false;
+      }, 1000);
     });
 
     return () => {
@@ -2933,35 +3060,7 @@ function LeafletMap({
       const customEvent = e as CustomEvent<{ provinceKey?: string; regionKey?: string }>;
       const targetKey = customEvent.detail?.provinceKey || customEvent.detail?.regionKey;
       if (!targetKey) return;
-
       onRegionChange?.(targetKey);
-
-      const map = mapRef.current;
-      if (!map || !(map as any)._loaded || !(map as any)._panes) return;
-
-      fetchRegionChunk(targetKey).then((chunkData) => {
-        const currentMap = mapRef.current;
-        if (!currentMap || !(currentMap as any)._loaded || !(currentMap as any)._panes) return;
-
-        if (chunkData) {
-          renderRegionGeoJson(targetKey, chunkData);
-        }
-
-        const preset = REGION_PRESETS[targetKey];
-        if (preset && currentMap && (currentMap as any)._loaded && (currentMap as any)._panes) {
-          try {
-            if (targetKey === 'philippines') {
-              currentMap.setView(preset.center, preset.zoom, { animate: true });
-            } else if (targetKey === 'panay') {
-              currentMap.setView(PANAY_CENTER, PANAY_ZOOM, { animate: true });
-            } else {
-              currentMap.flyTo(preset.center, preset.zoom, { duration: 1.2 });
-            }
-          } catch {
-            currentMap.setView(preset.center, preset.zoom);
-          }
-        }
-      });
     };
 
     window.addEventListener('sanag:focus-province', handleFocusEvent);
@@ -3088,7 +3187,10 @@ function LeafletMap({
 
       const marker = L.marker([lat, lng], {
         icon: customIcon,
-        zIndexOffset: isActive ? 1200 : 800,
+        zIndexOffset: isActive ? 1500 : 1000,
+        interactive: true,
+        riseOnHover: true,
+        bubblingMouseEvents: false,
         title: `${alert.name} (${alert.alert_level} Alert)`,
       });
 
@@ -3097,8 +3199,23 @@ function LeafletMap({
         offset: [0, -18],
       });
 
-      marker.on('click', async () => {
+      marker.on('click', async (e: any) => {
+        if (e) {
+          try {
+            L.DomEvent.stopPropagation(e);
+          } catch {}
+        }
         setSelectedGdacsAlert(alert);
+        window.dispatchEvent(
+          new CustomEvent('sanag:select-weather-location', {
+            detail: {
+              lat,
+              lon: lng,
+              regionName: alert.name || alert.country || 'Hazard Area',
+              source: 'gdacs-marker',
+            },
+          })
+        );
         const success = await loadRegionByCoordinates(lat, lng);
         if (!success) {
           drawEpicenterBuffer(lat, lng);
@@ -3117,6 +3234,7 @@ function LeafletMap({
         fillColor: color,
         fillOpacity: 0.07,
         dashArray: '4, 6',
+        interactive: false,
       });
       group.addLayer(circle);
 
@@ -3337,16 +3455,37 @@ function LeafletMap({
                     onClick={async () => {
                       const alertLat = selectedGdacsAlert.latitude ?? selectedGdacsAlert.coordinates?.[0];
                       const alertLng = selectedGdacsAlert.longitude ?? selectedGdacsAlert.coordinates?.[1];
+
+                      // 1. Synchronously apply simulation styling to active layers immediately (0-delay 1-click response)
+                      activeEventRef.current = selectedGdacsAlert;
+                      runSimulationForCurrentRegion(selectedGdacsAlert);
+                      onSimulateGdacs?.(selectedGdacsAlert);
+
+                      // 2. Dispatch dynamic weather forecast strip update to target disaster epicenter
+                      if (alertLat != null && alertLng != null) {
+                        window.dispatchEvent(
+                          new CustomEvent('sanag:select-weather-location', {
+                            detail: {
+                              lat: alertLat,
+                              lon: alertLng,
+                              regionName: selectedGdacsAlert.name || selectedGdacsAlert.country || 'Hazard Area',
+                              source: 'gdacs-simulation',
+                            },
+                          })
+                        );
+                      }
+
+                      // 3. Coordinate mesh streaming for hazard region if coordinates are present
                       if (alertLat != null && alertLng != null) {
                         const success = await loadRegionByCoordinates(alertLat, alertLng);
                         if (!success) {
                           drawEpicenterBuffer(alertLat, alertLng);
                         } else {
                           clearEpicenterBuffer();
+                          // Ensure newly streamed chunk mesh also adopts simulation colors immediately
+                          runSimulationForCurrentRegion(selectedGdacsAlert);
                         }
                       }
-                      runSimulationForCurrentRegion(selectedGdacsAlert);
-                      onSimulateGdacs(selectedGdacsAlert);
                     }}
                     className="w-full py-2 px-3 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-ocean-600 to-ocean-500 hover:from-ocean-500 hover:to-ocean-400 shadow-md shadow-ocean-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95"
                     title="Ready to Simulate: Confirmed NASA VIIRS radiance data available"

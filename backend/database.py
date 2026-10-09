@@ -88,6 +88,24 @@ HISTORICAL_EVENT_PROFILES: Dict[str, Dict[str, str]] = {
         "root_cause_summary": "Unprecedented 315 km/h sustained winds and catastrophic storm surge destroying entire transmission line backbones across Eastern and Western Visayas.",
         "infrastructure_impact": "Total collapse of high-voltage transmission lines and distribution networks; multi-month physical reconstruction required.",
     },
+    "volcanic-eruption": {
+        "event_type": "Volcanic Eruption",
+        "disaster_category": "Volcanic Eruption",
+        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+    },
+    "eruption-taal": {
+        "event_type": "Volcanic Eruption",
+        "disaster_category": "Volcanic Eruption",
+        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+    },
+    "taal-volcano-eruption": {
+        "event_type": "Volcanic Eruption",
+        "disaster_category": "Volcanic Eruption",
+        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+    },
 }
 
 CONTEXTUAL_COLUMNS = [
@@ -287,6 +305,8 @@ def get_event_profile(event_id: str) -> Optional[Dict[str, str]]:
     
     # Generic fallback based on id keywords
     lower = clean_id.lower()
+    if "volcan" in lower or "eruption" in lower or "taal" in lower or "mayon" in lower or "kanlaon" in lower or "bulusan" in lower or lower == "vo":
+        return HISTORICAL_EVENT_PROFILES["volcanic-eruption"]
     if "grid" in lower or "blackout" in lower or "trip" in lower:
         return HISTORICAL_EVENT_PROFILES["panay-grid-collapse-2024"]
     if "odette" in lower or "rai" in lower:

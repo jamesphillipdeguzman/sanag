@@ -202,8 +202,97 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "disaster_category": "Category 5 Super Typhoon",
         "root_cause_summary": "Unprecedented 315 km/h sustained winds and catastrophic storm surge destroying entire transmission line backbones across Eastern and Western Visayas.",
         "infrastructure_impact": "Total collapse of high-voltage transmission lines and distribution networks; multi-month physical reconstruction required."
+    },
+    {
+        "id": "taal-volcano-eruption-2020",
+        "name": "Taal Volcano Eruption",
+        "startDate": "2020-01-12",
+        "endDate": "2020-02-12",
+        "type": "volcano",
+        "severity": "Severe",
+        "affected_population": 540000,
+        "description": "Phreatomagmatic eruption of Taal Volcano sending ash plumes over Calabarzon and Southern Tagalog, impacting regional distribution lines and transmission substations.",
+        "category": "Volcanic Eruption",
+        "event_type": "Volcanic Eruption",
+        "disaster_category": "Volcanic Eruption",
+        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization."
     }
 ]
+
+def resolve_event_profile(
+    event_id: Optional[str] = None,
+    disaster_type: Optional[str] = None,
+    name: Optional[str] = None,
+    category: Optional[str] = None,
+) -> Dict[str, str]:
+    """
+    Standardized event profile and classification resolver.
+    Explicitly supports GDACS hazard code 'VO' and category 'volcano' / 'volcanic eruption'.
+    Avoids defaulting unmapped types strictly to 'Tropical Cyclone'.
+    """
+    combined = f"{event_id or ''} {disaster_type or ''} {name or ''} {category or ''}".lower()
+    d_type = (disaster_type or "").upper()
+
+    if (
+        d_type == "VO"
+        or "eruption" in combined
+        or "volcan" in combined
+        or "taal" in combined
+        or "mayon" in combined
+        or "kanlaon" in combined
+        or "bulusan" in combined
+    ):
+        return {
+            "event_type": "Volcanic Eruption",
+            "disaster_category": "Volcanic Eruption",
+            "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+            "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+        }
+
+    if d_type == "EQ" or "earthquake" in combined or "quake" in combined or "seismic" in combined:
+        return {
+            "event_type": "Earthquake",
+            "disaster_category": "Seismic Ground Shaking",
+            "root_cause_summary": "High-magnitude ground motion causing transformer foundation displacement, substation busbar shearing, and transmission tower tilt.",
+            "infrastructure_impact": "Substation civil re-alignment and structural testing before staged line re-energization.",
+        }
+
+    if d_type in ("POW", "GRID") or "grid" in combined or "blackout" in combined or "trip" in combined:
+        return {
+            "event_type": "Grid Disturbance / Frequency Trip",
+            "disaster_category": "Cascading System Separation",
+            "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units leading to island-wide under-frequency cascade tripping.",
+            "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid V-shaped recovery curve observed.",
+        }
+
+    if d_type == "FL" or "flood" in combined or "inundation" in combined:
+        return {
+            "event_type": "Severe Tropical Storm / Monsoon Flooding",
+            "disaster_category": "High-Volume Monsoon Inundation",
+            "root_cause_summary": "Unprecedented continuous precipitation, inundated low-lying substations, and widespread transmission right-of-way landslides.",
+            "infrastructure_impact": "Substation water-logging and precautionary sectional feeder isolations; equipment drying required.",
+        }
+
+    if d_type == "TC" or "typhoon" in combined or "cyclone" in combined or "storm" in combined:
+        return {
+            "event_type": "Tropical Cyclone",
+            "disaster_category": "Category 3 Landfall",
+            "root_cause_summary": "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal corridors.",
+            "infrastructure_impact": "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve.",
+        }
+
+    # Fallback to Geological / Natural Hazard or category if present
+    cat_clean = (category or "").strip()
+    ev_type = cat_clean if cat_clean and cat_clean.lower() not in ["hazard", "disaster", "hazard event"] else "Geological / Natural Hazard"
+    dis_cat = cat_clean if cat_clean else "Natural Hazard"
+    return {
+        "event_type": ev_type,
+        "disaster_category": dis_cat,
+        "root_cause_summary": "Natural hazard event triggering localized infrastructure isolation and electrical distribution deficits.",
+        "infrastructure_impact": "Physical distribution grid damage requiring damage inspection and systematic line clearance.",
+    }
+
 
 def get_presets() -> List[Dict[str, Any]]:
     """Returns the verified Panay disaster event presets sorted in reverse chronological order (newest first)."""

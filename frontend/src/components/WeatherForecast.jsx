@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../services/apiService.ts'
+import { REGION_PRESETS } from '../utils/regionLookup.ts'
 import {
   Sun,
   CloudSun,
@@ -216,7 +217,19 @@ function getWeatherConfig(code) {
   )
 }
 
-function getClientFallbackWeatherData() {
+function cleanWeatherLabel(raw) {
+  if (!raw) return 'Panay'
+  return raw
+    .replace(/\s*Province/gi, '')
+    .replace(/\s*City/gi, '')
+    .replace(/\s*Island/gi, '')
+    .replace(/\s*\(.*?\)/g, '')
+    .replace(/^Region\s+[A-Z0-9-]+\s*/i, '')
+    .replace(/\s*\/\s*.*$/, '')
+    .trim() || 'Panay'
+}
+
+function getClientFallbackWeatherData(lat = 10.7202, lon = 122.5621, name = 'Panay') {
   const dates = []
   const today = new Date()
   for (let i = 0; i < 5; i++) {
@@ -225,8 +238,9 @@ function getClientFallbackWeatherData() {
     dates.push(d.toISOString().slice(0, 10))
   }
   return {
-    latitude: 11.15,
-    longitude: 122.50,
+    latitude: lat,
+    longitude: lon,
+    region_name: name,
     daily: {
       time: dates,
       weather_code: [2, 3, 61, 1, 0],
@@ -238,10 +252,92 @@ function getClientFallbackWeatherData() {
   }
 }
 
-export default function WeatherForecast() {
+/**
+ * @typedef {Object} WeatherForecastProps
+ * @property {number} [lat]
+ * @property {number} [lon]
+ * @property {string} [regionName]
+ * @property {import('../types').Municipality | null} [selectedMunicipality]
+ * @property {string} [selectedRegionKey]
+ * @property {string | null} [selectedId]
+ */
+
+/**
+ * @param {WeatherForecastProps} [props]
+ */
+export default function WeatherForecast({
+  lat: propLat,
+  lon: propLon,
+  regionName: propRegionName,
+  selectedMunicipality,
+  selectedRegionKey,
+  selectedId,
+} = {}) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [eventLocation, setEventLocation] = useState(null)
+
+  // Listen for global map selection events dispatched by PanayMap
+  useEffect(() => {
+    const handleLocationEvent = (e) => {
+      const detail = e?.detail
+      if (!detail) return
+      const lat = detail.lat ?? detail.latitude
+      const lon = detail.lon ?? detail.lng ?? detail.longitude
+      const name = detail.name || detail.label || detail.regionName
+      if (lat != null && lon != null) {
+        setEventLocation({
+          lat: Number(lat),
+          lon: Number(lon),
+          name: cleanWeatherLabel(name),
+        })
+      }
+    }
+
+    window.addEventListener('sanag:select-weather-location', handleLocationEvent)
+    return () => {
+      window.removeEventListener('sanag:select-weather-location', handleLocationEvent)
+    }
+  }, [])
+
+  // Resolve target location coordinates and label dynamically
+  const targetLocation = useMemo(() => {
+    if (propLat != null && propLon != null) {
+      return {
+        lat: Number(propLat),
+        lon: Number(propLon),
+        name: cleanWeatherLabel(propRegionName || 'Panay'),
+      }
+    }
+    if (selectedMunicipality) {
+      const mLat = selectedMunicipality.coordinates?.[0] ?? selectedMunicipality.latitude
+      const mLon = selectedMunicipality.coordinates?.[1] ?? selectedMunicipality.longitude
+      if (mLat != null && mLon != null) {
+        return {
+          lat: Number(mLat),
+          lon: Number(mLon),
+          name: cleanWeatherLabel(selectedMunicipality.name),
+        }
+      }
+    }
+    if (eventLocation) {
+      return eventLocation
+    }
+    if (selectedRegionKey && REGION_PRESETS[selectedRegionKey]) {
+      const preset = REGION_PRESETS[selectedRegionKey]
+      return {
+        lat: preset.center[0],
+        lon: preset.center[1],
+        name: cleanWeatherLabel(preset.name),
+      }
+    }
+    return {
+      lat: 10.7202,
+      lon: 122.5621,
+      name: 'Panay',
+    }
+  }, [propLat, propLon, propRegionName, selectedMunicipality, eventLocation, selectedRegionKey])
 
   useEffect(() => {
     let active = true
@@ -251,8 +347,15 @@ export default function WeatherForecast() {
         setLoading(true)
         setError('')
 
+        const queryParams = new URLSearchParams({
+          lat: String(targetLocation.lat),
+          lon: String(targetLocation.lon),
+          region_name: targetLocation.name,
+          days: '5',
+        })
+
         const response = await apiFetch(
-          '/api/v1/weather/forecast?days=5'
+          `/api/v1/weather/forecast?${queryParams.toString()}`
         )
 
         if (!response.ok) {
@@ -264,13 +367,13 @@ export default function WeatherForecast() {
         const payload = await response.json()
 
         if (active) {
-          setData(payload.data || getClientFallbackWeatherData())
+          setData(payload.data || getClientFallbackWeatherData(targetLocation.lat, targetLocation.lon, targetLocation.name))
         }
       } catch (err) {
         console.warn('Weather request failed, using client fallback forecast:', err)
         if (active) {
-          // Gracefully fall back to client mock data so UI remains functional
-          setData(getClientFallbackWeatherData())
+          // Gracefully fall back to client mock data for the selected coordinates so UI remains functional
+          setData(getClientFallbackWeatherData(targetLocation.lat, targetLocation.lon, targetLocation.name))
           setError('')
         }
       } finally {
@@ -285,7 +388,7 @@ export default function WeatherForecast() {
     return () => {
       active = false
     }
-  }, [])
+  }, [targetLocation.lat, targetLocation.lon, targetLocation.name])
 
   const days = useMemo(() => {
     const daily = data?.daily
@@ -306,14 +409,19 @@ export default function WeatherForecast() {
   }, [data])
 
   /*
-   * Loading state (compact horizontal strip)
+   * Loading state (compact horizontal strip with location preview)
    */
   if (loading) {
     return (
       <div className="flex items-center justify-between gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/80 backdrop-blur-md shadow-sm dark:shadow-none transition-colors overflow-hidden">
         <div className="flex items-center gap-2 shrink-0">
           <div className="h-4 w-4 rounded-full bg-gray-200 dark:bg-ink-800 animate-pulse" />
-          <div className="h-3.5 w-24 rounded bg-gray-200 dark:bg-ink-800 animate-pulse" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-gray-500 dark:text-ink-400">
+              {targetLocation.name || 'Panay'} Weather
+            </span>
+            <div className="h-3 w-12 rounded bg-gray-200 dark:bg-ink-800 animate-pulse" />
+          </div>
         </div>
         <div className="flex items-center gap-1.5 overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -348,7 +456,7 @@ export default function WeatherForecast() {
 
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/80 backdrop-blur-md shadow-sm dark:shadow-none transition-colors">
-      {/* Left indicator */}
+      {/* Left indicator with dynamic location label */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900 dark:text-white">
           <span className="relative flex h-2 w-2">
@@ -356,7 +464,9 @@ export default function WeatherForecast() {
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
           </span>
           <CloudSun className="h-4 w-4 text-ocean-500 dark:text-ocean-400 shrink-0" />
-          <span>Panay Weather</span>
+          <span className="truncate max-w-[180px] sm:max-w-none">
+            {targetLocation.name || 'Panay'} Weather
+          </span>
         </div>
         <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-ink-400 border border-gray-200 dark:border-white/5 hidden md:inline">
           5-Day Forecast

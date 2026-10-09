@@ -69,6 +69,32 @@ def check_viirs_data_availability(
 # by resolve_fallback_viirs() so it always reflects actual DB observation records.
 _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
     {
+        "event_id": "vo-taal-2024",
+        "id": "gdacs-vo-taal-2024",
+        "name": "Eruption Taal",
+        "type": "VO",
+        "category": "Volcanic Eruption",
+        "event_type": "Volcanic Eruption",
+        "disaster_category": "Volcanic Eruption",
+        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+        "alert_level": "Orange",
+        "alert_score": 2.0,
+        "date": "2024-10-05",
+        "startDate": "2024-10-05",
+        "endDate": "2024-11-05",
+        "description": "Volcanic eruption and explosive ash emissions from Taal Volcano triggering regional power grid insulator washing protocols.",
+        "severity_text": "Ashfall advisory · Insulator washing protocols active",
+        "country": "Philippines",
+        "url": "https://www.gdacs.org",
+        "latitude": 14.002,
+        "longitude": 120.993,
+        "coordinates": [14.002, 120.993],
+        "bbox": [120.5, 13.5, 121.5, 14.5],
+        "geometry": {"type": "Point", "coordinates": [120.993, 14.002]},
+        "is_imported": False,
+    },
+    {
         "event_id": "1002891",
         "id": "gdacs-1002891",
         "name": "Tropical Cyclone (Typhoon Track - Visayas)",
@@ -292,7 +318,65 @@ def format_gdacs_feature(
     ev_id_str = str(raw_id)
     event_name = str(props.get('name') or props.get('eventname') or 'Hazard Alert')
     raw_type = str(props.get('eventtype') or 'GEN').upper()
-    category = EVENT_TYPE_MAP.get(raw_type, "Power Disruption")
+    name_lower = event_name.lower()
+    desc_lower = str(props.get('description') or props.get('htmldescription') or '').lower()
+
+    # Explicit support for GDACS hazard code "VO" and category "volcano" / "volcanic eruption"
+    is_volcano = (
+        raw_type == "VO"
+        or "eruption" in name_lower
+        or "volcan" in name_lower
+        or "taal" in name_lower
+        or "mayon" in name_lower
+        or "kanlaon" in name_lower
+        or "bulusan" in name_lower
+        or "eruption" in desc_lower
+        or "volcan" in desc_lower
+    )
+
+    if is_volcano:
+        raw_type = "VO"
+        category = "Volcanic Eruption"
+        event_type = "Volcanic Eruption"
+        disaster_category = "Volcanic Eruption"
+        root_cause_summary = (
+            "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, "
+            "acidic ash corrosion, and visibility-restricted emergency repair corridors."
+        )
+        infrastructure_impact = (
+            "De-energization and high-pressure water washing of substation transformer bushings and "
+            "insulator strings to clear conductive ash deposits before safe re-energization."
+        )
+    elif raw_type in EVENT_TYPE_MAP:
+        category = EVENT_TYPE_MAP[raw_type]
+        event_type = category
+        disaster_category = category
+        root_cause_summary = None
+        infrastructure_impact = None
+    elif "flood" in name_lower or "flood" in desc_lower:
+        category = "Flood"
+        event_type = "Severe Tropical Storm / Monsoon Flooding"
+        disaster_category = "Flood"
+        root_cause_summary = None
+        infrastructure_impact = None
+    elif "quake" in name_lower or "seismic" in name_lower:
+        category = "Earthquake"
+        event_type = "Earthquake"
+        disaster_category = "Seismic Ground Shaking"
+        root_cause_summary = None
+        infrastructure_impact = None
+    elif "cyclone" in name_lower or "typhoon" in name_lower or "storm" in name_lower:
+        category = "Tropical Cyclone"
+        event_type = "Tropical Cyclone"
+        disaster_category = "Category 3 Landfall"
+        root_cause_summary = None
+        infrastructure_impact = None
+    else:
+        category = "Geological / Natural Hazard"
+        event_type = "Geological / Natural Hazard"
+        disaster_category = "Natural Hazard"
+        root_cause_summary = None
+        infrastructure_impact = None
     
     alert_level = str(props.get('alertlevel') or props.get('episodealertlevel') or 'Green').capitalize()
     alert_score = props.get('alertscore') or props.get('episodealertscore') or 1.0
@@ -372,6 +456,10 @@ def format_gdacs_feature(
         "name": event_name,
         "type": raw_type,
         "category": category,
+        "event_type": event_type,
+        "disaster_category": disaster_category,
+        "root_cause_summary": root_cause_summary,
+        "infrastructure_impact": infrastructure_impact,
         "alert_level": alert_level,
         "alert_score": float(alert_score) if isinstance(alert_score, (int, float)) else 1.0,
         "date": date_clean,

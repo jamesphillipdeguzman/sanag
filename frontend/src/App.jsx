@@ -408,7 +408,17 @@ function App() {
     // Event type mapping
     const rawType = (alert.type || alert.category || title).toLowerCase()
     let disasterType = 'disaster'
-    if (rawType.includes('tc') || rawType.includes('typhoon') || rawType.includes('cyclone') || rawType.includes('storm')) {
+    const isVolcanic =
+      (alert.type || '').toUpperCase() === 'VO' ||
+      rawType.includes('vo') ||
+      rawType.includes('volcano') ||
+      rawType.includes('eruption') ||
+      title.toLowerCase().includes('eruption') ||
+      title.toLowerCase().includes('volcano')
+
+    if (isVolcanic) {
+      disasterType = 'volcano'
+    } else if (rawType.includes('tc') || rawType.includes('typhoon') || rawType.includes('cyclone') || rawType.includes('storm')) {
       disasterType = 'typhoon'
     } else if (rawType.includes('eq') || rawType.includes('earthquake') || rawType.includes('quake') || rawType.includes('seismic')) {
       disasterType = 'earthquake'
@@ -441,7 +451,7 @@ function App() {
       type: disasterType,
       affectedPopulation: affectedPopulation,
       description: alert.description || `Real-time GDACS hazard monitoring alert (${alert.type || 'Natural Hazard'}) detected in the Philippines region.`,
-      category: alert.category || alert.type || 'Hazard',
+      category: isVolcanic ? 'Volcanic Eruption' : (alert.category || alert.type || 'Hazard'),
       alert_level: alert.alert_level || (severity === 'Severe' ? 'Red' : severity === 'High' ? 'Orange' : 'Green'),
       viirs_data_available: true,
       critical_municipalities: [],
@@ -449,6 +459,14 @@ function App() {
       longitude: lng,
       coordinates: (lat != null && lng != null) ? [lat, lng] : null,
       is_live_simulated: true,
+      event_type: isVolcanic ? 'Volcanic Eruption' : undefined,
+      disaster_category: isVolcanic ? 'Volcanic Eruption' : undefined,
+      root_cause_summary: isVolcanic
+        ? 'Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.'
+        : undefined,
+      infrastructure_impact: isVolcanic
+        ? 'De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.'
+        : undefined,
     }
 
     // 3. Append it or set it directly as the active event state
