@@ -157,5 +157,17 @@
     "disaster_category": "Category 5 Super Typhoon",
     "root_cause_summary": "Unprecedented 315 km/h sustained winds and catastrophic storm surge destroying entire transmission line backbones across Eastern and Western Visayas.",
     "infrastructure_impact": "Total collapse of high-voltage transmission lines and distribution networks; multi-month physical reconstruction required."
+  },
+  {
+    "id": "taal-volcano-eruption-2020",
+    "name": "Taal Volcano Eruption",
+    "startDate": "2020-01-12",
+    "endDate": "2020-02-12",
+    "type": "volcano",
+    "category": "Volcanic Eruption",
+    "event_type": "Volcanic Eruption",
+    "disaster_category": "Volcanic Eruption",
+    "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+    "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization."
   }
 ]

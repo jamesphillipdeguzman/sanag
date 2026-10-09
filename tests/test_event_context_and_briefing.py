@@ -126,6 +126,50 @@ Top Critical Outage LGUs: Barbaza; Laua-an; Valderrama
         assert "Grid Disturbance / Frequency Trip" in briefing
         assert "Cascading System Separation" in briefing
 
+    def test_volcanic_eruption_taal_context_parsing(self):
+        sample_context = """
+Disaster Incident: Eruption Taal (2024-10-05)
+Incident Severity: Moderate
+Category: Volcanic Eruption
+Total Municipalities Monitored: 95
+Average Recovery Score: 82%
+Municipalities >= 90% Restored: 60
+Municipalities in Critical/Warning State (<60%): 5
+"""
+        data = _parse_event_context(sample_context)
+        assert data["event_type"] == "Volcanic Eruption"
+        assert data["disaster_category"] == "Volcanic Eruption"
+        assert "tephra/ashfall" in data["root_cause_summary"]
+        assert "insulator strings" in data["infrastructure_impact"]
+
+        briefing = generate_fallback_briefing(sample_context)
+        assert "- **Classification:** Volcanic Eruption (Volcanic Eruption)" in briefing
+        assert "Heavy tephra/ashfall accumulation on sub-transmission insulators" in briefing
+        assert "high-pressure water washing of substation transformer bushings" in briefing
+
+    def test_gdacs_vo_hazard_code_briefing(self):
+        sample_context = """
+Disaster Incident: Taal Volcano
+Classification: Tropical Cyclone (Volcanic Eruption)
+Primary Driver: Severe weather or mechanical system disruption...
+Incident Severity: High | Category: VO
+Total Municipalities Monitored: 95
+"""
+        briefing = generate_fallback_briefing(sample_context)
+        assert "- **Classification:** Volcanic Eruption (Volcanic Eruption)" in briefing
+        assert "tephra/ashfall" in briefing
+
+    def test_unmapped_hazard_not_defaulted_to_tropical_cyclone(self):
+        sample_context = """
+Disaster Incident: Geological Subsidence Event (2025-05-01)
+Incident Severity: Moderate
+Category: Geological / Natural Hazard
+Total Municipalities Monitored: 95
+"""
+        briefing = generate_fallback_briefing(sample_context)
+        assert "Tropical Cyclone" not in briefing
+        assert "Geological / Natural Hazard" in briefing
+
 
 class TestBackendAPISerialization:
     @classmethod

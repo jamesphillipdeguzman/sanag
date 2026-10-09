@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 
 # Ensure .env is loaded from backend directory
@@ -110,16 +110,19 @@ def _enrich_from_database_profile(data: dict):
     """Enriches data dict with standardized event profile metadata if available."""
     try:
         from database import get_event_profile
-        target_key = data.get("incident_name") or data.get("category") or ""
+        target_key = data.get("incident_name") or data.get("category") or data.get("disaster_category") or data.get("event_type") or ""
         profile = get_event_profile(target_key)
         if profile:
-            if not data.get("event_type"):
-                data["event_type"] = profile.get("event_type")
+            prof_type = profile.get("event_type")
+            curr_type = data.get("event_type")
+            # If profile is volcanic, correct any inadvertent 'Tropical Cyclone' assignment
+            if not curr_type or (prof_type == "Volcanic Eruption" and curr_type in ("Tropical Cyclone", "Disaster")):
+                data["event_type"] = prof_type
             if not data.get("disaster_category"):
                 data["disaster_category"] = profile.get("disaster_category")
-            if not data.get("root_cause_summary"):
+            if not data.get("root_cause_summary") or (prof_type == "Volcanic Eruption" and "winds" in (data.get("root_cause_summary") or "").lower()):
                 data["root_cause_summary"] = profile.get("root_cause_summary")
-            if not data.get("infrastructure_impact"):
+            if not data.get("infrastructure_impact") or (prof_type == "Volcanic Eruption" and "hardware replacement" in (data.get("infrastructure_impact") or "").lower()):
                 data["infrastructure_impact"] = profile.get("infrastructure_impact")
     except Exception:
         pass
@@ -257,9 +260,122 @@ def _parse_event_context(context: str) -> dict:
     if m_pi:
         data["infrastructure_impact"] = m_pi.group(1).strip().strip("*").strip()
 
+    # Detect volcanic context keywords or hazard code VO
+    comb_text = f"{text} {data.get('incident_name') or ''} {data.get('category') or ''} {data.get('disaster_category') or ''}".lower()
+    if (
+        "volcan" in comb_text
+        or "eruption" in comb_text
+        or "taal" in comb_text
+        or "mayon" in comb_text
+        or "kanlaon" in comb_text
+        or "bulusan" in comb_text
+        or (data.get("category") or "").upper() == "VO"
+    ):
+        if not data.get("event_type") or data.get("event_type") in ("Tropical Cyclone", "Disaster"):
+            data["event_type"] = "Volcanic Eruption"
+        if not data.get("disaster_category"):
+            data["disaster_category"] = "Volcanic Eruption"
+        rc_lower = (data.get("root_cause_summary") or "").lower()
+        if not data.get("root_cause_summary") or any(k in rc_lower for k in ("winds", "severe weather", "mechanical system")):
+            data["root_cause_summary"] = (
+                "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, "
+                "acidic ash corrosion, and visibility-restricted emergency repair corridors."
+            )
+        infra_lower = (data.get("infrastructure_impact") or "").lower()
+        if not data.get("infrastructure_impact") or any(k in infra_lower for k in ("hardware replacement", "physical grid restoration")):
+            data["infrastructure_impact"] = (
+                "De-energization and high-pressure water washing of substation transformer bushings and "
+                "insulator strings to clear conductive ash deposits before safe re-energization."
+            )
+
     _enrich_from_database_profile(data)
 
     return data
+
+
+def _resolve_default_event_profile(data: dict) -> Tuple[str, str, str, str]:
+    """
+    Derives event_type, disaster_category, root_cause_summary, and infrastructure_impact.
+    Explicitly supports volcanic events, earthquakes, power grid disturbances, and floods.
+    Avoids defaulting unmapped types strictly to 'Tropical Cyclone'.
+    """
+    cat_val = str(data.get("category") or data.get("disaster_category") or "").strip()
+    cat_lower = cat_val.lower()
+    inc_name = str(data.get("incident_name") or "").lower()
+    ev_type = str(data.get("event_type") or "").strip()
+    ev_lower = ev_type.lower()
+    combined = f"{inc_name} {cat_lower} {ev_lower}"
+
+    # 1. Volcanic Eruption
+    if (
+        "volcan" in combined
+        or "eruption" in combined
+        or "taal" in combined
+        or "mayon" in combined
+        or "kanlaon" in combined
+        or "bulusan" in combined
+        or cat_lower == "vo"
+        or ev_lower == "vo"
+    ):
+        return (
+            "Volcanic Eruption",
+            "Volcanic Eruption",
+            "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
+            "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
+        )
+
+    # 2. Power Grid Disturbance / Blackout
+    if "grid" in combined or "blackout" in combined or "trip" in combined:
+        return (
+            "Grid Disturbance / Frequency Trip",
+            "Cascading System Separation",
+            "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
+            "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate.",
+        )
+
+    # 3. Earthquake
+    if "earthquake" in combined or "quake" in combined or "seismic" in combined or cat_lower == "eq":
+        return (
+            "Earthquake",
+            "Seismic Ground Shaking",
+            "High-magnitude ground motion causing transformer foundation displacement, substation busbar shearing, and transmission tower tilt.",
+            "Substation civil re-alignment and structural testing before staged line re-energization.",
+        )
+
+    # 4. Flood / Monsoon
+    if "flood" in combined or "monsoon" in combined or "inundation" in combined or cat_lower == "fl":
+        return (
+            "Severe Tropical Storm / Monsoon Flooding",
+            "High-Volume Monsoon Inundation",
+            "Unprecedented continuous precipitation, inundated low-lying substations, and widespread transmission right-of-way landslides across river basins.",
+            "Substation water-logging and precautionary sectional feeder isolations; rapid recovery as floodwaters recede followed by equipment drying.",
+        )
+
+    # 5. Tropical Cyclone / Typhoon
+    if "cyclone" in combined or "typhoon" in combined or "storm" in combined or cat_lower in ("tc", "typhoon"):
+        return (
+            "Tropical Cyclone",
+            "Category 3 Landfall",
+            "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors.",
+            "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles.",
+        )
+
+    # 6. Preserved category if present and not generic
+    if cat_val and cat_lower not in ["hazard", "disaster", "hazard event"]:
+        return (
+            cat_val,
+            cat_val,
+            "Severe weather, geophysical, or infrastructure disturbance impacting regional power transmission and distribution lines.",
+            "Physical grid restoration in progress with daily satellite radiance tracking.",
+        )
+
+    # 7. Unmapped fallback: Geological / Natural Hazard
+    return (
+        "Geological / Natural Hazard",
+        "Natural Hazard",
+        "Natural hazard event triggering localized infrastructure isolation and electrical distribution deficits.",
+        "Physical distribution grid damage requiring damage inspection and systematic line clearance.",
+    )
 
 
 def generate_fallback_briefing(context: str) -> str:
@@ -406,10 +522,29 @@ def generate_fallback_briefing(context: str) -> str:
             "* **Telemetry Re-assessment**: Continue daily situational monitoring to verify recovery metrics and ground-truth utility reports."
         )
 
-    event_type = data.get("event_type") or "Tropical Cyclone"
-    disaster_category = data.get("disaster_category") or "Category 3 Landfall"
-    root_cause_summary = data.get("root_cause_summary") or "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors."
-    infrastructure_impact = data.get("infrastructure_impact") or "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
+    def_type, def_cat, def_rc, def_infra = _resolve_default_event_profile(data)
+
+    event_type = data.get("event_type")
+    if not event_type or (event_type == "Tropical Cyclone" and def_type == "Volcanic Eruption"):
+        event_type = def_type
+
+    disaster_category = data.get("disaster_category")
+    if not disaster_category or (disaster_category == "Category 3 Landfall" and def_type == "Volcanic Eruption"):
+        disaster_category = def_cat
+
+    root_cause_summary = data.get("root_cause_summary")
+    if not root_cause_summary or (
+        event_type == "Volcanic Eruption"
+        and any(k in root_cause_summary.lower() for k in ("winds", "severe weather", "mechanical system"))
+    ):
+        root_cause_summary = def_rc
+
+    infrastructure_impact = data.get("infrastructure_impact")
+    if not infrastructure_impact or (
+        event_type == "Volcanic Eruption"
+        and any(k in infrastructure_impact.lower() for k in ("hardware replacement", "physical grid restoration"))
+    ):
+        infrastructure_impact = def_infra
 
     raw_briefing = f"""### Event Context & Root Cause
 - **Classification:** {event_type} ({disaster_category})
@@ -486,16 +621,29 @@ def generate_recovery_briefing(
     if infrastructure_impact:
         parsed_ctx["infrastructure_impact"] = infrastructure_impact
 
-    ev_type = parsed_ctx.get("event_type") or "Tropical Cyclone"
-    dis_cat = parsed_ctx.get("disaster_category") or "Category 3 Landfall"
-    rc_summary = (
-        parsed_ctx.get("root_cause_summary")
-        or "High sustained winds exceeding 185 km/h, widespread fallen distribution poles, localized flooding of low-lying substations, and severe line-clearing obstructions across coastal and northern corridors."
-    )
-    infra_impact = (
-        parsed_ctx.get("infrastructure_impact")
-        or "Physical distribution grid damage requiring heavy on-the-ground hardware replacement; recovery follows a gradual, step-wise restoration curve over multiple observation cycles."
-    )
+    def_type, def_cat, def_rc, def_infra = _resolve_default_event_profile(parsed_ctx)
+
+    ev_type = parsed_ctx.get("event_type")
+    if not ev_type or (ev_type == "Tropical Cyclone" and def_type == "Volcanic Eruption"):
+        ev_type = def_type
+
+    dis_cat = parsed_ctx.get("disaster_category")
+    if not dis_cat or (dis_cat == "Category 3 Landfall" and def_type == "Volcanic Eruption"):
+        dis_cat = def_cat
+
+    rc_summary = parsed_ctx.get("root_cause_summary")
+    if not rc_summary or (
+        ev_type == "Volcanic Eruption"
+        and any(k in rc_summary.lower() for k in ("winds", "severe weather", "mechanical system"))
+    ):
+        rc_summary = def_rc
+
+    infra_impact = parsed_ctx.get("infrastructure_impact")
+    if not infra_impact or (
+        ev_type == "Volcanic Eruption"
+        and any(k in infra_impact.lower() for k in ("hardware replacement", "physical grid restoration"))
+    ):
+        infra_impact = def_infra
 
     api_key = os.getenv("GEMINI_API_KEY")
     prompt = f"""

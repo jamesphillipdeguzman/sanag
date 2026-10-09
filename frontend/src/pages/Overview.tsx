@@ -26,6 +26,7 @@ interface OverviewProps {
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
   onNavigateTab?: (tab: 'overview' | 'map' | 'recovery' | 'events' | 'guide') => void;
+  selectedRegionKey?: string;
 }
 
 export default function Overview({
@@ -45,6 +46,7 @@ export default function Overview({
   importingGdacsId = null,
   importedEventIds = new Set(),
   onNavigateTab,
+  selectedRegionKey,
 }: OverviewProps) {
   // Focus overview headline metrics on Panay Island by default (strictly Iloilo, Capiz, Aklan, and Antique = 95 LGUs)
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
@@ -64,6 +66,11 @@ export default function Overview({
     });
     return list.length > 0 ? list : municipalities;
   }, [municipalities, PANAY_PROVINCE_SET, PANAY_PCODE_PREFIXES]);
+
+  const selectedMunicipality = useMemo(() => {
+    if (!selectedId || !municipalities?.length) return null;
+    return municipalities.find((m) => m.id === selectedId || m.pcode === selectedId) || null;
+  }, [selectedId, municipalities]);
 
   const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 95;
 
@@ -175,7 +182,11 @@ export default function Overview({
 
         {/* 5-Day Weather Forecast Mini-Widget Strip */}
         <div className="mb-4 animate-fade-in-up" style={{ animationDelay: '0.02s' }}>
-          <WeatherForecast />
+          <WeatherForecast
+            selectedRegionKey={selectedRegionKey}
+            selectedMunicipality={selectedMunicipality}
+            selectedId={selectedId}
+          />
         </div>
 
         {/* GDACS Situational Telemetry Alert Bar */}

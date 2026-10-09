@@ -425,9 +425,21 @@ code {
 }
 
 /* GDACS Live Hazard Leaflet Markers & Popups */
-.custom-gdacs-marker {
+.leaflet-marker-pane,
+.is-fullscreen .leaflet-marker-pane,
+.leaflet-map.is-fullscreen .leaflet-marker-pane,
+#leaflet-map.is-fullscreen .leaflet-marker-pane {
+  z-index: 650 !important;
+  pointer-events: auto !important;
+}
+
+.custom-gdacs-marker,
+.leaflet-marker-icon.custom-gdacs-marker {
   background: transparent !important;
   border: none !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 650 !important;
 }
 
 .gdacs-marker-container {
@@ -437,15 +449,20 @@ code {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  z-index: 660 !important;
 }
 
-.gdacs-marker-pulse {
+.gdacs-marker-pulse,
+.custom-gdacs-marker .gdacs-marker-pulse {
   position: absolute;
   width: 100%;
   height: 100%;
   border-radius: 9999px;
   opacity: 0.45;
   animation: ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  pointer-events: none !important;
 }
 
 .gdacs-marker-core {
@@ -459,7 +476,9 @@ code {
   align-items: center;
   justify-content: center;
   transition: transform 0.2s ease;
-  cursor: pointer;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  z-index: 670 !important;
 }
 
 .custom-gdacs-marker:hover .gdacs-marker-core {
@@ -471,6 +490,7 @@ code {
   height: 8px;
   border-radius: 9999px;
   box-shadow: 0 0 6px currentColor;
+  pointer-events: none !important;
 }
 
 .gdacs-marker-container.is-active .gdacs-marker-core {
@@ -485,6 +505,7 @@ code {
   border: 1.5px dashed;
   opacity: 0.8;
   animation: spin 10s linear infinite;
+  pointer-events: none !important;
 }
 
 /* GDACS Leaflet Light & Dark Mode Popup */

@@ -27,13 +27,16 @@ except ImportError:
 
 from datetime import datetime, timezone
 from functools import lru_cache
-from typing import List, Optional, Dict, Any, Union, Tuple
+from typing import List, Optional, Dict, Any, Union, Tuple, overload
 from calculator import compute_recovery_index
 from weather_service import (
     fetch_historical_weather,
     fetch_weather_forecast,
     get_fallback_weather_forecast,
     get_fallback_historical_weather,
+    resolve_location,
+    DEFAULT_LAT,
+    DEFAULT_LON,
 )
 from ai_briefing import generate_recovery_briefing
 from contextlib import asynccontextmanager
@@ -1499,7 +1502,22 @@ def _parse_int_param(val: Any, default: int = 5, min_val: int = 1, max_val: int 
         return default
 
 
+@overload
 def _parse_float_param(val: Any, default: float, min_val: float = -90.0, max_val: float = 90.0) -> float:
+    ...
+
+
+@overload
+def _parse_float_param(val: Any, default: None = None, min_val: float = -90.0, max_val: float = 90.0) -> Optional[float]:
+    ...
+
+
+@overload
+def _parse_float_param(val: Any, default: Optional[float] = None, min_val: float = -90.0, max_val: float = 90.0) -> Optional[float]:
+    ...
+
+
+def _parse_float_param(val: Any, default: Optional[float] = None, min_val: float = -90.0, max_val: float = 90.0) -> Optional[float]:
     try:
         if val is None:
             return default
@@ -1547,32 +1565,45 @@ async def get_historical_weather_endpoint(
 @app.get("/api/v1/weather/forecast", tags=["Weather"])
 async def get_weather_forecast_endpoint(
     days: Optional[Union[int, str]] = Query(5, description="Number of forecast days (1-16)"),
-    latitude: Optional[Union[float, str]] = Query(11.15, description="Latitude centroid"),
-    longitude: Optional[Union[float, str]] = Query(122.50, description="Longitude centroid"),
+    latitude: Optional[Union[float, str]] = Query(None, description="Latitude centroid"),
+    longitude: Optional[Union[float, str]] = Query(None, description="Longitude centroid"),
+    lat: Optional[Union[float, str]] = Query(None, description="Alias for latitude"),
+    lon: Optional[Union[float, str]] = Query(None, description="Alias for longitude"),
+    region_name: Optional[str] = Query(None, description="Region, province, or LGU name"),
 ):
     """
-    Fetches a daily weather forecast for the Panay region from Open-Meteo.
+    Fetches a daily weather forecast for a selected Philippine region/coordinates from Open-Meteo.
+    Defaults to Panay / Iloilo (lat: 10.7202, lon: 122.5621) if no parameters are supplied.
     Gracefully falls back to high-fidelity mock data if the external API is unreachable.
     """
     safe_days = _parse_int_param(days, default=5, min_val=1, max_val=16)
-    safe_lat = _parse_float_param(latitude, default=11.15, min_val=-90.0, max_val=90.0)
-    safe_lon = _parse_float_param(longitude, default=122.50, min_val=-180.0, max_val=180.0)
+
+    # Prefer lat/lon aliases if supplied, otherwise latitude/longitude
+    target_lat_val = lat if lat is not None else latitude
+    target_lon_val = lon if lon is not None else longitude
+
+    parsed_lat = _parse_float_param(target_lat_val, default=None, min_val=-90.0, max_val=90.0) if target_lat_val is not None else None
+    parsed_lon = _parse_float_param(target_lon_val, default=None, min_val=-180.0, max_val=180.0) if target_lon_val is not None else None
+
+    safe_lat, safe_lon, resolved_name = resolve_location(parsed_lat, parsed_lon, region_name)
 
     try:
         data = await fetch_weather_forecast(
             latitude=safe_lat,
             longitude=safe_lon,
             days=safe_days,
+            region_name=resolved_name,
         )
-        return {"status": "success", "data": data}
+        return {"status": "success", "data": data, "region_name": resolved_name}
     except Exception as e:
         logger.warning(f"Error in weather forecast endpoint: {e}")
         fallback = get_fallback_weather_forecast(
             latitude=safe_lat,
             longitude=safe_lon,
-            days=safe_days
+            days=safe_days,
+            region_name=resolved_name,
         )
-        return {"status": "success", "data": fallback, "fallback": True}
+        return {"status": "success", "data": fallback, "fallback": True, "region_name": resolved_name}
 
 
 class BriefingRequest(BaseModel):

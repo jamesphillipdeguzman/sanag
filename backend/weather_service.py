@@ -10,9 +10,85 @@ logger = logging.getLogger(__name__)
 OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 
-# Centroid for Panay Island
-DEFAULT_LAT = 11.15
-DEFAULT_LON = 122.50
+# Default centroid for Panay / Iloilo
+DEFAULT_LAT = 10.7202
+DEFAULT_LON = 122.5621
+DEFAULT_REGION_NAME = "Panay"
+
+# Geographic presets for Philippine regions, provinces, and major cities
+REGION_COORDINATES: Dict[str, Tuple[float, float, str]] = {
+    "panay": (10.7202, 122.5621, "Panay"),
+    "iloilo": (10.7202, 122.5621, "Iloilo"),
+    "capiz": (11.5853, 122.7511, "Capiz"),
+    "roxas": (11.5853, 122.7511, "Capiz"),
+    "aklan": (11.7075, 122.3638, "Aklan"),
+    "kalibo": (11.7075, 122.3638, "Aklan"),
+    "antique": (10.7450, 121.9405, "Antique"),
+    "san jose": (10.7450, 121.9405, "Antique"),
+    "cebu": (10.3157, 123.8854, "Cebu"),
+    "central_visayas": (10.3157, 123.8854, "Central Visayas"),
+    "cebu_bohol": (10.3157, 123.8854, "Cebu"),
+    "bohol": (9.8500, 124.1435, "Bohol"),
+    "tagbilaran": (9.8500, 124.1435, "Bohol"),
+    "negros": (10.6765, 122.9509, "Negros"),
+    "bacolod": (10.6765, 122.9509, "Negros"),
+    "davao": (7.1907, 125.4504, "Davao"),
+    "mindanao_south": (7.1907, 125.4504, "Davao"),
+    "ncr": (14.5995, 120.9842, "Metro Manila"),
+    "manila": (14.5995, 120.9842, "Metro Manila"),
+    "bicol": (13.4210, 123.4136, "Bicol"),
+    "albay": (13.1775, 123.6300, "Albay"),
+    "legazpi": (13.1775, 123.6300, "Albay"),
+    "leyte": (11.2444, 125.0039, "Leyte"),
+    "tacloban": (11.2444, 125.0039, "Leyte"),
+    "eastern_visayas": (11.2443, 125.0039, "Eastern Visayas"),
+    "samar": (11.7753, 124.8860, "Samar"),
+    "palawan": (9.7392, 118.7353, "Palawan"),
+    "puerto princesa": (9.7392, 118.7353, "Palawan"),
+    "benguet": (16.4023, 120.5960, "Benguet"),
+    "baguio": (16.4023, 120.5960, "Benguet"),
+    "car": (17.0754, 121.0028, "CAR"),
+    "zamboanga": (6.9214, 122.0790, "Zamboanga"),
+    "cagayan de oro": (8.4542, 124.6319, "Cagayan de Oro"),
+    "cdo": (8.4542, 124.6319, "Cagayan de Oro"),
+    "philippines": (12.8797, 121.7740, "Philippines"),
+}
+
+
+def resolve_location(
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    region_name: Optional[str] = None
+) -> Tuple[float, float, str]:
+    """
+    Resolves latitude, longitude, and display label for a weather query.
+    Falls back to Panay / Iloilo (10.7202, 122.5621) if none provided.
+    """
+    clean_name = (region_name or "").strip()
+
+    # If coordinates explicitly provided, use them
+    if lat is not None and lon is not None:
+        try:
+            safe_lat = float(lat)
+            safe_lon = float(lon)
+            if -90.0 <= safe_lat <= 90.0 and -180.0 <= safe_lon <= 180.0:
+                label = clean_name if clean_name else DEFAULT_REGION_NAME
+                return round(safe_lat, 4), round(safe_lon, 4), label
+        except (ValueError, TypeError):
+            pass
+
+    # If region_name provided, match against known presets
+    if clean_name:
+        slug = clean_name.lower().replace("province", "").replace("city", "").replace("island", "").strip()
+        slug = slug.replace(" ", "_").replace("-", "_")
+        for key, (r_lat, r_lon, r_label) in REGION_COORDINATES.items():
+            if slug == key or key in slug or slug in key:
+                return r_lat, r_lon, clean_name
+
+        # If clean_name is non-empty but not in presets, keep name and use default Panay coords
+        return DEFAULT_LAT, DEFAULT_LON, clean_name
+
+    return DEFAULT_LAT, DEFAULT_LON, DEFAULT_REGION_NAME
 
 # 30-minute in-memory cache to prevent 429 Too Many Requests on Open-Meteo API
 _FORECAST_CACHE: Dict[Tuple[float, float, int], Tuple[float, Dict[str, Any]]] = {}
@@ -37,21 +113,18 @@ def get_fallback_weather_forecast(
     latitude: float = DEFAULT_LAT,
     longitude: float = DEFAULT_LON,
     days: int = 5,
+    region_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Generates a realistic 1-to-16 day weather forecast for Panay Island / Philippines
     when external Open-Meteo API is unreachable or rate-limited.
     Matches Open-Meteo v1 forecast JSON response format.
     """
+    safe_lat, safe_lon, safe_region_name = resolve_location(latitude, longitude, region_name)
     try:
         safe_days = max(1, min(16, days))
     except (ValueError, TypeError):
         safe_days = 5
-
-    try:
-        safe_lat = round(latitude, 4)
-    except (ValueError, TypeError):
-        safe_lat = DEFAULT_LAT
 
     try:
         safe_lon = round(longitude, 4)
@@ -102,6 +175,7 @@ def get_fallback_weather_forecast(
         "timezone_abbreviation": "PST",
         "elevation": 45.0,
         "is_fallback": True,
+        "region_name": safe_region_name,
         "daily_units": {
             "time": "iso8601",
             "weather_code": "wmo code",
@@ -235,28 +309,22 @@ async def fetch_weather_forecast(
     latitude: float = DEFAULT_LAT,
     longitude: float = DEFAULT_LON,
     days: int = 5,
+    region_name: Optional[str] = None,
 ) -> Dict[str, Any]:
+    safe_lat, safe_lon, safe_region_name = resolve_location(latitude, longitude, region_name)
     try:
         safe_days = max(1, min(16, days))
     except (ValueError, TypeError):
         safe_days = 5
 
-    try:
-        safe_lat = latitude
-    except (ValueError, TypeError):
-        safe_lat = DEFAULT_LAT
-
-    try:
-        safe_lon = longitude
-    except (ValueError, TypeError):
-        safe_lon = DEFAULT_LON
-
     # Check 30-minute in-memory cache first to avoid 429 Too Many Requests
     cached_data = get_cached_weather_forecast(safe_lat, safe_lon, safe_days)
     if cached_data is not None:
         logger.info(
-            f"Serving 30-minute cached Open-Meteo forecast (lat={safe_lat}, lon={safe_lon}, days={safe_days})"
+            f"Serving 30-minute cached Open-Meteo forecast (lat={safe_lat}, lon={safe_lon}, days={safe_days}, region={safe_region_name})"
         )
+        if isinstance(cached_data, dict):
+            cached_data["region_name"] = safe_region_name
         return cached_data
 
     params = {
@@ -279,10 +347,11 @@ async def fetch_weather_forecast(
             response.raise_for_status()
             data = response.json()
             if "daily" in data and isinstance(data["daily"], dict) and "time" in data["daily"]:
+                data["region_name"] = safe_region_name
                 set_cached_weather_forecast(safe_lat, safe_lon, safe_days, data)
                 return data
             logger.warning("Open-Meteo forecast missing daily array, using fallback")
-            return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days)
+            return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days, safe_region_name)
     except Exception as exc:
         logger.warning(
             f"Open-Meteo forecast request failed ({type(exc).__name__}: {exc}). Checking stale cache or fallback."
@@ -291,5 +360,8 @@ async def fetch_weather_forecast(
         key = (round(safe_lat, 2), round(safe_lon, 2), safe_days)
         if key in _FORECAST_CACHE:
             logger.info("Serving stale cached forecast following rate limit / network error")
-            return _FORECAST_CACHE[key][1]
-        return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days)
+            cached = _FORECAST_CACHE[key][1]
+            if isinstance(cached, dict):
+                cached["region_name"] = safe_region_name
+            return cached
+        return get_fallback_weather_forecast(safe_lat, safe_lon, safe_days, safe_region_name)
