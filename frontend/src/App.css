@@ -715,3 +715,21 @@ html.dark .viirs-grid-pane {
   background-image: linear-gradient(to right, rgba(255, 204, 0, 0.42) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 204, 0, 0.42) 1px, transparent 1px);
 }
+
+/* ── GDACS Alert Modal Card (Suppresses sub-pixel hover scrollbars) ──────── */
+.gdacs-alert-card {
+  overflow: hidden !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.gdacs-alert-card::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

@@ -88,7 +88,7 @@ export default function RecoveryChart({
 }: RecoveryChartProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const [viewMode, setViewMode] = useState<ViewMode>('hubs');
+  const [viewMode, setViewMode] = useState<ViewMode>('critical');
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('panay');
 
   // Interactive hover tracking and point selection state
@@ -762,12 +762,12 @@ export default function RecoveryChart({
               onClick={() => handleModeChange('critical')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 viewMode === 'critical' && !selectedId
-                  ? 'bg-white dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-slate-200 dark:border-rose-500/30 shadow-sm'
+                  ? 'bg-red-500/15 text-red-700 border-red-300 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/50 shadow-sm font-semibold'
                   : 'text-slate-600 dark:text-ink-400 hover:text-slate-900 dark:hover:text-ink-200 hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
               }`}
               title="Inspect top hardest-hit municipalities with lowest Day-0 scores"
             >
-              <AlertTriangle className="h-3.5 w-3.5" />
+              <AlertTriangle className={`h-3.5 w-3.5 ${viewMode === 'critical' && !selectedId ? 'text-red-600 dark:text-red-400' : ''}`} />
               <span>Most Critical / Hardest-Hit</span>
             </button>
           </div>
