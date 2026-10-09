@@ -164,25 +164,23 @@ export function EventContextCard({ event, className = '', variant = 'full' }: Ev
 
   return (
     <div
-      className={`rounded-xl border border-slate-200/90 dark:border-white/10 bg-gradient-to-br ${
-        isVolcano
-          ? 'from-rose-500/5 via-slate-50 dark:via-ink-900/40 to-amber-500/5 border-rose-500/25 dark:border-rose-500/20'
-          : isGridTrip
+      className={`rounded-xl border border-slate-200/90 dark:border-white/10 bg-gradient-to-br ${isVolcano
+        ? 'from-rose-500/5 via-slate-50 dark:via-ink-900/40 to-amber-500/5 border-rose-500/25 dark:border-rose-500/20'
+        : isGridTrip
           ? 'from-amber-500/5 via-slate-50 dark:via-ink-900/40 to-ocean-500/5 border-amber-500/25 dark:border-amber-500/20'
           : 'from-ocean-500/5 via-slate-50 dark:via-ink-900/40 to-emerald-500/5 border-ocean-500/25 dark:border-ocean-500/20'
-      } p-4 sm:p-4.5 shadow-sm transition-all ${className}`}
+        } p-4 sm:p-4.5 shadow-sm transition-all ${className}`}
     >
       {/* Top Header Row with Title and Tag Badges */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 mb-2.5">
         <div className="flex items-center gap-2">
           <div
-            className={`flex h-7 w-7 items-center justify-center rounded-lg ${
-              isVolcano
-                ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-                : isGridTrip
+            className={`flex h-7 w-7 items-center justify-center rounded-lg ${isVolcano
+              ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+              : isGridTrip
                 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
                 : 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
-            }`}
+              }`}
           >
             {isVolcano ? <Flame className="h-4 w-4" /> : isGridTrip ? <Zap className="h-4 w-4" /> : <Wind className="h-4 w-4" />}
           </div>
@@ -194,13 +192,12 @@ export function EventContextCard({ event, className = '', variant = 'full' }: Ev
         {/* Tag Badges: {event_type} and {disaster_category} */}
         <div className="flex flex-wrap items-center gap-1.5">
           <span
-            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-              isVolcano
-                ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/30'
-                : isGridTrip
+            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${isVolcano
+              ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-500/30'
+              : isGridTrip
                 ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-500/30'
                 : 'bg-ocean-50 text-ocean-800 border-ocean-300 dark:bg-ocean-500/15 dark:text-ocean-200 dark:border-ocean-500/30'
-            }`}
+              }`}
           >
             <Activity className="h-3 w-3" />
             {eventType}

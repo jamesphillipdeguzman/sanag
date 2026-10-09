@@ -72,172 +72,172 @@ const GLOSSARY_ITEMS: GlossaryItem[] = [
     tags: ['Reference', 'Normalization', 'Benchmark'],
   },
   {
-      id: 'recovery-score',
-      term: 'Recovery Score',
-      shortName: 'R(t) = 0–100%',
-      category: 'metric',
-      formula: 'R(t) = \\min\\left(100, \\frac{\\text{Radiance}_{\\text{post}}}{\\text{Radiance}_{\\text{base}}} \\times 100\\right)',
-      definition: 'Post-impact observed radiance divided by baseline radiance. Values ≥ 90% indicate benchmark restoration; < 60% indicate critical deficits / blackout clusters.',
-      details: 'Color-coded into 3 official operational tiers: Near-Full Recovery (≥90%, Emerald), Active Restoration (60–89%, Amber), and Critical Deficit (<60%, Red).',
-      tags: ['Performance', 'Index', 'Restoration'],
-    },
-    {
-      id: 'day-0',
-      term: 'Day-0',
-      shortName: 'Event Onset Timestamp',
-      category: 'metric',
-      definition: 'The critical timestamp when peak hazard forces (cyclone landfall, earthquake tremor, or transmission trip) cause primary electrical grid collapse.',
-      details: 'All comparative recovery curves and restoration trajectories are indexed relative to Day-0 (T+0d, T+3d, T+7d, T+14d, T+30d) for standardized longitudinal analysis.',
-      tags: ['Timeline', 'Disaster Onset', 'Temporal Index'],
-    },
-    {
-      id: 'lgu',
-      term: 'LGU',
-      shortName: 'Local Government Unit',
-      category: 'governance',
-      definition: 'Municipalities, component cities, and provincial administrations in the Philippines (e.g., the 95 LGUs of Panay Island across Iloilo, Capiz, Aklan, Antique).',
-      details: 'Each LGU possesses a standardized Philippine Standard Geographic Code (PSGC/PCode) that SANAG maps with sub-district GeoJSON polygons to calculate localized recovery rates.',
-      tags: ['Administration', 'Municipalities', 'PCode / PSGC'],
-    },
-    {
-      id: 'gdacs',
-      term: 'GDACS',
-      shortName: 'Global Disaster Alert and Coordination System',
-      category: 'governance',
-      definition: 'Real-time multi-hazard alerting framework operated by the United Nations and the European Commission providing near real-time disaster alerts and impact zones.',
-      details: 'SANAG ingests live GDACS feeds for Tropical Cyclones (TC), Floods (FL), Earthquakes (EQ), and Power Grid Failures (POW), enabling immediate automated radiance monitoring simulations.',
-      tags: ['United Nations', 'Real-time Telemetry', 'Multi-hazard'],
-    },
-    {
-      id: 'electric-coops',
-      term: 'Electric Cooperatives',
-      shortName: 'Distribution Utilities',
-      category: 'governance',
-      definition: 'Non-profit distribution utilities operating on Panay Island: ILECO I, II, III for Iloilo, CAPELCO for Capiz, AKELCO for Aklan, and ANTECO for Antique.',
-      details: 'These entities manage local distribution feeder lines connected to the NGCP 138kV transmission backbone. SANAG provides feeder-level insights into which franchise areas face persistent outages.',
-      tags: ['ILECO', 'CAPELCO', 'AKELCO', 'ANTECO'],
-    },
-  ];
+    id: 'recovery-score',
+    term: 'Recovery Score',
+    shortName: 'R(t) = 0–100%',
+    category: 'metric',
+    formula: 'R(t) = \\min\\left(100, \\frac{\\text{Radiance}_{\\text{post}}}{\\text{Radiance}_{\\text{base}}} \\times 100\\right)',
+    definition: 'Post-impact observed radiance divided by baseline radiance. Values ≥ 90% indicate benchmark restoration; < 60% indicate critical deficits / blackout clusters.',
+    details: 'Color-coded into 3 official operational tiers: Near-Full Recovery (≥90%, Emerald), Active Restoration (60–89%, Amber), and Critical Deficit (<60%, Red).',
+    tags: ['Performance', 'Index', 'Restoration'],
+  },
+  {
+    id: 'day-0',
+    term: 'Day-0',
+    shortName: 'Event Onset Timestamp',
+    category: 'metric',
+    definition: 'The critical timestamp when peak hazard forces (cyclone landfall, earthquake tremor, or transmission trip) cause primary electrical grid collapse.',
+    details: 'All comparative recovery curves and restoration trajectories are indexed relative to Day-0 (T+0d, T+3d, T+7d, T+14d, T+30d) for standardized longitudinal analysis.',
+    tags: ['Timeline', 'Disaster Onset', 'Temporal Index'],
+  },
+  {
+    id: 'lgu',
+    term: 'LGU',
+    shortName: 'Local Government Unit',
+    category: 'governance',
+    definition: 'Municipalities, component cities, and provincial administrations in the Philippines (e.g., the 95 LGUs of Panay Island across Iloilo, Capiz, Aklan, Antique).',
+    details: 'Each LGU possesses a standardized Philippine Standard Geographic Code (PSGC/PCode) that SANAG maps with sub-district GeoJSON polygons to calculate localized recovery rates.',
+    tags: ['Administration', 'Municipalities', 'PCode / PSGC'],
+  },
+  {
+    id: 'gdacs',
+    term: 'GDACS',
+    shortName: 'Global Disaster Alert and Coordination System',
+    category: 'governance',
+    definition: 'Real-time multi-hazard alerting framework operated by the United Nations and the European Commission providing near real-time disaster alerts and impact zones.',
+    details: 'SANAG ingests live GDACS feeds for Tropical Cyclones (TC), Floods (FL), Earthquakes (EQ), and Power Grid Failures (POW), enabling immediate automated radiance monitoring simulations.',
+    tags: ['United Nations', 'Real-time Telemetry', 'Multi-hazard'],
+  },
+  {
+    id: 'electric-coops',
+    term: 'Electric Cooperatives',
+    shortName: 'Distribution Utilities',
+    category: 'governance',
+    definition: 'Non-profit distribution utilities operating on Panay Island: ILECO I, II, III for Iloilo, CAPELCO for Capiz, AKELCO for Aklan, and ANTECO for Antique.',
+    details: 'These entities manage local distribution feeder lines connected to the NGCP 138kV transmission backbone. SANAG provides feeder-level insights into which franchise areas face persistent outages.',
+    tags: ['ILECO', 'CAPELCO', 'AKELCO', 'ANTECO'],
+  },
+];
 
-  export default function GuideGlossary({ onNavigateTab }: GuideGlossaryProps) {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [activeCategory, setActiveCategory] = useState<'all' | 'satellite' | 'metric' | 'governance'>('all');
+export default function GuideGlossary({ onNavigateTab }: GuideGlossaryProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'satellite' | 'metric' | 'governance'>('all');
 
-    const filteredGlossary = useMemo(() => {
-      return GLOSSARY_ITEMS.filter((item) => {
-        const matchesCategory = activeCategory === 'all' || item.category === activeCategory;
-        const q = searchTerm.toLowerCase().trim();
-        const matchesSearch =
-          !q ||
-          item.term.toLowerCase().includes(q) ||
-          (item.shortName && item.shortName.toLowerCase().includes(q)) ||
-          item.definition.toLowerCase().includes(q) ||
-          (item.details && item.details.toLowerCase().includes(q)) ||
-          item.tags.some((t) => t.toLowerCase().includes(q));
+  const filteredGlossary = useMemo(() => {
+    return GLOSSARY_ITEMS.filter((item) => {
+      const matchesCategory = activeCategory === 'all' || item.category === activeCategory;
+      const q = searchTerm.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        item.term.toLowerCase().includes(q) ||
+        (item.shortName && item.shortName.toLowerCase().includes(q)) ||
+        item.definition.toLowerCase().includes(q) ||
+        (item.details && item.details.toLowerCase().includes(q)) ||
+        item.tags.some((t) => t.toLowerCase().includes(q));
 
-        return matchesCategory && matchesSearch;
-      });
-    }, [searchTerm, activeCategory]);
+      return matchesCategory && matchesSearch;
+    });
+  }, [searchTerm, activeCategory]);
 
-    return (
-      <div className="w-full py-2 sm:py-4 animate-fade-in-up">
-        {/* Header introduction banner */}
-        <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl p-5 sm:p-7 mb-8 shadow-sm dark:shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-ocean-500/10 via-emerald-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2.5">
-                <BookOpen className="h-3.5 w-3.5 text-ocean-600 dark:text-ocean-300" />
-                <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
-                  Documentation & Analytical Standards
-                </span>
-              </div>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                Platform Guide & <span className="gradient-text">Disaster Analytics Glossary</span>
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
-                Understand how SANAG leverages NASA VIIRS Earth observation radiometry to calculate post-disaster power grid restoration curves and guide emergency response operations across the Philippines.
-              </p>
+  return (
+    <div className="w-full py-2 sm:py-4 animate-fade-in-up">
+      {/* Header introduction banner */}
+      <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-900/80 backdrop-blur-xl p-5 sm:p-7 mb-8 shadow-sm dark:shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-ocean-500/10 via-emerald-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-ocean-500/30 bg-ocean-500/10 px-3 py-1 mb-2.5">
+              <BookOpen className="h-3.5 w-3.5 text-ocean-600 dark:text-ocean-300" />
+              <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-200 uppercase tracking-wider">
+                Documentation & Analytical Standards
+              </span>
             </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Platform Guide & <span className="gradient-text">Disaster Analytics Glossary</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1.5 max-w-2xl leading-relaxed">
+              Understand how SANAG leverages NASA VIIRS Earth observation radiometry to calculate post-disaster power grid restoration curves and guide emergency response operations across the Philippines.
+            </p>
+          </div>
 
-            <div className="flex items-center gap-2 flex-wrap shrink-0">
-              <button
-                type="button"
-                onClick={() => onNavigateTab?.('overview')}
-                className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer flex items-center gap-1.5"
-              >
-                <span>Back to Overview</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigateTab?.('overview')}
+              className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10 transition-all cursor-pointer flex items-center gap-1.5"
+            >
+              <span>Back to Overview</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Main two-column educational layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* COLUMN 1: Platform Walkthrough / How to Use (5 cols) */}
-          <div className="lg:col-span-5 flex flex-col gap-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ocean-500/10 border border-ocean-500/30 text-ocean-500">
-                  <Compass className="h-4 w-4" />
-                </div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Platform Walkthrough
-                </h3>
+      {/* Main two-column educational layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* COLUMN 1: Platform Walkthrough / How to Use (5 cols) */}
+        <div className="lg:col-span-5 flex flex-col gap-5">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-ocean-500/10 border border-ocean-500/30 text-ocean-500">
+                <Compass className="h-4 w-4" />
               </div>
-              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">4-Step Workflow</span>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Platform Walkthrough
+              </h3>
             </div>
+            <span className="text-xs font-mono text-slate-500 dark:text-slate-400">4-Step Workflow</span>
+          </div>
 
-            {/* Step 1 */}
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-sm dark:shadow-md hover:border-ocean-500/40 transition-all group">
-              <div className="flex items-start gap-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ocean-500/10 border border-ocean-500/30 text-ocean-600 dark:text-ocean-400 font-black text-sm group-hover:scale-105 transition-transform">
-                  01
+          {/* Step 1 */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-sm dark:shadow-md hover:border-ocean-500/40 transition-all group">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-ocean-500/10 border border-ocean-500/30 text-ocean-600 dark:text-ocean-400 font-black text-sm group-hover:scale-105 transition-transform">
+                01
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-ocean-500 dark:group-hover:text-ocean-300 transition-colors">
+                    Select a Disaster Event or Live Hazard
+                  </h4>
+                  <span className="text-[10px] uppercase font-bold text-ocean-600 dark:text-ocean-400 px-2 py-0.5 rounded-full bg-ocean-500/10 border border-ocean-500/20">
+                    Step 1
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-ocean-500 dark:group-hover:text-ocean-300 transition-colors">
-                      Select a Disaster Event or Live Hazard
-                    </h4>
-                    <span className="text-[10px] uppercase font-bold text-ocean-600 dark:text-ocean-400 px-2 py-0.5 rounded-full bg-ocean-500/10 border border-ocean-500/20">
-                      Step 1
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
-                    Choose from landmark historical events (e.g., <strong className="text-slate-800 dark:text-slate-100">Jan 2024 Panay Blackout</strong>, <strong className="text-slate-800 dark:text-slate-100">Super Typhoon Carina</strong>, or <strong className="text-slate-800 dark:text-slate-100">Typhoon Ursula</strong>) or ingest real-time multi-hazard telemetry from the live UN GDACS feed.
-                  </p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onNavigateTab?.('events')}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-600 dark:text-ocean-400 hover:underline cursor-pointer"
-                    >
-                      <span>Browse Disaster Events Tab</span>
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
-                  </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
+                  Choose from landmark historical events (e.g., <strong className="text-slate-800 dark:text-slate-100">Jan 2024 Panay Blackout</strong>, <strong className="text-slate-800 dark:text-slate-100">Super Typhoon Carina</strong>, or <strong className="text-slate-800 dark:text-slate-100">Typhoon Ursula</strong>) or ingest real-time multi-hazard telemetry from the live UN GDACS feed.
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab?.('events')}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-600 dark:text-ocean-400 hover:underline cursor-pointer"
+                  >
+                    <span>Browse Disaster Events Tab</span>
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Step 2 */}
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-sm dark:shadow-md hover:border-emerald-500/40 transition-all group">
-              <div className="flex items-start gap-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-black text-sm group-hover:scale-105 transition-transform">
-                  02
+          {/* Step 2 */}
+          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900/60 p-5 shadow-sm dark:shadow-md hover:border-emerald-500/40 transition-all group">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-black text-sm group-hover:scale-105 transition-transform">
+                02
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-500 dark:group-hover:text-emerald-300 transition-colors">
+                    Inspect Day-0 Radiance Drops on the Map
+                  </h4>
+                  <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                    Step 2
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-500 dark:group-hover:text-emerald-300 transition-colors">
-                      Inspect Day-0 Radiance Drops on the Map
-                    </h4>
-                    <span className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                      Step 2
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
-                    Open the interactive Philippine Satellite Grid map to inspect municipality-level blackout severity. Darkened polygons immediately identify LGUs with severe radiance collapse (&lt;60% recovery) on Day-0.
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed">
+                  Open the interactive Philippine Satellite Grid map to inspect municipality-level blackout severity. Darkened polygons immediately identify LGUs with severe radiance collapse (&lt;60% recovery) on Day-0.
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <button
@@ -345,11 +345,10 @@ const GLOSSARY_ITEMS: GlossaryItem[] = [
                     key={cat.id}
                     type="button"
                     onClick={() => setActiveCategory(cat.id as any)}
-                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-emerald-500 text-white font-semibold shadow-sm shadow-emerald-500/20 border border-emerald-400/40'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 border-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border dark:border-slate-700/50'
-                    }`}
+                    className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all cursor-pointer ${isActive
+                      ? 'bg-emerald-500 text-white font-semibold shadow-sm shadow-emerald-500/20 border border-emerald-400/40'
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 border-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-200 border dark:border-slate-700/50'
+                      }`}
                   >
                     {cat.label}
                   </button>
@@ -411,13 +410,12 @@ const GLOSSARY_ITEMS: GlossaryItem[] = [
                       )}
                     </div>
                     <span
-                      className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-md font-bold tracking-wider ${
-                        item.category === 'satellite'
-                          ? 'bg-ocean-500/15 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30'
-                          : item.category === 'metric'
+                      className={`text-[10px] font-mono uppercase px-2 py-0.5 rounded-md font-bold tracking-wider ${item.category === 'satellite'
+                        ? 'bg-ocean-500/15 text-ocean-700 dark:text-ocean-300 border border-ocean-500/30'
+                        : item.category === 'metric'
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
                           : 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
-                      }`}
+                        }`}
                     >
                       {item.category}
                     </span>

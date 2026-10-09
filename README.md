@@ -62,12 +62,12 @@ Where:
 ## 2. Status Benchmarks & Interpretation
 The resulting ratio $R(t)$ is classified into three official operational benchmarks:
 
-| Range                      | Status Category                     | Interpretation                                                                      |
-| :------------------------- | :---------------------------------- | :---------------------------------------------------------------------------------- |
-| **$R(t) \ge 0.90$** (≥90%) | **Normal Operating Conditions** / **Near-Full Recovery** | Power grid has fully or near-fully recovered to pre-disaster baseline levels.       |
-| **$0.60 \le R(t) < 0.90$** (60%–89%) | **Active Restoration**               | Active recovery underway; partial grid re-energization and feeder restoration.     |
-| **$R(t) < 0.60$** (<60%)   | **Critical Deficit** / **Severe Blackout** | Major grid failure resulting in catastrophic loss of nighttime luminosity (<60%).  |
-| **$R(t)$ is None**         | **No Data / Cloud Masked**          | Satellite observation obscured by persistent cloud cover or missing tile.           |
+| Range                                | Status Category                                          | Interpretation                                                                    |
+| :----------------------------------- | :------------------------------------------------------- | :-------------------------------------------------------------------------------- |
+| **$R(t) \ge 0.90$** (≥90%)           | **Normal Operating Conditions** / **Near-Full Recovery** | Power grid has fully or near-fully recovered to pre-disaster baseline levels.     |
+| **$0.60 \le R(t) < 0.90$** (60%–89%) | **Active Restoration**                                   | Active recovery underway; partial grid re-energization and feeder restoration.    |
+| **$R(t) < 0.60$** (<60%)             | **Critical Deficit** / **Severe Blackout**               | Major grid failure resulting in catastrophic loss of nighttime luminosity (<60%). |
+| **$R(t)$ is None**                   | **No Data / Cloud Masked**                               | Satellite observation obscured by persistent cloud cover or missing tile.         |
 
 
 ---
@@ -1091,3 +1091,18 @@ SANAG is complete when:
 > *"No man can serve two masters; for either he will hate the one and love the other, or else he will hold to the one and despise the other."*
 > 
 > — **Katherine Cendana** *(3 Nephi 13:24)*
+
+---
+
+## Release Version & History
+
+Current Release: **`v1.3.0`** (October 2026)
+
+| Version    | Date       | Highlights                                                                                                                                                                                 |
+| :--------- | :--------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1.3.0** | 2026-10-09 | 5-step guided journey (`Home` → `Events` → `Map` → `Recovery` → `Summary`), dedicated Executive Summary view, dynamic GDACS alert colors, enlarged VIIRS scale ruler, and mobile UX fixes. |
+| **v1.2.0** | 2026-10-07 | 95 Panay LGUs calibration, dual-axis 500m scale ruler, and Gemini AI briefing offline fallbacks.                                                                                           |
+| **v1.1.0** | 2026-09-30 | Live GDACS hazard ingestion, 1-click simulation import, and multi-LGU trajectory SVG curves.                                                                                               |
+| **v1.0.0** | 2026-09-15 | Initial release: Google Earth Engine VIIRS ingestion, NPRI scoring engine, and Leaflet spatial grid.                                                                                       |
+
+For detailed commit-level history and notes, see [CHANGELOG.md](./CHANGELOG.md).

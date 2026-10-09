@@ -257,20 +257,18 @@ export default function Footer({ onSelectRegion, selectedRegionKey }: FooterProp
                     <a
                       href="#map"
                       onClick={(e) => handleProvinceClick(e, prov.key)}
-                      className={`group flex items-center justify-between p-2 rounded-xl border transition-all duration-200 cursor-pointer ${
-                        isSelected
+                      className={`group flex items-center justify-between p-2 rounded-xl border transition-all duration-200 cursor-pointer ${isSelected
                           ? 'bg-ocean-50/90 dark:bg-ocean-500/15 border-ocean-400/60 dark:border-ocean-500/40 text-ocean-700 dark:text-ocean-200 shadow-sm'
                           : 'bg-white/60 dark:bg-white/5 border-slate-200/80 dark:border-white/10 hover:border-ocean-300 dark:hover:border-ocean-500/30 hover:bg-ocean-50/50 dark:hover:bg-ocean-500/10 text-slate-700 dark:text-ink-300'
-                      }`}
+                        }`}
                       title={`Focus map on ${prov.name} (${prov.lgus})`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                            isSelected
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${isSelected
                               ? 'bg-ocean-500 text-white'
                               : 'bg-slate-100 dark:bg-white/10 text-ocean-600 dark:text-ocean-400 group-hover:bg-ocean-500 group-hover:text-white'
-                          }`}
+                            }`}
                         >
                           <MapPin className="h-3.5 w-3.5" />
                         </span>

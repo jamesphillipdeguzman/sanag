@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   Menu,
@@ -7,39 +7,31 @@ import {
   Satellite,
   Sun,
   X,
-  BookOpen,
-  Compass,
-  BarChart3,
-  Calendar,
-  Map as MapIcon,
   Settings,
-  ChevronDown,
-  Zap,
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { useServerHealth } from '@/context/ServerHealthContext';
 import { useSettings } from '@/context/SettingsContext';
-import { PANAY_GRID_TRANSMISSION_NODES, PANAY_TOTAL_LGUS } from '@/hooks/useLiveCounter';
-import { getStationsByProvince, type ProvinceStationGroup } from '@/data/transmissionStations';
-import StationProvinceBreakdownPopover from './StationProvinceBreakdownPopover';
 import packageInfo from '../../package.json';
 
-export const APP_VERSION = packageInfo?.version || '1.2.0';
+export const APP_VERSION = packageInfo?.version || '1.3.0';
 
-export type TabId = 'overview' | 'map' | 'recovery' | 'events' | 'guide';
+export type TabId = 'home' | 'events' | 'map' | 'recovery' | 'summary' | 'guide' | 'overview';
 
 export interface NavTabItem {
   id: TabId;
   label: string;
   href: string;
+  step?: string;
   icon?: React.ReactNode;
 }
 
 export const navLinks: NavTabItem[] = [
-  { id: 'overview', label: 'Overview', href: '#overview' },
-  { id: 'map', label: 'Map', href: '#map' },
-  { id: 'recovery', label: 'Recovery', href: '#recovery' },
-  { id: 'events', label: 'Events', href: '#events' },
+  { id: 'home', label: 'Home', href: '#home' },
+  { id: 'events', label: 'Events', href: '#events', step: 'Step 1' },
+  { id: 'map', label: 'Map', href: '#map', step: 'Step 2' },
+  { id: 'recovery', label: 'Recovery', href: '#recovery', step: 'Step 3' },
+  { id: 'summary', label: 'Summary', href: '#summary', step: 'Step 4' },
   { id: 'guide', label: 'Guide & Glossary', href: '#guide' },
 ];
 
@@ -71,119 +63,17 @@ export default function Navbar({
     systemTelemetry,
   } = useServerHealth();
 
-  const stationsCount =
-    reportingStationsCount ??
-    systemTelemetry?.activeStationsCount ??
-    PANAY_GRID_TRANSMISSION_NODES;
-  const lgusCount =
-    totalLgus ??
-    systemTelemetry?.totalLgus ??
-    PANAY_TOTAL_LGUS;
-
-  const [showProvinceBreakdown, setShowProvinceBreakdown] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
-  const mobilePopoverRef = useRef<HTMLDivElement>(null);
-
-  // Normalize stations array safely across various payload shapes (grouped or flat)
-  const stationsByProvince: ProvinceStationGroup[] = React.useMemo(() => {
-    const tel = systemTelemetry as any;
-    const candidates = [
-      systemTelemetry?.stationsByProvince,
-      tel?.stations_by_province,
-      tel?.breakdown,
-      tel?.provinces,
-      tel?.items,
-    ];
-
-    for (const cand of candidates) {
-      if (Array.isArray(cand) && cand.length > 0) {
-        if (cand[0]?.province && (cand[0]?.stations || cand[0]?.items)) {
-          return cand.map((g: any) => ({
-            province: g.province,
-            count: g.count ?? (g.stations || g.items || []).length,
-            active_count:
-              g.active_count ??
-              (g.stations || g.items || []).filter((s: any) => s.status === 'active').length,
-            stations: g.stations || g.items || [],
-          }));
-        }
-      }
-    }
-
-    if (Array.isArray(tel?.stations) && tel.stations.length > 0) {
-      return getStationsByProvince(tel.stations);
-    }
-
-    return getStationsByProvince();
-  }, [systemTelemetry]);
-
-  // Determine grounded telemetry status based on genuine API status probe
-  const isServerWakingState = isWaking || (isReconnecting && !isOffline);
-  const isServerOfflineState = isOffline && !isWaking;
-
-  let badgeBorderBg = 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-  let badgeLabel = `${stationsCount} Active Stations · ${lgusCount} LGUs`;
-  let badgeMobileLabel = `${stationsCount} Active Stations`;
-  let badgeTooltip = `Panay Grid Telemetry: ${stationsCount} Active Monitoring Stations · ${lgusCount} LGUs Monitored (Click to view breakdown per province)`;
-  let hasPingDot = true;
-  let dotPingClass = 'bg-emerald-400 opacity-75';
-  let dotSolidClass = 'bg-emerald-500';
-
-  if (isServerWakingState) {
-    badgeBorderBg = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-    badgeLabel = `Waking Server · ${lgusCount} LGUs`;
-    badgeMobileLabel = 'Waking Server';
-    badgeTooltip = `Backend cold-start in progress. Monitoring ${lgusCount} LGUs via local cache.`;
-    hasPingDot = true;
-    dotPingClass = 'bg-amber-400 opacity-75';
-    dotSolidClass = 'bg-amber-500';
-  } else if (isServerOfflineState) {
-    badgeBorderBg = 'border-slate-300 dark:border-white/10 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-300';
-    badgeLabel = `Local Cache · ${lgusCount} LGUs`;
-    badgeMobileLabel = 'Local Cache';
-    badgeTooltip = `Backend currently unreachable. Operating on cached local baseline data across ${lgusCount} LGUs.`;
-    hasPingDot = false;
-    dotSolidClass = 'bg-slate-400 dark:bg-slate-500';
-  }
-
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    if (!showProvinceBreakdown) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const isInsideDesktop = popoverRef.current?.contains(target);
-      const isInsideMobile = mobilePopoverRef.current?.contains(target);
-      const triggerBtn = document.getElementById('navbar-station-province-trigger');
-      const mobileTriggerBtn = document.getElementById('mobile-station-province-trigger');
-      const isTrigger =
-        (triggerBtn && triggerBtn.contains(target)) ||
-        (mobileTriggerBtn && mobileTriggerBtn.contains(target));
-
-      if (!isInsideDesktop && !isInsideMobile && !isTrigger) {
-        setShowProvinceBreakdown(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowProvinceBreakdown(false);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showProvinceBreakdown]);
-
   const handleLogoClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
-    onSelectTab?.('overview');
-    if (typeof window !== 'undefined' && window.location.hash !== '#overview') {
-      window.history.replaceState(null, '', '#overview');
+    onSelectTab?.('home');
+    if (typeof window !== 'undefined' && window.location.hash !== '#home') {
+      window.history.replaceState(null, '', '#home');
     }
     if (hasConnectionError || isOffline || isWaking) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -208,8 +98,8 @@ export default function Navbar({
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-[100] overflow-visible transition-all duration-300 ${scrolled || mobileOpen
-          ? 'bg-white/90 dark:bg-slate-950/85 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
-          : 'bg-transparent'
+        ? 'bg-white/90 dark:bg-slate-950/85 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.06)] dark:shadow-[0_10px_30px_rgba(2,6,23,0.45)]'
+        : 'bg-transparent'
         }`}
     >
       {/* Nightlight Header Atmosphere & Gradient Accents */}
@@ -219,23 +109,23 @@ export default function Navbar({
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           <a
-            href="#overview"
+            href="#home"
             onClick={handleLogoClick}
             className="flex items-center gap-2.5 group cursor-pointer"
             title={hasConnectionError || isOffline || isWaking ? 'Server disconnected - Click to reconnect' : 'SANAG - Nightlight Analytics'}
           >
             <div className="relative">
               <div className={`absolute inset-0 blur-lg transition-opacity ${hasConnectionError || isOffline
-                  ? 'bg-rose-500 opacity-60 group-hover:opacity-80'
-                  : isWaking
-                    ? 'bg-amber-500 opacity-60 group-hover:opacity-80'
-                    : 'bg-ocean-500 opacity-40 group-hover:opacity-60'
+                ? 'bg-rose-500 opacity-60 group-hover:opacity-80'
+                : isWaking
+                  ? 'bg-amber-500 opacity-60 group-hover:opacity-80'
+                  : 'bg-ocean-500 opacity-40 group-hover:opacity-60'
                 }`} />
               <div className={`relative flex h-9 w-9 items-center justify-center rounded-lg shadow-lg transition-all ${hasConnectionError || isOffline
-                  ? 'bg-gradient-to-br from-rose-600 to-amber-600 shadow-rose-500/30'
-                  : isWaking
-                    ? 'bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-500/30'
-                    : 'bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-ocean-500/30'
+                ? 'bg-gradient-to-br from-rose-600 to-amber-600 shadow-rose-500/30'
+                : isWaking
+                  ? 'bg-gradient-to-br from-amber-500 to-amber-600 shadow-amber-500/30'
+                  : 'bg-gradient-to-br from-ocean-500 to-emerald-500 shadow-ocean-500/30'
                 }`}>
                 <Satellite className="h-5 w-5 text-white" />
               </div>
@@ -253,80 +143,36 @@ export default function Navbar({
           {/* Desktop Navigation Tabs */}
           <div className="hidden md:flex items-center gap-1.5 p-1 rounded-2xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-white/5 backdrop-blur-md">
             {navLinks.map((link) => {
-              const isActive = activeTab === link.id;
+              const isHomeActive = (activeTab === 'home' || activeTab === 'overview') && (link.id === 'home' || link.id === 'overview');
+              const isActive = isHomeActive || activeTab === link.id;
               return (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={(e) => handleTabClick(e, link)}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${isActive
-                      ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-300 font-bold border border-slate-200/80 dark:border-white/10 shadow-sm shadow-ocean-500/10'
-                      : 'text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${isActive
+                    ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-300 font-bold border border-slate-200/80 dark:border-white/10 shadow-sm shadow-ocean-500/10'
+                    : 'text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
                     }`}
                 >
                   {isActive && (
                     <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 animate-pulse" />
                   )}
                   <span>{link.label}</span>
+                  {link.step && (
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold transition-colors inline-block ${isActive
+                      ? 'bg-ocean-500/20 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
+                      : 'bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300/60 dark:border-slate-700/60'
+                      }`}>
+                      {link.step}
+                    </span>
+                  )}
                 </a>
               );
             })}
           </div>
 
           <div className="hidden md:flex items-center gap-2.5">
-            {/* Live Monitoring Activity Counter Pill with Province Breakdown Popover */}
-            <div className="relative" ref={popoverRef}>
-              <button
-                type="button"
-                id="navbar-station-province-trigger"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowProvinceBreakdown((prev) => !prev);
-                }}
-                className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-semibold shadow-xs transition-colors cursor-pointer select-none focus:outline-none focus:ring-2 focus:ring-emerald-500/30 ${badgeBorderBg}`}
-                title="Click to view transmission station breakdown per province"
-                aria-expanded={showProvinceBreakdown}
-                aria-haspopup="dialog"
-              >
-                <span className="relative flex h-2 w-2">
-                  {hasPingDot && (
-                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
-                  )}
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
-                </span>
-                <span className="whitespace-nowrap font-medium text-[11px] lg:text-xs">
-                  {badgeLabel}
-                </span>
-                <ChevronDown className={`h-3 w-3 transition-transform duration-200 opacity-70 ${showProvinceBreakdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Province Breakdown Popover Modal */}
-              {showProvinceBreakdown && (
-                <>
-                  <div
-                    className="fixed inset-0 z-[9998] bg-transparent cursor-default"
-                    onClick={() => setShowProvinceBreakdown(false)}
-                    aria-hidden="true"
-                  />
-                  <StationProvinceBreakdownPopover
-                    stationsCount={stationsCount}
-                    stationsByProvince={stationsByProvince}
-                    onClose={() => setShowProvinceBreakdown(false)}
-                    popoverRef={popoverRef}
-                    isMobile={false}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Version Badge */}
-            <span
-              className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/50 select-none"
-              title="Current SANAG build version"
-            >
-              v{APP_VERSION}
-            </span>
-
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -360,10 +206,10 @@ export default function Navbar({
               disabled={isRefetching}
               title="Click to check connection and refresh active telemetry data"
               className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all cursor-pointer ${isWaking || (isReconnecting && !isOffline)
-                  ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-600 dark:text-amber-300 shadow-md shadow-amber-500/10'
-                  : isOffline
-                    ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-600 dark:text-rose-300 shadow-md shadow-rose-500/10'
-                    : 'bg-gradient-to-r from-ocean-600 to-ocean-500 text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02]'
+                ? 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-600 dark:text-amber-300 shadow-md shadow-amber-500/10'
+                : isOffline
+                  ? 'bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-600 dark:text-rose-300 shadow-md shadow-rose-500/10'
+                  : 'bg-gradient-to-r from-ocean-600 to-ocean-500 text-white shadow-lg shadow-ocean-500/20 hover:shadow-ocean-500/40 hover:scale-[1.02]'
                 }`}
             >
               {isWaking || (isReconnecting && !isOffline) ? (
@@ -398,50 +244,6 @@ export default function Navbar({
           </div>
 
           <div className="flex md:hidden items-center gap-1.5 sm:gap-2">
-            {/* Mobile Live Activity Pill with Province Breakdown Popover */}
-            <div className="relative">
-              <button
-                type="button"
-                id="mobile-station-province-trigger"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowProvinceBreakdown((prev) => !prev);
-                }}
-                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold select-none transition-colors cursor-pointer ${badgeBorderBg}`}
-                title={badgeTooltip}
-                aria-expanded={showProvinceBreakdown}
-              >
-                <span className="relative flex h-1.5 w-1.5">
-                  {hasPingDot && (
-                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
-                  )}
-                  <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotSolidClass}`} />
-                </span>
-                <span>
-                  {isServerWakingState ? 'Waking' : isServerOfflineState ? 'Offline' : `${stationsCount} Stations`}
-                </span>
-                <ChevronDown className={`h-2.5 w-2.5 transition-transform duration-200 opacity-70 ${showProvinceBreakdown ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Mobile Province Breakdown Popover */}
-              {showProvinceBreakdown && (
-                <>
-                  <div
-                    className="fixed inset-0 z-[9998] bg-transparent cursor-default"
-                    onClick={() => setShowProvinceBreakdown(false)}
-                    aria-hidden="true"
-                  />
-                  <StationProvinceBreakdownPopover
-                    stationsCount={stationsCount}
-                    stationsByProvince={stationsByProvince}
-                    onClose={() => setShowProvinceBreakdown(false)}
-                    popoverRef={mobilePopoverRef}
-                    isMobile={true}
-                  />
-                </>
-              )}
-            </div>
-
             {/* Mobile Theme Toggle */}
             <button
               type="button"
@@ -481,18 +283,26 @@ export default function Navbar({
           <div className="md:hidden border-t border-slate-200 dark:border-white/10 py-4 animate-fade-in bg-white/95 dark:bg-slate-950/95 rounded-b-xl px-2">
             <div className="flex flex-col gap-1">
               {navLinks.map((link) => {
-                const isActive = activeTab === link.id;
+                const isHomeActive = (activeTab === 'home' || activeTab === 'overview') && (link.id === 'home' || link.id === 'overview');
+                const isActive = isHomeActive || activeTab === link.id;
                 return (
                   <a
                     key={link.href}
                     href={link.href}
                     onClick={(e) => handleTabClick(e, link)}
                     className={`px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${isActive
-                        ? 'bg-ocean-500/15 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
-                        : 'text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
+                      ? 'bg-ocean-500/15 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
+                      : 'text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                       }`}
                   >
-                    <span>{link.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span>{link.label}</span>
+                      {link.step && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                          {link.step}
+                        </span>
+                      )}
+                    </div>
                     {isActive && (
                       <span className="h-2 w-2 rounded-full bg-ocean-500" />
                     )}
@@ -501,22 +311,6 @@ export default function Navbar({
               })}
 
               <div className="pt-2 mt-2 border-t border-slate-200 dark:border-white/10 space-y-2">
-                {/* Mobile Active Node & Version Summary */}
-                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-xs text-slate-600 dark:text-ink-300">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      {hasPingDot && (
-                        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingClass}`} />
-                      )}
-                      <span className={`relative inline-flex rounded-full h-2 w-2 ${dotSolidClass}`} />
-                    </span>
-                    <span className="font-semibold text-slate-900 dark:text-white">{badgeMobileLabel}</span>
-                    <span className="text-slate-400 hidden xs:inline">· {lgusCount} LGUs</span>
-                  </div>
-                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800/80 border border-slate-300/60 dark:border-slate-700/50">
-                    v{APP_VERSION}
-                  </span>
-                </div>
 
                 <button
                   type="button"
@@ -525,10 +319,10 @@ export default function Navbar({
                     setMobileOpen(false);
                   }}
                   className={`w-full flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${isWaking || (isReconnecting && !isOffline)
-                      ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40'
-                      : isOffline
-                        ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40'
-                        : 'bg-ocean-600 text-white'
+                    ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40'
+                    : isOffline
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40'
+                      : 'bg-ocean-600 text-white'
                     }`}
                 >
                   {isWaking || (isReconnecting && !isOffline) ? (
