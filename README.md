@@ -1034,7 +1034,7 @@ The project should prioritize **correct data and a working system over extra fea
 
 # 🎥 Final Video
 
-📺 **Watch Presentation / Demo:** **[https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)** *(Replace with your YouTube demo link)*
+📺 **Watch Presentation / Demo:** **[https://www.youtube.com/watch?v=IfkmCGMWioE](https://www.youtube.com/watch?v=IfkmCGMWioE)**
 
 Target length: **5–8 minutes**
 
