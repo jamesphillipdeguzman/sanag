@@ -511,10 +511,10 @@ export default function RegionTreeSelector({
             ref={panelRef}
             role="tree"
             aria-label="Philippine Region and Province Selector"
-            className="absolute top-full mt-2 z-[1050] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] max-w-[360px] sm:left-0 sm:translate-x-0 sm:w-[340px] max-h-[75vh] flex flex-col rounded-2xl border border-slate-700/80 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl overflow-hidden animate-fade-in text-slate-800 dark:text-slate-100 pointer-events-auto select-auto"
+            className="absolute top-full mt-2 z-[1050] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] max-w-[360px] sm:left-0 sm:translate-x-0 sm:w-[340px] max-h-[75vh] flex flex-col rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 p-3 shadow-2xl backdrop-blur-md overflow-hidden animate-fade-in text-slate-800 dark:text-slate-100 pointer-events-auto select-auto"
           >
             {/* Header & Search Bar */}
-            <div className="pb-2.5 mb-1 border-b border-slate-700/80 bg-transparent shrink-0 space-y-2">
+            <div className="pb-2.5 mb-1 border-b border-slate-200/80 dark:border-slate-800 bg-transparent shrink-0 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                   <Globe className="h-3.5 w-3.5 text-sky-500" />
@@ -523,7 +523,7 @@ export default function RegionTreeSelector({
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors cursor-pointer"
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
                   aria-label="Close selector"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -539,7 +539,7 @@ export default function RegionTreeSelector({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search region, province, or city..."
-                  className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-ocean-500/50 transition-all"
+                  className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-white/10 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-ocean-500/50 transition-all"
                 />
                 {searchQuery && (
                   <button
@@ -557,7 +557,7 @@ export default function RegionTreeSelector({
               <div className="text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center justify-between gap-1 truncate font-mono">
                 <div className="flex items-center gap-1 min-w-0 truncate">
                   <span className="text-sky-600 dark:text-sky-400 font-semibold shrink-0">Active:</span>
-                  <span className="truncate">{activeBoundary.name}</span>
+                  <span className="truncate text-slate-800 dark:text-slate-200">{activeBoundary.name}</span>
                   <span className={`text-[9px] px-1 py-0.2 rounded font-bold uppercase shrink-0 border ${getBadgeStyle(activeBoundary)}`}>
                     {formatBadgeText(activeBoundary)}
                   </span>
@@ -569,7 +569,7 @@ export default function RegionTreeSelector({
                       e.stopPropagation();
                       onSelectMunicipality?.('');
                     }}
-                    className="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shrink-0 cursor-pointer"
+                    className="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-300/60 dark:border-slate-700/60 shrink-0 cursor-pointer"
                     title="Clear selected municipality and return to regional scope"
                   >
                     Clear LGU
@@ -652,7 +652,7 @@ export default function RegionTreeSelector({
             </div>
 
             {/* Footer Helper Note */}
-            <div className="px-3 py-2 border-t border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/70 shrink-0 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+            <div className="px-3 py-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/70 shrink-0 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
               <span>Tip: Click arrows to expand · Click name to zoom</span>
               <span className="font-semibold text-ocean-600 dark:text-ocean-400">Project SANAG</span>
             </div>
@@ -740,7 +740,7 @@ function TreeNodeItem({
       <div
         style={{ paddingLeft }}
         className={`group flex items-center justify-between py-1.5 pr-2 rounded-xl text-xs transition-all cursor-pointer ${isSelected
-          ? 'bg-ocean-500/20 text-ocean-900 dark:text-white font-bold border border-ocean-500/40 shadow-sm'
+          ? 'bg-ocean-500/15 dark:bg-ocean-500/20 text-ocean-700 dark:text-ocean-300 font-bold border border-ocean-500/30'
           : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
           }`}
         onClick={handleRowClick}
@@ -753,7 +753,7 @@ function TreeNodeItem({
                 e.stopPropagation();
                 onToggleExpand(node.id, e);
               }}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors shrink-0 z-10"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shrink-0 z-10"
               title={isExpanded ? 'Collapse' : 'Expand'}
               aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
             >
@@ -772,7 +772,7 @@ function TreeNodeItem({
             </span>
           )}
 
-          <span className="truncate flex-1 font-medium">{node.name}</span>
+          <span className="truncate flex-1 font-medium text-slate-800 dark:text-slate-200">{node.name}</span>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
