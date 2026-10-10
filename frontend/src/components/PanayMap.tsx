@@ -3,12 +3,13 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Municipality, GdacsAlert, DisasterEvent } from '@/types';
 import { getRecoveryColor, getRecoveryStatusColor, createMunicipalities } from '@/data/mockData';
-import { Compass, Globe, Lock, Unlock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler, Maximize2, Minimize2, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { Compass, Globe, Lock, Unlock, Loader2, MapPin, Radio, RotateCcw, X, Layers, Volume2, VolumeX, Sparkles, Moon, Ruler, Maximize2, Minimize2, RefreshCw, ChevronUp, ChevronDown, ArrowLeft } from 'lucide-react';
 import { useAudioSpatialIndicator, type EmergencyAudioStatus } from '@/utils/audioSpatialIndicator';
 import { useTheme } from '@/context/ThemeContext';
 import { useSettings, type BasemapSource } from '@/context/SettingsContext';
 import GisHierarchyReference from '@/components/GisHierarchyReference';
 import RegionTreeSelector from '@/components/RegionTreeSelector';
+import ViirsScaleRuler from '@/components/ViirsScaleRuler';
 import { findRegionTreeNode, getRegionNodeBounds, PHILIPPINES_BOUNDS } from '@/utils/philippinesHierarchy';
 import {
   findRegionByCoordinates,
@@ -50,6 +51,7 @@ export interface PanayMapProps {
 export interface LeafletMapProps {
   municipalities: Municipality[];
   selectedId: string | null;
+  targetLocation?: { lat: number; lng: number; zoom?: number } | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
   onMapHoverChange?: (hovered: boolean) => void;
@@ -233,6 +235,8 @@ export default function PanayMap({
   const [mapZoom, setMapZoom] = useState(8);
   const [hasRenderedFeatures, setHasRenderedFeatures] = useState<boolean>(true);
   const [showImpactBuffers, setShowImpactBuffers] = useState<boolean>(true);
+  const [selectedLgu, setSelectedLgu] = useState<any>(null);
+  const [targetLocation, setTargetLocation] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   // Handle ESC key to dismiss fullscreen map mode
   useEffect(() => {
@@ -315,6 +319,29 @@ export default function PanayMap({
     });
     return Array.from(map.values());
   }, [municipalities, extraMunicipalities]);
+
+  const handleSelectMunicipality = (idOrPcode: string, lguPayload?: any) => {
+    let lgu = lguPayload;
+    if (!lgu && idOrPcode) {
+      lgu = findLguQuickLookup(idOrPcode) || allMunicipalities.find((m) => m.id === idOrPcode || m.pcode === idOrPcode || m.name === idOrPcode);
+    }
+    if (lgu) {
+      const lat = lgu.lat ?? lgu.centroid?.[1] ?? lgu.coordinates?.[1] ?? lgu.center?.[0];
+      const lng = lgu.lng ?? lgu.centroid?.[0] ?? lgu.coordinates?.[0] ?? lgu.center?.[1];
+
+      setSelectedLgu(lgu);
+      const chosenId = lgu.pcode || lgu.id || lgu.name || idOrPcode;
+      onSelect(chosenId);
+
+      if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+        setTargetLocation({ lat: Number(lat), lng: Number(lng), zoom: 11 });
+      }
+    } else {
+      setSelectedLgu(null);
+      setTargetLocation(null);
+      onSelect(idOrPcode);
+    }
+  };
 
   // Uniform ranking lookup based on Municipal Resilience Index
   const resilienceRankMap = useMemo(() => {
@@ -453,12 +480,44 @@ export default function PanayMap({
   }, [allMunicipalities, extraMunicipalities, currentRegionKey]);
 
   const hovered = allMunicipalities.find((m: Municipality) => m.id === hoveredId);
-  const selected = allMunicipalities.find(
-    (m: Municipality) =>
-      m.id === selectedId ||
-      (m.pcode && m.pcode === selectedId) ||
-      (m.name && selectedId && m.name.toLowerCase() === selectedId.toLowerCase())
-  );
+  const selected = useMemo(() => {
+    if (!selectedId) return null;
+    const lowerSel = selectedId.toLowerCase().trim();
+    const normSel = lowerSel.replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '');
+
+    const found = allMunicipalities.find((m: Municipality) => {
+      if (m.id && m.id.toLowerCase() === lowerSel) return true;
+      if (m.pcode && m.pcode.toLowerCase() === lowerSel) return true;
+      if (m.name) {
+        const mLower = m.name.toLowerCase().trim();
+        if (mLower === lowerSel) return true;
+        const mNorm = mLower.replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '');
+        if (mNorm && mNorm === normSel) return true;
+      }
+      return false;
+    });
+    if (found) return found;
+
+    const lookup = findLguQuickLookup(selectedId);
+    if (lookup) {
+      return {
+        id: lookup.pcode || selectedId,
+        name: lookup.name,
+        province: lookup.province,
+        region: lookup.region_code,
+        pcode: lookup.pcode,
+        recoveryScore: 82,
+        currentRadiance: 36.5,
+        baselineRadiance: 45.0,
+        status: 'recovering' as const,
+        population: 35000,
+        daysSinceEvent: 3,
+        estimatedDaysToRecover: 5,
+        area: 85.5,
+      };
+    }
+    return null;
+  }, [allMunicipalities, selectedId]);
 
   // Audio-Spatial Emergency Indicator: dynamically resolve target municipality
   // Prioritizes hovered municipality first for instant spatial acoustic feedback,
@@ -526,780 +585,767 @@ export default function PanayMap({
   const activePreset = REGION_PRESETS[currentRegionKey] || REGION_PRESETS.panay;
 
   return (
-    <div className={isMaximized ? 'relative w-full max-w-full overflow-x-hidden' : 'grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch w-full max-w-full min-w-0 overflow-x-hidden'}>
-      {/* Map */}
-      <div className={isMaximized ? 'w-full max-w-full' : 'lg:col-span-8 flex flex-col w-full max-w-full min-w-0'}>
-        {/* Keep the panel chrome on the app theme; night glow darkens only the map viewport. */}
-        <div className={isMaximized
-          ? 'map-fullscreen-modal fixed inset-0 z-[1500] w-full max-w-full h-screen rounded-none m-0 p-0 overflow-hidden flex flex-col bg-slate-950'
-          : `relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-white/95 dark:bg-ink-900/60 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`
-        }>
-          {/* Map header with Region Selector */}
-          <div className={`transition-all duration-300 ease-in-out shrink-0 relative z-[2000] ${
-            isHeaderCollapsed
+    <>
+      {!isMaximized && (
+        <div className="flex justify-center mb-4">
+          <div className="inline-flex items-center px-4 py-1.5 rounded-full border border-amber-500/60 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+            <span className="text-xs sm:text-sm font-bold tracking-wider uppercase text-amber-400">
+              STEP 02 · SPATIAL GRID & DISASTER FOOTPRINT
+            </span>
+          </div>
+        </div>
+      )}
+      <div className={isMaximized ? 'relative w-full max-w-full overflow-x-hidden' : 'grid lg:grid-cols-12 gap-5 sm:gap-6 items-stretch w-full max-w-full min-w-0 overflow-x-hidden'}>
+        {/* Map */}
+        <div className={isMaximized ? 'w-full max-w-full' : 'lg:col-span-8 flex flex-col w-full max-w-full min-w-0'}>
+          {/* Keep the panel chrome on the app theme; night glow darkens only the map viewport. */}
+          <div className={isMaximized
+            ? 'map-fullscreen-modal fixed inset-0 z-[1500] w-full max-w-full h-screen rounded-none m-0 p-0 overflow-hidden flex flex-col bg-slate-950'
+            : `relative rounded-2xl border ${nightGlowMode ? 'border-amber-500/25 bg-white/95 dark:bg-ink-900/60 shadow-[0_0_35px_rgba(255,170,51,0.08)]' : 'border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 shadow-sm dark:shadow-xl'} backdrop-blur-sm overflow-hidden flex flex-col h-full transition-all duration-300`
+          }>
+            {/* Map header with Region Selector */}
+            <div className={`transition-all duration-300 ease-in-out shrink-0 relative z-[2000] ${isHeaderCollapsed
               ? 'max-h-0 opacity-0 -translate-y-4 pointer-events-none py-0 border-b-0 overflow-hidden'
               : `max-h-48 opacity-100 py-3 border-b overflow-visible ${nightGlowMode ? 'border-amber-500/20 bg-slate-50/80 dark:bg-ink-950/40' : 'border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-ink-950/40'}`
-          } transition-colors`}>
-            {/* Centered Title block & Subtitle */}
-            <div className="flex flex-col items-center justify-center">
-              <div className="flex items-center justify-center gap-2">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
-                {nightGlowMode && (
-                  <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/35 shadow-sm shadow-amber-500/20 animate-fade-in" title="NASA Black Marble VIIRS DNB Day/Night Band Composite Active">
-                    <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-300 animate-pulse" />
-                    Black Marble VIIRS
-                  </span>
-                )}
-                {(isRegionChunkLoading || isLoadingRegion) && (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 bg-ocean-50 dark:bg-ocean-500/15 border border-ocean-200 dark:border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
-                    <Loader2 className="h-3 w-3 animate-spin text-ocean-600 dark:text-ocean-300" />
-                    Loading {activePreset?.name || currentRegionKey}...
-                  </span>
+              } transition-colors`}>
+              {/* Centered Title block & Subtitle */}
+              <div className="flex flex-col items-center justify-center">
+                <div className="flex items-center justify-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Philippine Satellite Grid</h3>
+                  {nightGlowMode && (
+                    <span className="hidden md:inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/35 shadow-sm shadow-amber-500/20 animate-fade-in" title="NASA Black Marble VIIRS DNB Day/Night Band Composite Active">
+                      <Sparkles className="h-3 w-3 text-amber-500 dark:text-amber-300 animate-pulse" />
+                      Black Marble VIIRS
+                    </span>
+                  )}
+                  {(isRegionChunkLoading || isLoadingRegion) && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 bg-ocean-50 dark:bg-ocean-500/15 border border-ocean-200 dark:border-ocean-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin text-ocean-600 dark:text-ocean-300" />
+                      Loading {activePreset?.name || currentRegionKey}...
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5 text-center">
+                  {nightGlowMode ? (
+                    <span className="inline-flex items-center justify-center gap-1.5 flex-wrap">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                      <span className="text-amber-600 dark:text-amber-300 font-semibold">NASA Black Marble Composite</span>
+                      <span>· Realistic VIIRS Night Lights · Harmonized Orbital Basemap</span>
+                      {recoveryDate ? ` · Reading: ${recoveryDate}` : ''}
+                    </span>
+                  ) : (
+                    <>
+                      NASA VIIRS radiance overlay · Nationwide Philippine municipality boundaries
+                      {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
+                    </>
+                  )}
+                </p>
+              </div>
+
+              {/* Region selection dropdown and Live Hazards indicator badge directly underneath */}
+              <div className="relative flex flex-wrap items-center justify-center gap-2">
+                {/* Hierarchical Collapsible Tree Region Selector */}
+                <RegionTreeSelector
+                  currentRegionKey={currentRegionKey}
+                  selectedMunicipalityId={selectedId}
+                  selectedMunicipalityName={selected?.name || selectedLgu?.name}
+                  onSelectRegion={handleRegionChange}
+                  onSelectMunicipality={handleSelectMunicipality}
+                />
+
+                {/* Primary Live Status: Live Hazards Badge Toggle */}
+                {alertsWithCoords.length > 0 && (
+                  <button
+                    type="button"
+                    id="header-live-hazards-toggle"
+                    onClick={() => setShowGdacsMarkers(!showGdacsMarkers)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${showGdacsMarkers
+                      ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    title="Toggle live GDACS hazard epicenter markers on map"
+                  >
+                    <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-500 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
+                    <span>Live Hazards ({alertsWithCoords.length})</span>
+                  </button>
                 )}
               </div>
-              <p className="text-xs text-slate-500 dark:text-ink-400 mt-0.5 text-center">
-                {nightGlowMode ? (
-                  <span className="inline-flex items-center justify-center gap-1.5 flex-wrap">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                    <span className="text-amber-600 dark:text-amber-300 font-semibold">NASA Black Marble Composite</span>
-                    <span>· Realistic VIIRS Night Lights · Harmonized Orbital Basemap</span>
-                    {recoveryDate ? ` · Reading: ${recoveryDate}` : ''}
-                  </span>
-                ) : (
-                  <>
-                    NASA VIIRS radiance overlay · Nationwide Philippine municipality boundaries
-                    {recoveryDate ? ` · Latest reading: ${recoveryDate}` : ''}
-                  </>
-                )}
-              </p>
             </div>
 
-            {/* Region selection dropdown and Live Hazards indicator badge directly underneath */}
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
-              {/* Hierarchical Collapsible Tree Region Selector */}
-              <RegionTreeSelector
-                currentRegionKey={currentRegionKey}
-                selectedMunicipalityId={selectedId}
-                selectedMunicipalityName={selected?.name}
-                onSelectRegion={handleRegionChange}
-                onSelectMunicipality={onSelect}
-              />
+            {/* Leaflet GeoJSON map */}
+            <div
+              className={`relative dot-bg ${isMaximized ? 'fullscreen-map-container p-0 w-full h-full flex-1' : 'p-2 flex-1 min-h-0'} flex flex-col ${nightGlowMode ? 'bg-[#0b0f19]' : ''}`}
+              onMouseEnter={() => setAudioHovered(true)}
+              onMouseLeave={() => setAudioHovered(false)}
+            >
+              {isLoading && allMunicipalities.length === 0 ? (
+                <MapLoadingSkeleton />
+              ) : (
+                <>
+                  <LeafletMap
+                    municipalities={allMunicipalities}
+                    selectedId={selectedId}
+                    targetLocation={targetLocation}
+                    onSelect={onSelect}
+                    onHover={setHoveredId}
+                    onMapHoverChange={setAudioHovered}
+                    gdacsAlerts={gdacsAlerts}
+                    showGdacsMarkers={showGdacsMarkers}
+                    activeEventId={activeEventId}
+                    activeEvent={activeEvent}
+                    onSimulateGdacs={onSimulateGdacs}
+                    selectedRegionKey={currentRegionKey}
+                    onRegionChange={handleRegionChange}
+                    onChunkLoaded={handleChunkLoaded}
+                    onChunkLoadingChange={(loading) => {
+                      setIsRegionChunkLoading(loading);
+                      setIsLoadingRegion(loading);
+                    }}
+                    isActiveTab={isActiveTab}
+                    nightGlowMode={nightGlowMode}
+                    nightGlowIntensity={nightGlowIntensity}
+                    onNightGlowModeChange={handleNightGlowToggle}
+                    onZoomChange={setMapZoom}
+                    onFeaturesInViewChange={setHasRenderedFeatures}
+                    isMaximized={isMaximized}
+                    onToggleMaximize={() => setIsMaximized((v) => !v)}
+                    isHeaderCollapsed={isHeaderCollapsed}
+                    onToggleCollapseHeader={() => setIsHeaderCollapsed((prev) => !prev)}
+                    onHoverRagStatusChange={setHoveredRagStatus}
+                    selectedGdacsAlert={selectedGdacsAlert}
+                    onSelectGdacsAlert={setSelectedGdacsAlert}
+                    isLoading={Boolean(isLoading || isLoadingRegion || isRegionChunkLoading)}
+                    loadingMessage={
+                      (isLoadingRegion || isRegionChunkLoading)
+                        ? `Loading ${activePreset?.name || currentRegionKey} GeoJSON...`
+                        : isLoading
+                          ? 'Connecting / Calibrating radiance...'
+                          : undefined
+                    }
+                    showImpactBuffers={showImpactBuffers}
+                    onToggleImpactBuffers={setShowImpactBuffers}
+                  />
 
-              {/* Primary Live Status: Live Hazards Badge Toggle */}
-              {alertsWithCoords.length > 0 && (
-                <button
-                  type="button"
-                  id="header-live-hazards-toggle"
-                  onClick={() => setShowGdacsMarkers(!showGdacsMarkers)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${showGdacsMarkers
-                    ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  title="Toggle live GDACS hazard epicenter markers on map"
-                >
-                  <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-500 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
-                  <span>Live Hazards ({alertsWithCoords.length})</span>
-                </button>
+                  {/* Night Glow Fallback Notification Toast — positioned top-16 so it never collides with top-3 toolbar */}
+                  {nightGlowMode && !hasRenderedFeatures && (
+                    <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[999] max-w-[90%] sm:max-w-md px-3.5 py-2 rounded-xl bg-slate-900/90 dark:bg-black/90 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs shadow-xl flex items-center gap-2.5 animate-fade-in pointer-events-auto">
+                      <Sparkles className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
+                      <span className="leading-snug">
+                        Orbital night glow active. Waiting for regional telemetry or boundaries.
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 500m VIIRS Spatial Grid Overlay */}
+                  {showGrid && <div className="viirs-grid-pane animate-fade-in" />}
+
+                  <ViirsScaleRuler
+                    pinned={showScaleRuler}
+                    nightGlow={nightGlowMode}
+                    mapHovered={!!hoveredId}
+                    showGrid={showGrid}
+                    onToggleGrid={() => setShowGrid((v) => !v)}
+                    zoom={mapZoom}
+                    scaleCalibration={settings?.scaleCalibration ?? 1.0}
+                    onClose={() => {
+                      setShowScaleRuler(false);
+                      updateSetting('showScaleRuler', false);
+                    }}
+                  />
+
+                  {/* Floating municipality telemetry card — z-[1200] so it reliably floats above basemap and canvas in both normal and maximized views */}
+                  {hovered && !selected && (
+                    <div className="absolute pointer-events-auto bottom-16 left-6 z-[1200] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/90 backdrop-blur-md">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-2.5 w-2.5 rounded-full"
+                            style={{
+                              backgroundColor: nightGlowMode
+                                ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#121722')
+                                : getRecoveryColor(hovered.recoveryScore),
+                              boxShadow: nightGlowMode && hovered.recoveryScore >= 60 ? '0 0 8px #ffaa33' : undefined,
+                              border: nightGlowMode && hovered.recoveryScore < 60 ? '1px solid rgba(255,255,255,0.2)' : undefined,
+                            }}
+                          />
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
+                          <span className="text-xs text-gray-500 dark:text-ink-400">{hovered.province}</span>
+                        </div>
+                        <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
+                          #{hovered.resilienceRank ?? hovered.rank ?? (resilienceRankMap.get(hovered.id) || 1)} Lowest
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="text-gray-600 dark:text-ink-300">
+                          Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore}%</span>
+                        </span>
+                        <span className="text-gray-600 dark:text-ink-300">
+                          Status: <span style={{
+                            color: nightGlowMode
+                              ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#94a3b8')
+                              : getRecoveryStatusColor(hovered.status)
+                          }}>
+                            {nightGlowMode && hovered.status === 'restored'
+                              ? 'Near-Full Recovery'
+                              : nightGlowMode && (hovered.status === 'critical' || hovered.recoveryScore < 60)
+                                ? 'Critical Deficit'
+                                : statusLabels[hovered.status] || (hovered.recoveryScore >= 90 ? 'Near-Full Recovery' : hovered.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit')}
+                          </span>
+                        </span>
+                      </div>
+                      {nightGlowMode && (
+                        <div className="flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-300/90 mt-1 pt-1 border-t border-slate-200 dark:border-white/5">
+                          <span>VIIRS Radiance:</span>
+                          <span className="font-mono font-semibold">
+                            {(hovered.currentRadiance ?? (hovered.recoveryScore * 0.45)).toFixed(1)} nW/cm²/sr
+                          </span>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-gray-500 dark:text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
+                      {isAudioEnabled && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-300/90 mt-1.5 pt-1.5 border-t border-gray-200 dark:border-white/5">
+                          <Volume2 className={`h-3 w-3 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
+                          <span>Spatial Audio: {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
-          </div>
 
-          {/* Leaflet GeoJSON map */}
-          <div
-            className={`relative dot-bg ${isMaximized ? 'fullscreen-map-container p-0 w-full h-full flex-1' : 'p-2 flex-1 min-h-0'} flex flex-col ${nightGlowMode ? 'bg-[#0b0f19]' : ''}`}
-            onMouseEnter={() => setAudioHovered(true)}
-            onMouseLeave={() => setAudioHovered(false)}
-          >
-            {isLoading && allMunicipalities.length === 0 ? (
-              <MapLoadingSkeleton />
-            ) : (
-              <>
-                <LeafletMap
-                  municipalities={allMunicipalities}
-                  selectedId={selectedId}
-                  onSelect={onSelect}
-                  onHover={setHoveredId}
-                  onMapHoverChange={setAudioHovered}
-                  gdacsAlerts={gdacsAlerts}
-                  showGdacsMarkers={showGdacsMarkers}
-                  activeEventId={activeEventId}
-                  activeEvent={activeEvent}
-                  onSimulateGdacs={onSimulateGdacs}
-                  selectedRegionKey={currentRegionKey}
-                  onRegionChange={handleRegionChange}
-                  onChunkLoaded={handleChunkLoaded}
-                  onChunkLoadingChange={(loading) => {
-                    setIsRegionChunkLoading(loading);
-                    setIsLoadingRegion(loading);
-                  }}
-                  isActiveTab={isActiveTab}
-                  nightGlowMode={nightGlowMode}
-                  nightGlowIntensity={nightGlowIntensity}
-                  onNightGlowModeChange={handleNightGlowToggle}
-                  onZoomChange={setMapZoom}
-                  onFeaturesInViewChange={setHasRenderedFeatures}
-                  isMaximized={isMaximized}
-                  onToggleMaximize={() => setIsMaximized((v) => !v)}
-                  isHeaderCollapsed={isHeaderCollapsed}
-                  onToggleCollapseHeader={() => setIsHeaderCollapsed((prev) => !prev)}
-                  onHoverRagStatusChange={setHoveredRagStatus}
-                  selectedGdacsAlert={selectedGdacsAlert}
-                  onSelectGdacsAlert={setSelectedGdacsAlert}
-                  isLoading={Boolean(isLoading || isLoadingRegion || isRegionChunkLoading)}
-                  loadingMessage={
-                    (isLoadingRegion || isRegionChunkLoading)
-                      ? `Loading ${activePreset?.name || currentRegionKey} GeoJSON...`
-                      : isLoading
-                      ? 'Connecting / Calibrating radiance...'
-                      : undefined
-                  }
-                  showImpactBuffers={showImpactBuffers}
-                  onToggleImpactBuffers={setShowImpactBuffers}
-                />
+            {/* Unified Bottom Utility Dock & Severity Reference Footer */}
+            <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 px-4 sm:px-5 py-2.5 border-t shrink-0 border-slate-200 dark:border-white/10 bg-slate-100/95 dark:bg-slate-950/85 backdrop-blur-md text-slate-700 dark:text-slate-300 transition-colors">
+              {/* Left: Secondary Controls Toolbar (ADM Hierarchy, Scale Ruler, Spatial Audio, Night Glow Switch + Intensity Slider) */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* ADM Hierarchy popover button */}
+                <GisHierarchyReference />
 
-                {/* Night Glow Fallback Notification Toast — positioned top-16 so it never collides with top-3 toolbar */}
-                {nightGlowMode && !hasRenderedFeatures && (
-                  <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[999] max-w-[90%] sm:max-w-md px-3.5 py-2 rounded-xl bg-slate-900/90 dark:bg-black/90 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs shadow-xl flex items-center gap-2.5 animate-fade-in pointer-events-auto">
-                    <Sparkles className="h-4 w-4 text-amber-400 shrink-0 animate-pulse" />
-                    <span className="leading-snug">
-                      Orbital night glow active. Waiting for regional telemetry or boundaries.
-                    </span>
-                  </div>
-                )}
-
-                {/* 500m VIIRS Spatial Grid Overlay */}
-                {showGrid && <div className="viirs-grid-pane animate-fade-in" />}
-
-                <VIIRSScaleRuler
-                  pinned={showScaleRuler}
-                  nightGlow={nightGlowMode}
-                  mapHovered={!!hoveredId}
-                  showGrid={showGrid}
-                  onToggleGrid={() => setShowGrid((v) => !v)}
-                  zoom={mapZoom}
-                  scaleCalibration={settings?.scaleCalibration ?? 1.0}
-                />
-
-                {/* Floating municipality telemetry card — z-[1200] so it reliably floats above basemap and canvas in both normal and maximized views */}
-                {hovered && !selected && (
-                  <div className="absolute pointer-events-auto bottom-16 left-6 z-[1200] glass rounded-xl px-4 py-3 max-w-xs animate-fade-in shadow-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/90 backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2.5 w-2.5 rounded-full"
-                          style={{
-                            backgroundColor: nightGlowMode
-                              ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#121722')
-                              : getRecoveryColor(hovered.recoveryScore),
-                            boxShadow: nightGlowMode && hovered.recoveryScore >= 60 ? '0 0 8px #ffaa33' : undefined,
-                            border: nightGlowMode && hovered.recoveryScore < 60 ? '1px solid rgba(255,255,255,0.2)' : undefined,
-                          }}
-                        />
-                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
-                        <span className="text-xs text-gray-500 dark:text-ink-400">{hovered.province}</span>
-                      </div>
-                      <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
-                        #{hovered.resilienceRank ?? hovered.rank ?? (resilienceRankMap.get(hovered.id) || 1)} Lowest
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-gray-600 dark:text-ink-300">
-                        Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore}%</span>
-                      </span>
-                      <span className="text-gray-600 dark:text-ink-300">
-                        Status: <span style={{
-                          color: nightGlowMode
-                            ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#94a3b8')
-                            : getRecoveryStatusColor(hovered.status)
-                        }}>
-                          {nightGlowMode && hovered.status === 'restored'
-                            ? 'Near-Full Recovery'
-                            : nightGlowMode && (hovered.status === 'critical' || hovered.recoveryScore < 60)
-                              ? 'Critical Deficit'
-                              : statusLabels[hovered.status] || (hovered.recoveryScore >= 90 ? 'Near-Full Recovery' : hovered.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit')}
-                        </span>
-                      </span>
-                    </div>
-                    {nightGlowMode && (
-                      <div className="flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-300/90 mt-1 pt-1 border-t border-slate-200 dark:border-white/5">
-                        <span>VIIRS Radiance:</span>
-                        <span className="font-mono font-semibold">
-                          {(hovered.currentRadiance ?? (hovered.recoveryScore * 0.45)).toFixed(1)} nW/cm²/sr
-                        </span>
-                      </div>
-                    )}
-                    <p className="text-[11px] text-gray-500 dark:text-ink-400 mt-1.5">Click municipality to pin telemetry</p>
-                    {isAudioEnabled && (
-                      <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 dark:text-emerald-300/90 mt-1.5 pt-1.5 border-t border-gray-200 dark:border-white/5">
-                        <Volume2 className={`h-3 w-3 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
-                        <span>Spatial Audio: {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Unified Bottom Utility Dock & Severity Reference Footer */}
-          <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 px-4 sm:px-5 py-2.5 border-t shrink-0 border-slate-200 dark:border-white/10 bg-slate-100/95 dark:bg-slate-950/85 backdrop-blur-md text-slate-700 dark:text-slate-300 transition-colors">
-            {/* Left: Secondary Controls Toolbar (ADM Hierarchy, Scale Ruler, Spatial Audio, Night Glow Switch + Intensity Slider) */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* ADM Hierarchy popover button */}
-              <GisHierarchyReference />
-
-              {/* VIIRS 500m Scale Ruler Toggle */}
-              <button
-                type="button"
-                id="viirs-scale-ruler-toggle"
-                onClick={() => {
-                  const next = !showScaleRuler;
-                  setShowScaleRuler(next);
-                  updateSetting('showScaleRuler', next);
-                }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${showScaleRuler
-                  ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
-                  : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                title={showScaleRuler ? 'Hide VIIRS 500m pixel scale ruler' : 'Pin VIIRS 500m pixel scale ruler (also appears on hover)'}
-                aria-pressed={showScaleRuler}
-              >
-                <Ruler className={`h-3.5 w-3.5 ${showScaleRuler ? 'text-sky-500 dark:text-sky-300' : 'text-slate-500 dark:text-slate-400'}`} />
-                <span>Scale Ruler</span>
-              </button>
-
-              {/* Impact Buffers & Infrastructure Toggle */}
-              <button
-                type="button"
-                id="impact-buffers-toggle"
-                onClick={() => setShowImpactBuffers(!showImpactBuffers)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${showImpactBuffers
-                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/40 shadow-sm shadow-amber-500/20 ring-1 ring-amber-500/30'
-                  : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                title={showImpactBuffers ? 'Hide Radial Impact Buffers & Substation Hubs' : 'Show Radial Impact Buffers & Substation Hubs'}
-                aria-pressed={showImpactBuffers}
-              >
-                <Radio className={`h-3.5 w-3.5 ${showImpactBuffers ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`} />
-                <span>Impact Buffers</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${showImpactBuffers
-                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                  : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'
-                  }`}>
-                  {showImpactBuffers ? 'ON' : 'OFF'}
-                </span>
-              </button>
-
-              {/* Spatial Audio Emergency Indicator Toggle */}
-              <button
-                type="button"
-                id="audio-spatial-indicator-toggle"
-                onClick={() => {
-                  toggleAudio();
-                  updateSetting('audioFeedback', !isAudioEnabled);
-                }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${isAudioEnabled
-                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
-                  : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                  }`}
-                title={
-                  isAudioEnabled
-                    ? isMapAudioPlaying
-                      ? `Audio-Spatial Indicator: ACTIVE (${audioStatusLabel}) - Click to turn off`
-                      : `Audio-Spatial Indicator: ON (Standby · Hover map to listen) - Click to turn off`
-                    : 'Enable Audio-Spatial Emergency Indicator (Simulated Nighttime Cricket Telemetry · Plays on map hover)'
-                }
-                aria-pressed={isAudioEnabled}
-              >
-                {isAudioEnabled ? (
-                  <>
-                    <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-70'}`} />
-                    <span>Audio</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 uppercase tracking-wider font-mono">
-                      {isMapAudioPlaying ? (liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : 'LOW') : 'Standby'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <VolumeX className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                    <span>Spatial Audio</span>
-                  </>
-                )}
-              </button>
-
-              {/* Realistic Night Glow Switch with Inline Intensity Slider */}
-              <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all ${nightGlowMode
-                ? 'bg-amber-100 border border-amber-400 text-amber-950 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/60 shadow-sm'
-                : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                }`}>
+                {/* VIIRS 500m Scale Ruler Toggle */}
                 <button
                   type="button"
-                  id="realistic-night-glow-toggle"
-                  onClick={handleNightGlowToggle}
-                  className="flex items-center gap-1.5 cursor-pointer"
-                  title="Toggle NASA Black Marble Realistic Night Light composite view"
-                  aria-pressed={nightGlowMode}
+                  id="viirs-scale-ruler-toggle"
+                  onClick={() => {
+                    const next = !showScaleRuler;
+                    setShowScaleRuler(next);
+                    updateSetting('showScaleRuler', next);
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${showScaleRuler
+                    ? 'bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/40 shadow-sm shadow-sky-500/20 ring-1 ring-sky-500/30'
+                    : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  title={showScaleRuler ? 'Hide VIIRS 500m pixel scale ruler' : 'Pin VIIRS 500m pixel scale ruler (also appears on hover)'}
+                  aria-pressed={showScaleRuler}
                 >
-                  <Sparkles className={`h-3.5 w-3.5 ${nightGlowMode ? 'text-amber-900 dark:text-amber-300 animate-pulse' : 'text-slate-500 dark:text-slate-400'}`} />
-                  <span>Night Glow</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${nightGlowMode
-                      ? 'bg-amber-200 text-amber-950 dark:bg-amber-500/30 dark:text-amber-200 border border-amber-400 dark:border-amber-500/40'
-                      : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'
-                      }`}
-                  >
-                    {nightGlowMode ? 'NASA VIIRS' : 'OFF'}
+                  <Ruler className={`h-3.5 w-3.5 ${showScaleRuler ? 'text-sky-500 dark:text-sky-300' : 'text-slate-500 dark:text-slate-400'}`} />
+                  <span>Scale Ruler</span>
+                </button>
+
+                {/* Impact Buffers & Infrastructure Toggle */}
+                <button
+                  type="button"
+                  id="impact-buffers-toggle"
+                  onClick={() => setShowImpactBuffers(!showImpactBuffers)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${showImpactBuffers
+                    ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 shadow-sm'
+                    : 'bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800'
+                    }`}
+                  title={showImpactBuffers ? 'Hide Radial Impact Buffers & Substation Hubs' : 'Show Radial Impact Buffers & Substation Hubs'}
+                  aria-pressed={showImpactBuffers}
+                >
+                  <Radio className={`h-3.5 w-3.5 ${showImpactBuffers ? 'text-amber-800 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                  <span>Impact Buffers</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${showImpactBuffers
+                    ? 'bg-amber-200 text-amber-950 dark:bg-amber-500/20 dark:text-amber-300'
+                    : 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-400'
+                    }`}>
+                    {showImpactBuffers ? 'ON' : 'OFF'}
                   </span>
                 </button>
 
-                {nightGlowMode && (
-                  <div className="flex items-center gap-1.5 pl-1.5 border-l border-amber-400 dark:border-amber-500/30">
-                    <span className="text-[10px] font-mono text-amber-900 dark:text-amber-300 font-bold">
-                      {Math.round(nightGlowIntensity * 100)}%
-                    </span>
-                    <input
-                      id="night-glow-intensity-slider"
-                      type="range"
-                      min="0.20"
-                      max="1.00"
-                      step="0.05"
-                      value={nightGlowIntensity}
-                      onChange={(e) => setNightGlowIntensity(parseFloat(e.target.value))}
-                      className="w-16 h-1 bg-amber-200 dark:bg-amber-900/60 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                      title={`Night Glow Intensity: ${Math.round(nightGlowIntensity * 100)}%`}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Numbered VIIRS Scale with Anchored RAG Severity Guide Directly Beneath */}
-            <div className="flex flex-col items-start xl:items-end gap-1.5">
-              {/* Row 1: Numbered VIIRS Reference Scale */}
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
-                  {nightGlowMode ? 'NASA Black Marble Radiance' : '500M VIIRS Scale'}
-                </span>
-                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">0</span>
-                <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden border border-slate-300/60 dark:border-white/10 shadow-inner">
-                  {nightGlowMode ? (
+                {/* Spatial Audio Emergency Indicator Toggle */}
+                <button
+                  type="button"
+                  id="audio-spatial-indicator-toggle"
+                  onClick={() => {
+                    toggleAudio();
+                    updateSetting('audioFeedback', !isAudioEnabled);
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all cursor-pointer ${isAudioEnabled
+                    ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
+                    : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  title={
+                    isAudioEnabled
+                      ? isMapAudioPlaying
+                        ? `Audio-Spatial Indicator: ACTIVE (${audioStatusLabel}) - Click to turn off`
+                        : `Audio-Spatial Indicator: ON (Standby · Hover map to listen) - Click to turn off`
+                      : 'Enable Audio-Spatial Emergency Indicator (Simulated Nighttime Cricket Telemetry · Plays on map hover)'
+                  }
+                  aria-pressed={isAudioEnabled}
+                >
+                  {isAudioEnabled ? (
                     <>
-                      <div className="flex-1 bg-[#121722]" title="< 60% Critical Deficit" />
-                      <div className="flex-1 bg-[#e08b18]" title="60%–89% Active Restoration" />
-                      <div className="flex-1 bg-gradient-to-r from-[#ffaa33] to-[#ffc04d] shadow-[0_0_8px_#ffaa33]" title=">= 90% Near-Full Recovery" />
+                      <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-70'}`} />
+                      <span>Audio</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 uppercase tracking-wider font-mono">
+                        {isMapAudioPlaying ? (liveAudioStatus === 'critical' ? 'MAX' : liveAudioStatus === 'warning' ? 'MID' : 'LOW') : 'Standby'}
+                      </span>
                     </>
                   ) : (
                     <>
-                      <div className="flex-1 bg-[#ef4444]" title="< 60% Critical Deficit" />
-                      <div className="flex-1 bg-[#f59e0b]" title="60%–89% Active Restoration" />
-                      <div className="flex-1 bg-[#10b981]" title=">= 90% Near-Full Recovery" />
+                      <VolumeX className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                      <span>Spatial Audio</span>
                     </>
                   )}
+                </button>
+
+                {/* Realistic Night Glow Switch with Inline Intensity Slider */}
+                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-semibold border backdrop-blur-sm transition-all ${nightGlowMode
+                  ? 'bg-amber-100 border border-amber-400 text-amber-950 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/60 shadow-sm'
+                  : 'bg-white/80 dark:bg-slate-900/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700/60 hover:bg-slate-200/80 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                  }`}>
+                  <button
+                    type="button"
+                    id="realistic-night-glow-toggle"
+                    onClick={handleNightGlowToggle}
+                    className="flex items-center gap-1.5 cursor-pointer"
+                    title="Toggle NASA Black Marble Realistic Night Light composite view"
+                    aria-pressed={nightGlowMode}
+                  >
+                    <Sparkles className={`h-3.5 w-3.5 ${nightGlowMode ? 'text-amber-900 dark:text-amber-300 animate-pulse' : 'text-slate-500 dark:text-slate-400'}`} />
+                    <span>Night Glow</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded uppercase font-mono font-bold tracking-wider ${nightGlowMode
+                        ? 'bg-amber-200 text-amber-950 dark:bg-amber-500/30 dark:text-amber-200 border border-amber-400 dark:border-amber-500/40'
+                        : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400'
+                        }`}
+                    >
+                      {nightGlowMode ? 'NASA VIIRS' : 'OFF'}
+                    </span>
+                  </button>
+
+                  {nightGlowMode && (
+                    <div className="flex items-center gap-1.5 pl-1.5 border-l border-amber-400 dark:border-amber-500/30">
+                      <span className="text-[10px] font-mono text-amber-900 dark:text-amber-300 font-bold">
+                        {Math.round(nightGlowIntensity * 100)}%
+                      </span>
+                      <input
+                        id="night-glow-intensity-slider"
+                        type="range"
+                        min="0.20"
+                        max="1.00"
+                        step="0.05"
+                        value={nightGlowIntensity}
+                        onChange={(e) => setNightGlowIntensity(parseFloat(e.target.value))}
+                        className="w-16 h-1 bg-amber-200 dark:bg-amber-900/60 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                        title={`Night Glow Intensity: ${Math.round(nightGlowIntensity * 100)}%`}
+                      />
+                    </div>
+                  )}
                 </div>
-                <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">100</span>
               </div>
 
-              {/* Row 2: Anchored 3-Tier RAG Recovery Severity Guide directly beneath numbered scale */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none py-1 max-w-full">
-                {/* 1. Critical Deficit (< 60%) */}
-                <div
-                  id="rag-red"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
-                    hoveredRagStatus != null && hoveredRagStatus !== 'critical'
+              {/* Right: Numbered VIIRS Scale with Anchored RAG Severity Guide Directly Beneath */}
+              <div className="flex flex-col items-start xl:items-end gap-1.5">
+                {/* Row 1: Numbered VIIRS Reference Scale */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-400 tracking-wider uppercase">
+                    {nightGlowMode ? 'NASA Black Marble Radiance' : '500M VIIRS Scale'}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">0</span>
+                  <div className="flex h-2 w-28 sm:w-36 rounded-full overflow-hidden border border-slate-300/60 dark:border-white/10 shadow-inner">
+                    {nightGlowMode ? (
+                      <>
+                        <div className="flex-1 bg-[#121722]" title="< 60% Critical Deficit" />
+                        <div className="flex-1 bg-[#e08b18]" title="60%–89% Active Restoration" />
+                        <div className="flex-1 bg-gradient-to-r from-[#ffaa33] to-[#ffc04d] shadow-[0_0_8px_#ffaa33]" title=">= 90% Near-Full Recovery" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1 bg-[#ef4444]" title="< 60% Critical Deficit" />
+                        <div className="flex-1 bg-[#f59e0b]" title="60%–89% Active Restoration" />
+                        <div className="flex-1 bg-[#10b981]" title=">= 90% Near-Full Recovery" />
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-bold">100</span>
+                </div>
+
+                {/* Row 2: Anchored 3-Tier RAG Recovery Severity Guide directly beneath numbered scale */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none py-1 max-w-full">
+                  {/* 1. Critical Deficit (< 60%) */}
+                  <div
+                    id="rag-red"
+                    className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${hoveredRagStatus != null && hoveredRagStatus !== 'critical'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${
-                      nightGlowMode
+                      }`}
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${nightGlowMode
                         ? hoveredRagStatus === 'critical'
                           ? 'bg-slate-300 shadow-[0_0_12px_rgba(244,63,94,0.9)] scale-125'
                           : 'bg-slate-700 border border-white/20'
                         : hoveredRagStatus === 'critical'
                           ? 'bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.9)] scale-125 ring-2 ring-rose-400/50'
                           : 'bg-rose-500 shadow-sm shadow-rose-500/50'
-                    }`}
-                  />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">&lt; 60% Critical Deficit</span>
-                </div>
+                        }`}
+                    />
+                    <span className="font-medium text-slate-700 dark:text-slate-300">&lt; 60% Critical Deficit</span>
+                  </div>
 
-                {/* 2. Active Restoration (60%–89%) */}
-                <div
-                  id="rag-amber"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
-                    hoveredRagStatus != null && hoveredRagStatus !== 'restoration'
+                  {/* 2. Active Restoration (60%–89%) */}
+                  <div
+                    id="rag-amber"
+                    className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${hoveredRagStatus != null && hoveredRagStatus !== 'restoration'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${
-                      nightGlowMode
+                      }`}
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${nightGlowMode
                         ? hoveredRagStatus === 'restoration'
                           ? 'bg-[#e08b18] shadow-[0_0_12px_rgba(245,158,11,0.9)] scale-125'
                           : 'bg-[#e08b18] opacity-75'
                         : hoveredRagStatus === 'restoration'
                           ? 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.9)] scale-125 ring-2 ring-amber-400/50'
                           : 'bg-amber-500 shadow-sm shadow-amber-500/50'
-                    }`}
-                  />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">60%–89% Restoration</span>
-                </div>
+                        }`}
+                    />
+                    <span className="font-medium text-slate-700 dark:text-slate-300">60%–89% Restoration</span>
+                  </div>
 
-                {/* 3. Near-Full Recovery (≥ 90%) */}
-                <div
-                  id="rag-green"
-                  className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${
-                    hoveredRagStatus != null && hoveredRagStatus !== 'recovered'
+                  {/* 3. Near-Full Recovery (≥ 90%) */}
+                  <div
+                    id="rag-green"
+                    className={`flex items-center gap-1.5 transition-opacity duration-150 shrink-0 ${hoveredRagStatus != null && hoveredRagStatus !== 'recovered'
                       ? 'opacity-40 text-slate-500 dark:text-slate-400'
                       : 'opacity-100 text-slate-700 dark:text-slate-300'
-                  }`}
-                >
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${
-                      nightGlowMode
+                      }`}
+                  >
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${nightGlowMode
                         ? hoveredRagStatus === 'recovered'
                           ? 'bg-[#ffaa33] shadow-[0_0_12px_rgba(16,185,129,0.9)] scale-125'
                           : 'bg-[#ffaa33] opacity-75'
                         : hoveredRagStatus === 'recovered'
                           ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.9)] scale-125 ring-2 ring-emerald-400/50'
                           : 'bg-emerald-500 shadow-sm shadow-emerald-500/50'
-                    }`}
-                  />
-                  <span className="font-medium text-slate-700 dark:text-slate-300">≥ 90% Near-Full</span>
+                        }`}
+                    />
+                    <span className="font-medium text-slate-700 dark:text-slate-300">≥ 90% Near-Full</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Row 3: Radial Buffers & Infrastructure Legend */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none pt-1 border-t border-slate-200/80 dark:border-slate-800/80 text-slate-600 dark:text-slate-300">
-                <div className="flex items-center gap-1.5 shrink-0" title="Immediate Outage Zone with <60% restoration level">
-                  <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/30"></span>
-                  <span>Critical Outage Core (&lt;60%)</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0" title="Secondary Warning & Grid Stress Buffer (35km monitored perimeter)">
-                  <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400"></span>
-                  <span>Warning &amp; Grid Buffer (35km)</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0" title="High-voltage transmission substation node (230kV / 138kV / 69kV)">
-                  <span className="w-2.5 h-2.5 rounded-full border border-emerald-400 bg-emerald-400/30"></span>
-                  <span>Energized Substation Hub</span>
+                {/* Row 3: Radial Buffers & Infrastructure Legend */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] select-none pt-1 border-t border-slate-200/80 dark:border-slate-800/80 text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center gap-1.5 shrink-0" title="Immediate Outage Zone with <60% restoration level">
+                    <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/30"></span>
+                    <span>Critical Outage Core (&lt;60%)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0" title="Secondary Warning & Grid Stress Buffer (35km monitored perimeter)">
+                    <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400"></span>
+                    <span>Warning &amp; Grid Buffer (35km)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0" title="High-voltage transmission substation node (230kV / 138kV / 69kV)">
+                    <span className="w-2.5 h-2.5 rounded-full border border-emerald-400 bg-emerald-400/30"></span>
+                    <span>Energized Substation Hub</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Detail side panel */}
-      {!isMaximized && (
-        <div className="lg:col-span-4 flex flex-col w-full max-w-full min-w-0">
-          {selected ? (
-            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
-              <div>
-                {/* Active Event Context Header */}
-                <div className="p-3 mb-4 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-2 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {(() => {
-                        const alertLvl = (activeEvent as any)?.alertLevel || activeEvent?.alert_level;
-                        const theme = getAlertTheme(alertLvl, activeEvent?.severity);
-                        return (
-                          <span
-                            className={`w-2.5 h-2.5 rounded-full shrink-0 ${theme.dot} animate-pulse`}
-                          />
-                        );
-                      })()}
-                      <div className="min-w-0">
-                        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-                          Selected Incident (Step 1)
-                        </div>
-                        <div className="text-xs font-bold text-slate-100 truncate">
-                          {activeEvent?.name || 'Panay Island Grid Collapse'}
-                        </div>
-                      </div>
+        {/* Detail side panel */}
+        {!isMaximized && (
+          <div className="lg:col-span-4 flex flex-col w-full max-w-full min-w-0">
+            {selected ? (
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
+                <div>
+                  {/* Active Event Context Header */}
+                  <div className="rounded-xl p-3.5 mb-4 border transition-all bg-slate-50 border-slate-200 shadow-sm dark:bg-slate-900/90 dark:border-slate-800/80 dark:shadow-none text-left">
+                    {/* Step Header & Date */}
+                    <div className="flex items-center justify-between text-[11px] mb-1.5 font-mono">
+                      <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                        Selected Incident (Step 1)
+                      </span>
+                      <span className="text-slate-600 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] border border-slate-300/60 dark:border-slate-700/80">
+                        {activeEvent?.date || '2025-11-03'}
+                      </span>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                        {activeEvent?.date || '2024-01-02'}
+                    {/* Incident Title */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
+                        {activeEvent?.name || 'Typhoon Kalmaegi (Tino)'}
+                      </h4>
+                    </div>
+
+                    {/* Subtext Footnote / Calibration State */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800/70 text-[11px]">
+                      <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                        Active Baseline Simulation
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
+                        {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '187'} LGUs calibrated
                       </span>
                     </div>
                   </div>
 
-                  {Boolean(activeEvent) && (
-                    <div className="mt-1 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-                      <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                        Active Baseline Simulation
+                  <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
+                        <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">{selected.name}</h3>
+                        <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
+                          #{selected.resilienceRank ?? selected.rank ?? (selected.id === selectedId && globalRank ? globalRank : null) ?? (resilienceRankMap.get(selected.id) || 1)} Lowest ({selected.recoveryScore}%)
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSelect('')}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-ink-400 dark:hover:text-white dark:hover:bg-white/10 transition-all cursor-pointer"
+                      title="Deselect municipality"
+                      aria-label="Close details"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Audio-Spatial Indicator Status Badge */}
+                  {isAudioEnabled && (
+                    <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-ink-950/60 border border-emerald-500/30 dark:border-emerald-500/20 mb-4 transition-colors">
+                      <span className="flex items-center gap-1.5 text-slate-700 dark:text-ink-300">
+                        <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
+                        <span>Spatial Audio Profile</span>
                       </span>
-                      <span className="text-slate-400 text-[10px]">
-                        {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '95'} LGUs calibrated
+                      <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${liveAudioStatus === 'critical'
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
+                        : liveAudioStatus === 'warning'
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
+                          : liveAudioStatus === 'recovering'
+                            ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
+                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                        }`}>
+                        {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
                       </span>
                     </div>
                   )}
-                </div>
 
-              <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
-                    <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">{selected.name}</h3>
-                    <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
-                      #{selected.resilienceRank ?? selected.rank ?? (selected.id === selectedId && globalRank ? globalRank : null) ?? (resilienceRankMap.get(selected.id) || 1)} Lowest ({selected.recoveryScore}%)
-                    </span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onSelect('')}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-ink-400 dark:hover:text-white dark:hover:bg-white/10 transition-all cursor-pointer"
-                  title="Deselect municipality"
-                  aria-label="Close details"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Audio-Spatial Indicator Status Badge */}
-              {isAudioEnabled && (
-                <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-ink-950/60 border border-emerald-500/30 dark:border-emerald-500/20 mb-4 transition-colors">
-                  <span className="flex items-center gap-1.5 text-slate-700 dark:text-ink-300">
-                    <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
-                    <span>Spatial Audio Profile</span>
-                  </span>
-                  <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${liveAudioStatus === 'critical'
-                    ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-                    : liveAudioStatus === 'warning'
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
-                      : liveAudioStatus === 'recovering'
-                        ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
-                        : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                    }`}>
-                    {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
-                  </span>
-                </div>
-              )}
-
-              {/* Recovery gauge */}
-              <div className="mb-5 bg-slate-50 dark:bg-ink-950/50 rounded-xl p-3.5 border border-slate-200 dark:border-white/5 transition-colors">
-                <div className="flex items-end justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
-                  <span
-                    className="text-3xl font-black tracking-tight"
-                    style={{ color: getRecoveryColor(selected.recoveryScore) }}
-                  >
-                    {selected.recoveryScore}
-                    <span className="text-base text-slate-400 dark:text-ink-500 font-normal">/100</span>
-                  </span>
-                </div>
-                <div className="h-2.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${selected.recoveryScore}%`,
-                      backgroundColor: getRecoveryColor(selected.recoveryScore),
-                    }}
-                  />
-                </div>
-                <div className="mt-2.5 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5">
-                    <div
-                      className="h-2 w-2 rounded-full"
-                      style={{ backgroundColor: getRecoveryStatusColor(selected.status) }}
-                    />
-                    <span className="font-semibold" style={{ color: getRecoveryStatusColor(selected.status) }}>
-                      {statusLabels[selected.status]}
-                    </span>
-                  </div>
-                  <span className="text-slate-500 dark:text-ink-400">Target: 90%+ restored</span>
-                </div>
-              </div>
-
-              {/* Stats grid */}
-              <div className="grid grid-cols-2 gap-2.5 mb-4">
-                <MiniStat label="Population" value={selected.population.toLocaleString()} />
-                <MiniStat label="Days Elapsed" value={`${selected.daysSinceEvent}d`} />
-                <MiniStat
-                  label="Baseline Radiance"
-                  value={`${selected.baselineRadiance.toFixed(1)} nW`}
-                />
-                <MiniStat
-                  label="Observed Radiance"
-                  value={`${selected.currentRadiance.toFixed(1)} nW`}
-                />
-              </div>
-            </div>
-
-            {/* Recovery projection */}
-            <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/5 p-3.5 mt-auto transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-slate-500 dark:text-ink-400">Est. Full Restoration</span>
-                <span className="text-base font-bold text-slate-900 dark:text-white">
-                  {selected.estimatedDaysToRecover === 0 ? 'Restored' : `~${selected.estimatedDaysToRecover} days`}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-ocean-500 to-emerald-500 transition-all duration-700"
-                    style={{
-                      width: `${Math.max(5, 100 - (selected.estimatedDaysToRecover / 20) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <span className="text-[11px] text-slate-500 dark:text-ink-400 whitespace-nowrap">
-                  {selected.estimatedDaysToRecover === 0 ? '100% capacity' : `${selected.estimatedDaysToRecover}d remaining`}
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-lg dark:shadow-xl transition-colors">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-ink-300">
-                Municipality Telemetry
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/20 font-medium">
-                {currentRegionKey === 'panay' ? 'Panay Grid' : activePreset.name}
-              </span>
-            </div>
-
-            {/* Active Event Context Header */}
-            <div className="p-3 my-3 rounded-xl bg-slate-900/90 border border-slate-800 flex flex-col gap-2 shadow-sm text-left">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                      activeEvent?.severity === 'Severe' || (activeEvent?.severity as string) === 'red' || (activeEvent as any)?.alertLevel === 'Red' || activeEvent?.alert_level === 'Red'
-                        ? 'bg-rose-500 animate-pulse'
-                        : activeEvent?.severity === 'High' || (activeEvent?.severity as string) === 'orange' || (activeEvent as any)?.alertLevel === 'Orange' || activeEvent?.alert_level === 'Orange'
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
-                      Selected Incident (Step 1)
-                    </div>
-                    <div className="text-xs font-bold text-slate-100 truncate">
-                      {activeEvent?.name || 'Panay Island Grid Collapse'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700/80">
-                    {activeEvent?.date || '2024-01-02'}
-                  </span>
-                </div>
-              </div>
-
-              {Boolean(activeEvent) && (
-                <div className="mt-1 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-400 flex items-center gap-1 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Active Baseline Simulation
-                  </span>
-                  <span className="text-slate-400 text-[10px]">
-                    {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '95'} LGUs calibrated
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center justify-center text-center py-6">
-              <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-3 shadow-inner">
-                <MapPin className="h-6 w-6 text-ocean-500 dark:text-ocean-400 animate-bounce" />
-              </div>
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Select an LGU Boundary</h4>
-              <p className="text-xs text-slate-500 dark:text-ink-400 max-w-xs leading-relaxed">
-                Click any fine-grained municipality polygon or live hazard epicenter on the map to pin its satellite radiance indicators.
-              </p>
-
-              {/* Quick sample town buttons */}
-              <div className="mt-5 w-full">
-                <span className="text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider block mb-2">
-                  Quick Select Major Hubs
-                </span>
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {(() => {
-                    let preferredIds: string[] = [];
-                    if (currentRegionKey === 'mindanao_south') {
-                      preferredIds = [
-                        'PH126303000', // General Santos City
-                        'PH112402000', // Davao City
-                        'PH128002000', // Glan
-                        'PH128001000', // Alabel
-                        'PH112403000', // Digos City
-                        'PH126306000', // Koronadal City
-                        'PH112319000', // Tagum City
-                        'PH128006000', // Malapatan
-                      ];
-                    } else if (currentRegionKey === 'panay' || currentRegionKey === 'panay_guimaras' || currentRegionKey === 'r6_negros') {
-                      preferredIds = ['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000', 'PH060450100'];
-                    } else if (currentRegionKey === 'ncr' || currentRegionKey === 'ncr_southern_tagalog') {
-                      preferredIds = ['PH133901000', 'PH137404000', 'PH137601000', 'PH137403000'];
-                    } else if (currentRegionKey === 'central_visayas' || currentRegionKey === 'cebu_bohol' || currentRegionKey === 'r7') {
-                      preferredIds = ['PH072217000', 'PH072230000', 'PH072226000', 'PH071242000'];
-                    } else if (currentRegionKey === 'mindanao_south' || currentRegionKey === 'r11' || currentRegionKey === 'r12') {
-                      preferredIds = ['PH126303000', 'PH112402000', 'PH128002000', 'PH128001000', 'PH112403000', 'PH126306000', 'PH112319000'];
-                    } else if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
-                      preferredIds = ['PH035416000', 'PH035401000', 'PH031410000', 'PH036916000'];
-                    } else if (currentRegionKey === 'calabarzon_mimaropa' || currentRegionKey === 'r4a' || currentRegionKey === 'r4b') {
-                      preferredIds = ['PH045801000', 'PH043405000', 'PH042106000', 'PH041005000'];
-                    } else if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
-                      preferredIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
-                    } else if (currentRegionKey === 'ilocos_cagayan' || currentRegionKey === 'r1' || currentRegionKey === 'r2') {
-                      preferredIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000', 'PH021529000', 'PH023134000'];
-                    } else if (currentRegionKey === 'car') {
-                      preferredIds = ['PH141102000', 'PH141114000', 'PH143213000'];
-                    } else if (currentRegionKey === 'bicol' || currentRegionKey === 'r5') {
-                      preferredIds = ['PH050506000', 'PH051724000', 'PH056216000'];
-                    } else if (currentRegionKey === 'northern_mindanao_caraga' || currentRegionKey === 'r10' || currentRegionKey === 'r13') {
-                      preferredIds = ['PH104305000', 'PH103504000', 'PH101312000', 'PH160202000', 'PH166724000'];
-                    } else if (currentRegionKey === 'zamboanga_peninsula' || currentRegionKey === 'r9') {
-                      preferredIds = ['PH097332000', 'PH097322000'];
-                    } else if (currentRegionKey === 'barmm') {
-                      preferredIds = ['PH199901000', 'PH193601000'];
-                    }
-
-                    const matched = preferredIds
-                      .map((id) => activeRegionMunicipalities.find((item: Municipality) => item.id === id || item.pcode === id))
-                      .filter((m: Municipality | undefined): m is Municipality => Boolean(m));
-
-                    const matchedIds = new Set(matched.map((m) => m.id));
-                    const remaining = activeRegionMunicipalities.filter((m) => !matchedIds.has(m.id));
-                    const displayList = [...matched, ...remaining].slice(0, 5);
-
-                    return displayList.map((m: Municipality) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => onSelect(m.id)}
-                        className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
+                  {/* Recovery gauge */}
+                  <div className="mb-5 bg-slate-50 dark:bg-ink-950/50 rounded-xl p-3.5 border border-slate-200 dark:border-white/5 transition-colors">
+                    <div className="flex items-end justify-between mb-2">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
+                      <span
+                        className="text-3xl font-black tracking-tight"
+                        style={{ color: getRecoveryColor(selected.recoveryScore) }}
                       >
-                        {m.name}
-                      </button>
-                    ));
-                  })()}
+                        {selected.recoveryScore}
+                        <span className="text-base text-slate-400 dark:text-ink-500 font-normal">/100</span>
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${selected.recoveryScore}%`,
+                          backgroundColor: getRecoveryColor(selected.recoveryScore),
+                        }}
+                      />
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <div
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: getRecoveryStatusColor(selected.status) }}
+                        />
+                        <span className="font-semibold" style={{ color: getRecoveryStatusColor(selected.status) }}>
+                          {statusLabels[selected.status]}
+                        </span>
+                      </div>
+                      <span className="text-slate-500 dark:text-ink-400">Target: 90%+ restored</span>
+                    </div>
+                  </div>
+
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-2 gap-2.5 mb-4">
+                    <MiniStat label="Population" value={selected.population.toLocaleString()} />
+                    <MiniStat label="Days Elapsed" value={`${selected.daysSinceEvent}d`} />
+                    <MiniStat
+                      label="Baseline Radiance"
+                      value={`${selected.baselineRadiance.toFixed(1)} nW`}
+                    />
+                    <MiniStat
+                      label="Observed Radiance"
+                      value={`${selected.currentRadiance.toFixed(1)} nW`}
+                    />
+                  </div>
+                </div>
+
+                {/* Recovery projection */}
+                <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/5 p-3.5 mt-auto transition-colors">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-500 dark:text-ink-400">Est. Full Restoration</span>
+                    <span className="text-base font-bold text-slate-900 dark:text-white">
+                      {selected.estimatedDaysToRecover === 0 ? 'Restored' : `~${selected.estimatedDaysToRecover} days`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-ocean-500 to-emerald-500 transition-all duration-700"
+                        style={{
+                          width: `${Math.max(5, 100 - (selected.estimatedDaysToRecover / 20) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-ink-400 whitespace-nowrap">
+                      {selected.estimatedDaysToRecover === 0 ? '100% capacity' : `${selected.estimatedDaysToRecover}d remaining`}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-lg dark:shadow-xl transition-colors">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-ink-300">
+                    Municipality Telemetry
+                  </span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/20 font-medium">
+                    {currentRegionKey === 'panay' ? 'Panay Grid' : activePreset.name}
+                  </span>
+                </div>
 
-            <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-[11px] text-slate-500 dark:text-ink-400 text-center">
-              {currentRegionKey === 'panay'
-                ? 'Covers 95 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
-                : `Covers fine-grained municipalities in ${activePreset.name}`}
-            </div>
+                {/* Active Event Context Header */}
+                <div className="rounded-xl p-3.5 my-3 border transition-all bg-slate-50 border-slate-200 shadow-sm dark:bg-slate-900/90 dark:border-slate-800/80 dark:shadow-none text-left">
+                  {/* Step Header & Date */}
+                  <div className="flex items-center justify-between text-[11px] mb-1.5 font-mono">
+                    <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                      Selected Incident (Step 1)
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] border border-slate-300/60 dark:border-slate-700/80">
+                      {activeEvent?.date || '2025-11-03'}
+                    </span>
+                  </div>
+
+                  {/* Incident Title */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
+                      {activeEvent?.name || 'Typhoon Kalmaegi (Tino)'}
+                    </h4>
+                  </div>
+
+                  {/* Subtext Footnote / Calibration State */}
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800/70 text-[11px]">
+                    <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                      Active Baseline Simulation
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
+                      {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '187'} LGUs calibrated
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center text-center py-6">
+                  <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-3 shadow-inner">
+                    <MapPin className="h-6 w-6 text-ocean-500 dark:text-ocean-400 animate-bounce" />
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Select an LGU Boundary</h4>
+                  <p className="text-xs text-slate-500 dark:text-ink-400 max-w-xs leading-relaxed">
+                    Click any fine-grained municipality polygon or live hazard epicenter on the map to pin its satellite radiance indicators.
+                  </p>
+
+                  {/* Quick sample town buttons */}
+                  <div className="mt-5 w-full">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider block mb-2">
+                      Quick Select Major Hubs
+                    </span>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {(() => {
+                        let preferredIds: string[] = [];
+                        if (currentRegionKey === 'mindanao_south') {
+                          preferredIds = [
+                            'PH126303000', // General Santos City
+                            'PH112402000', // Davao City
+                            'PH128002000', // Glan
+                            'PH128001000', // Alabel
+                            'PH112403000', // Digos City
+                            'PH126306000', // Koronadal City
+                            'PH112319000', // Tagum City
+                            'PH128006000', // Malapatan
+                          ];
+                        } else if (currentRegionKey === 'panay' || currentRegionKey === 'panay_guimaras' || currentRegionKey === 'r6_negros') {
+                          preferredIds = ['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000', 'PH060450100'];
+                        } else if (currentRegionKey === 'ncr' || currentRegionKey === 'ncr_southern_tagalog') {
+                          preferredIds = ['PH133901000', 'PH137404000', 'PH137601000', 'PH137403000'];
+                        } else if (currentRegionKey === 'central_visayas' || currentRegionKey === 'cebu_bohol' || currentRegionKey === 'r7') {
+                          preferredIds = ['PH072217000', 'PH072230000', 'PH072226000', 'PH071242000'];
+                        } else if (currentRegionKey === 'mindanao_south' || currentRegionKey === 'r11' || currentRegionKey === 'r12') {
+                          preferredIds = ['PH126303000', 'PH112402000', 'PH128002000', 'PH128001000', 'PH112403000', 'PH126306000', 'PH112319000'];
+                        } else if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
+                          preferredIds = ['PH035416000', 'PH035401000', 'PH031410000', 'PH036916000'];
+                        } else if (currentRegionKey === 'calabarzon_mimaropa' || currentRegionKey === 'r4a' || currentRegionKey === 'r4b') {
+                          preferredIds = ['PH045801000', 'PH043405000', 'PH042106000', 'PH041005000'];
+                        } else if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
+                          preferredIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
+                        } else if (currentRegionKey === 'ilocos_cagayan' || currentRegionKey === 'r1' || currentRegionKey === 'r2') {
+                          preferredIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000', 'PH021529000', 'PH023134000'];
+                        } else if (currentRegionKey === 'car') {
+                          preferredIds = ['PH141102000', 'PH141114000', 'PH143213000'];
+                        } else if (currentRegionKey === 'bicol' || currentRegionKey === 'r5') {
+                          preferredIds = ['PH050506000', 'PH051724000', 'PH056216000'];
+                        } else if (currentRegionKey === 'northern_mindanao_caraga' || currentRegionKey === 'r10' || currentRegionKey === 'r13') {
+                          preferredIds = ['PH104305000', 'PH103504000', 'PH101312000', 'PH160202000', 'PH166724000'];
+                        } else if (currentRegionKey === 'zamboanga_peninsula' || currentRegionKey === 'r9') {
+                          preferredIds = ['PH097332000', 'PH097322000'];
+                        } else if (currentRegionKey === 'barmm') {
+                          preferredIds = ['PH199901000', 'PH193601000'];
+                        }
+
+                        const matched = preferredIds
+                          .map((id) => activeRegionMunicipalities.find((item: Municipality) => item.id === id || item.pcode === id))
+                          .filter((m: Municipality | undefined): m is Municipality => Boolean(m));
+
+                        const matchedIds = new Set(matched.map((m) => m.id));
+                        const remaining = activeRegionMunicipalities.filter((m) => !matchedIds.has(m.id));
+                        const displayList = [...matched, ...remaining].slice(0, 5);
+
+                        return displayList.map((m: Municipality) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => onSelect(m.id)}
+                            className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
+                          >
+                            {m.name}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-[11px] text-slate-500 dark:text-ink-400 text-center">
+                  {currentRegionKey === 'panay'
+                    ? 'Covers 95 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
+                    : `Covers fine-grained municipalities in ${activePreset.name}`}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -1629,9 +1675,74 @@ const NightLightOverlay = (L.Layer as any).extend({
   },
 });
 
+export interface CameraSyncProps {
+  map: L.Map | null;
+  targetLocation?: { lat: number; lng: number } | null;
+  selectedBounds?: L.LatLngBoundsExpression | null;
+  selectedId?: string | null;
+}
+
+export function MapCameraController({ map, targetLocation, selectedBounds, selectedId }: CameraSyncProps) {
+  const lastFocusedIdRef = useRef<string | null>(null);
+
+  // Serialize primitives so re-created object references don't trigger the effect
+  const targetLat = targetLocation?.lat;
+  const targetLng = targetLocation?.lng;
+
+  useEffect(() => {
+    if (!map) return;
+
+    // 1. If selection was cleared (e.g. by Reset View or Clear LGU), reset tracker
+    if (!selectedId) {
+      lastFocusedIdRef.current = null;
+      return;
+    }
+
+    // 2. Strict one-shot guard: never refire for the same entity
+    if (lastFocusedIdRef.current === selectedId) {
+      return;
+    }
+
+    // Mark as handled immediately to prevent concurrent re-triggers
+    lastFocusedIdRef.current = selectedId;
+
+    // 3. Priority 1: Focus via Bounds
+    if (selectedBounds) {
+      try {
+        const bounds = Array.isArray(selectedBounds) && selectedBounds.length === 2 && Array.isArray(selectedBounds[0])
+          ? L.latLngBounds(selectedBounds as L.LatLngBoundsLiteral)
+          : (selectedBounds as L.LatLngBounds);
+
+        if (bounds && typeof (bounds as any).isValid === 'function' && (bounds as any).isValid()) {
+          map.fitBounds(bounds, {
+            maxZoom: 12,
+            padding: [40, 40],
+            animate: true,
+            duration: 0.8,
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn('[MapCameraController] fitBounds failed, falling back to center coords:', err);
+      }
+    }
+
+    // 4. Priority 2: Focus via Point Lat/Lng
+    if (targetLat != null && targetLng != null && !isNaN(targetLat) && !isNaN(targetLng)) {
+      map.flyTo([targetLat, targetLng], 11, {
+        animate: true,
+        duration: 0.8,
+      });
+    }
+  }, [map, selectedId, targetLat, targetLng, selectedBounds]);
+
+  return null;
+}
+
 function LeafletMap({
   municipalities,
   selectedId,
+  targetLocation: externalTargetLocation,
   onSelect,
   onHover,
   onMapHoverChange,
@@ -1662,6 +1773,15 @@ function LeafletMap({
   showImpactBuffers = true,
   onToggleImpactBuffers,
 }: LeafletMapProps) {
+  const [cameraTarget, setCameraTarget] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  const [cameraBounds, setCameraBounds] = useState<any>(null);
+
+  useEffect(() => {
+    if (externalTargetLocation && externalTargetLocation.lat != null && externalTargetLocation.lng != null) {
+      setCameraTarget(externalTargetLocation);
+    }
+  }, [externalTargetLocation]);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const { theme } = useTheme();
   const { settings } = useSettings();
   const isLight = theme === 'light';
@@ -1691,6 +1811,7 @@ function LeafletMap({
   const centroidsRef = useRef<Map<string, [number, number]>>(new Map());
   const nightLightOverlayRef = useRef<any>(null);
   const selectedIdRef = useRef<string | null>(selectedId);
+  selectedIdRef.current = selectedId;
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const onMapHoverChangeRef = useRef(onMapHoverChange);
@@ -1829,12 +1950,12 @@ function LeafletMap({
       if (typeof (canvasRendererRef.current as any)._update === 'function') {
         try {
           (canvasRendererRef.current as any)._update();
-        } catch {}
+        } catch { }
       }
       if (typeof (canvasRendererRef.current as any).requestRedraw === 'function') {
         try {
           (canvasRendererRef.current as any).requestRedraw();
-        } catch {}
+        } catch { }
       }
     }
 
@@ -1865,9 +1986,9 @@ function LeafletMap({
         layer.setTooltipContent(tip);
       }
       if (typeof (layer as any)._updatePath === 'function') {
-        try { (layer as any)._updatePath(); } catch {}
+        try { (layer as any)._updatePath(); } catch { }
       } else if (typeof (layer as any).redraw === 'function') {
-        try { (layer as any).redraw(); } catch {}
+        try { (layer as any).redraw(); } catch { }
       }
     });
 
@@ -2206,7 +2327,7 @@ function LeafletMap({
         if (canvasRendererRef.current && typeof (canvasRendererRef.current as any)._update === 'function') {
           try {
             (canvasRendererRef.current as any)._update();
-          } catch {}
+          } catch { }
         }
         if (nightLightOverlayRef.current && typeof nightLightOverlayRef.current.redraw === 'function') {
           nightLightOverlayRef.current.redraw();
@@ -2241,8 +2362,9 @@ function LeafletMap({
   }, [isActiveTab]);
 
   // Panay coordinates constant
-  const PANAY_CENTER: [number, number] = [11.0, 122.5];
-  const PANAY_ZOOM = 8;
+  const PANAY_CENTER: [number, number] = [11.15, 122.50];
+  const PANAY_DEFAULT_ZOOM = 9;
+  const PANAY_ZOOM = 9;
   const PANAY_BOUNDS = L.latLngBounds([
     [10.35, 121.75],
     [11.95, 123.25],
@@ -2265,10 +2387,17 @@ function LeafletMap({
     onMapHoverChangeRef.current = onMapHoverChange;
   }, [onMapHoverChange]);
 
-  // Track lock state both imperatively and reactively.
-  const initialLocked = settings?.defaultInteractionMode === 'locked';
+  // Track lock state both imperatively and reactively. Default unlocked for free interaction.
+  const initialLocked = false;
   const isLockedRef = useRef<boolean>(initialLocked);
   const [isMapLocked, setIsMapLocked] = useState<boolean>(initialLocked);
+
+  // If the map was locked, auto-unlock it upon user search / selection
+  useEffect(() => {
+    if (selectedId && isMapLocked) {
+      applyMapLock(false);
+    }
+  }, [selectedId, isMapLocked]);
 
   // Enable/disable Leaflet interaction handlers and update the
   // container CSS class and state.
@@ -2283,12 +2412,14 @@ function LeafletMap({
         map.doubleClickZoom?.disable();
         map.scrollWheelZoom?.disable();
         map.boxZoom?.disable();
+        map.keyboard?.disable();
       } else {
         map.dragging?.enable();
         map.touchZoom?.enable();
         map.doubleClickZoom?.enable();
         map.scrollWheelZoom?.enable();
         map.boxZoom?.enable();
+        map.keyboard?.enable();
       }
     }
     const el = mapElement.current;
@@ -2309,12 +2440,14 @@ function LeafletMap({
       map.touchZoom?.disable();
       map.doubleClickZoom?.disable();
       map.boxZoom?.disable();
+      map.keyboard?.disable();
     } else {
       map.scrollWheelZoom?.enable();
       map.dragging?.enable();
       map.touchZoom?.enable();
       map.doubleClickZoom?.enable();
       map.boxZoom?.enable();
+      map.keyboard?.enable();
     }
   }, [isMapLocked]);
 
@@ -2482,7 +2615,7 @@ function LeafletMap({
     if (activeStreakLayerRef.current) {
       try {
         map.removeLayer(activeStreakLayerRef.current);
-      } catch {}
+      } catch { }
       activeStreakLayerRef.current = null;
     }
     Object.values(layersRef.current).forEach((l: any) => {
@@ -2495,7 +2628,7 @@ function LeafletMap({
             'polygon-highlight-settled',
             'lgu-active-stroke'
           );
-        } catch {}
+        } catch { }
       }
     });
 
@@ -2528,7 +2661,7 @@ function LeafletMap({
         pEl.addEventListener('animationend', () => {
           pEl.classList.remove('polygon-streak-gold', 'polygon-streak-active', 'lgu-active-stroke');
         }, { once: true });
-      } catch {}
+      } catch { }
     }
 
     // 3. Find feature geometry from passed chunk, geoJsonLayerRef, or region caches
@@ -2541,7 +2674,7 @@ function LeafletMap({
         try {
           const gj = (geoJsonLayerRef.current as any).toGeoJSON?.();
           if (gj?.features) list.push(...gj.features);
-        } catch {}
+        } catch { }
       }
       for (const chunk of regionCacheRef.current.values()) {
         if (chunk?.features) list.push(...chunk.features);
@@ -2601,7 +2734,7 @@ function LeafletMap({
           if (currentGeoJson?.features) {
             matchingData = searchFeatures(currentGeoJson.features);
           }
-        } catch {}
+        } catch { }
       }
       if (!matchingData) {
         for (const chunk of regionCacheRef.current.values()) {
@@ -2649,7 +2782,7 @@ function LeafletMap({
               if (activeStreakLayerRef.current === streakLayer && (streakLayer as any)._map) {
                 try {
                   map.removeLayer(streakLayer);
-                } catch {}
+                } catch { }
                 activeStreakLayerRef.current = null;
               }
             }, { once: true });
@@ -2676,7 +2809,7 @@ function LeafletMap({
         if (activeStreakLayerRef.current === streakLayer && (streakLayer as any)._map) {
           try {
             map.removeLayer(streakLayer);
-          } catch {}
+          } catch { }
           activeStreakLayerRef.current = null;
         }
         if (existingLayer && (existingLayer as any)._path) {
@@ -2688,7 +2821,7 @@ function LeafletMap({
               'polygon-highlight-gold-settled',
               'polygon-highlight-settled'
             );
-          } catch {}
+          } catch { }
         }
       }, 3500);
     }
@@ -2848,8 +2981,15 @@ function LeafletMap({
         layersRef.current[id] = featureLayer;
         const pcode = props.ADM3_PCODE || props.psgc_code || props.GID_2 || props.ADM2_PCODE;
         if (pcode) layersRef.current[pcode] = featureLayer;
+        if (props.psgc_code) layersRef.current[String(props.psgc_code)] = featureLayer;
+        if (props.psgc_id) layersRef.current[String(props.psgc_id)] = featureLayer;
         const rawName = String(props.ADM3_EN || props.ADM2_EN || props.ADM1_EN || 'Municipality');
         const normName = rawName ? rawName.toLowerCase().replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-z0-9]/g, '') : '';
+        if (rawName) {
+          layersRef.current[rawName] = featureLayer;
+          layersRef.current[rawName.toLowerCase().trim()] = featureLayer;
+        }
+        if (normName) layersRef.current[normName] = featureLayer;
 
         // Extract precise polygon bounds centroid for the radiance canvas
         if (typeof (featureLayer as any).getBounds === 'function') {
@@ -2859,6 +2999,13 @@ function LeafletMap({
             centroidsRef.current.set(id, [center.lat, center.lng]);
             if (pcode) centroidsRef.current.set(pcode, [center.lat, center.lng]);
             if (props.GID_2) centroidsRef.current.set(props.GID_2, [center.lat, center.lng]);
+            if (props.psgc_code) centroidsRef.current.set(String(props.psgc_code), [center.lat, center.lng]);
+            if (props.psgc_id) centroidsRef.current.set(String(props.psgc_id), [center.lat, center.lng]);
+            if (rawName) {
+              centroidsRef.current.set(rawName, [center.lat, center.lng]);
+              centroidsRef.current.set(rawName.toLowerCase().trim(), [center.lat, center.lng]);
+            }
+            if (normName) centroidsRef.current.set(normName, [center.lat, center.lng]);
           }
         }
 
@@ -2887,7 +3034,7 @@ function LeafletMap({
         featureLayer.on({
           click: (e: any) => {
             if (e) {
-              try { L.DomEvent.stopPropagation(e); } catch {}
+              try { L.DomEvent.stopPropagation(e); } catch { }
             }
             onSelectRef.current(id);
             const center = centroidsRef.current.get(id) || (pcode ? centroidsRef.current.get(pcode) : null);
@@ -3054,27 +3201,23 @@ function LeafletMap({
       // 1. Explicitly recalculate container size against current viewport dimensions
       (map.invalidateSize as any)({ pan: false, debounceMoveend: true });
 
-      // 2. Identify the target bounds:
-      let targetBounds: L.LatLngBounds | null = activeRegionBoundsRef.current;
-      if (!targetBounds && geoJsonLayerRef.current && typeof (geoJsonLayerRef.current as any).getBounds === 'function') {
-        try {
-          const layerBounds = (geoJsonLayerRef.current as any).getBounds();
-          if (layerBounds && layerBounds.isValid && layerBounds.isValid()) {
-            targetBounds = layerBounds;
-          }
-        } catch {}
-      }
+      // 2. Clear the locked active bounds reference so it stops clamping to the selected entity
+      activeRegionBoundsRef.current = null;
 
-      // Check active region's configured hierarchy bounds or bbox
-      const currentKey = activeChunkKeyRef.current || selectedRegionKey || getActiveDefaultRegion() || 'panay';
-      if (!targetBounds) {
+      // Determine default overview bounds
+      const currentKey = selectedRegionKey || getActiveDefaultRegion() || 'panay';
+      let targetBounds: L.LatLngBounds | null = null;
+
+      if (currentKey === 'philippines' || currentKey === 'nationwide') {
+        targetBounds = L.latLngBounds(PHILIPPINES_BOUNDS);
+      } else if (currentKey === 'panay') {
+        targetBounds = PANAY_BOUNDS;
+      } else {
         const treeNode = findRegionTreeNode(currentKey);
         if (treeNode?.bounds) {
           targetBounds = L.latLngBounds(treeNode.bounds);
         } else {
-          const chunk = REGIONAL_CHUNKS.find(
-            (c) => c.key === currentKey || c.key === REGION_PRESETS[currentKey]?.id
-          );
+          const chunk = REGIONAL_CHUNKS.find((c) => c.key === currentKey);
           if (chunk) {
             targetBounds = L.latLngBounds([
               [chunk.minLat, chunk.minLng],
@@ -3084,25 +3227,26 @@ function LeafletMap({
         }
       }
 
-      // Only default to Panay Island if explicitly selected as 'panay' or no bounds could be determined
-      if (!targetBounds && currentKey === 'panay') {
-        targetBounds = PANAY_BOUNDS;
+      // Final fallback to Panay or nationwide bounds
+      if (!targetBounds || !targetBounds.isValid()) {
+        targetBounds = PANAY_BOUNDS || L.latLngBounds(PHILIPPINES_BOUNDS);
       }
 
-      // 3. Fit cleanly to the calculated bounds with comfortable margins
-      if (targetBounds && targetBounds.isValid && targetBounds.isValid()) {
-        activeRegionBoundsRef.current = targetBounds;
+      activeRegionBoundsRef.current = targetBounds;
+
+      // 3. Smoothly animate out to the overview
+      if (targetBounds && targetBounds.isValid()) {
         map.fitBounds(targetBounds, {
           padding: [30, 30],
-          maxZoom: 11,
+          maxZoom: 9,
           animate,
         });
       } else {
         const preset = REGION_PRESETS[currentKey] || REGION_PRESETS.panay;
         if (animate) {
-          map.flyTo(preset.center, preset.zoom, { duration: 0.8 });
+          map.flyTo(preset.center, preset.zoom || 9, { duration: 0.8 });
         } else {
-          map.setView(preset.center, preset.zoom);
+          map.setView(preset.center, preset.zoom || 9);
         }
       }
 
@@ -3118,7 +3262,7 @@ function LeafletMap({
       if (canvasRendererRef.current && typeof (canvasRendererRef.current as any)._update === 'function') {
         try {
           (canvasRendererRef.current as any)._update();
-        } catch {}
+        } catch { }
       }
       if (nightLightOverlayRef.current && typeof nightLightOverlayRef.current.redraw === 'function') {
         nightLightOverlayRef.current.redraw();
@@ -3130,6 +3274,7 @@ function LeafletMap({
   };
 
   const handleReset = () => {
+    // Stop any active streak effects
     if (streakTimerRef.current) {
       clearTimeout(streakTimerRef.current);
       streakTimerRef.current = null;
@@ -3137,23 +3282,18 @@ function LeafletMap({
     if (activeStreakLayerRef.current && mapRef.current) {
       try {
         mapRef.current.removeLayer(activeStreakLayerRef.current);
-      } catch {}
+      } catch { }
       activeStreakLayerRef.current = null;
     }
-    Object.values(layersRef.current).forEach((l: any) => {
-      if (l?._path) {
-        try {
-          l._path.classList.remove(
-            'polygon-streak-gold',
-            'polygon-highlight-gold-settled',
-            'polygon-streak-active',
-            'polygon-highlight-settled',
-            'lgu-active-stroke'
-          );
-        } catch {}
-      }
-    });
+
+    // Reset camera coordination refs
+    if (selectedIdRef) selectedIdRef.current = null;
     lastFocusedIdRef.current = null;
+    activeRegionBoundsRef.current = null;
+    setCameraTarget?.(null);
+    setCameraBounds?.(null);
+
+    // Zoom back out to default
     resetToDefaultBounds(true);
   };
 
@@ -3161,28 +3301,39 @@ function LeafletMap({
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return;
 
+    const PANAY_CENTER: [number, number] = [11.15, 122.50];
+    const PANAY_DEFAULT_ZOOM = 9;
     const initialRegionKey = selectedRegionKey || settings?.defaultRegion || 'panay';
-    const initialPreset = REGION_PRESETS[initialRegionKey] || REGION_PRESETS.panay;
-    const initialLocked = settings?.defaultInteractionMode === 'locked';
+    const initialPreset = REGION_PRESETS[initialRegionKey] || { center: PANAY_CENTER, zoom: PANAY_DEFAULT_ZOOM };
+    const initialCenter = (!selectedRegionKey || selectedRegionKey === 'panay') ? PANAY_CENTER : initialPreset.center;
+    const initialZoom = (!selectedRegionKey || selectedRegionKey === 'panay') ? PANAY_DEFAULT_ZOOM : initialPreset.zoom;
+    const initialLocked = false;
     const activeRenderer = settings?.renderingEngine === 'svg'
       ? L.svg({ padding: 0.5 })
       : L.canvas({ padding: 0.5, tolerance: 10 });
     canvasRendererRef.current = activeRenderer as any;
 
     const map = L.map(mapElement.current, {
-      center: initialPreset.center,
-      zoom: initialPreset.zoom,
+      center: initialCenter,
+      zoom: initialZoom,
+      minZoom: 6,
       zoomControl: true,
-      scrollWheelZoom: !initialLocked,
+      scrollWheelZoom: true,
       wheelDebounceTime: 40,
       wheelPxPerZoomLevel: 120,
       attributionControl: false,
       preferCanvas: settings?.renderingEngine !== 'svg',
       renderer: activeRenderer,
-      dragging: !initialLocked,
-      touchZoom: !initialLocked,
-      doubleClickZoom: !initialLocked,
-      boxZoom: !initialLocked,
+      dragging: true,
+      touchZoom: true,
+      doubleClickZoom: true,
+      boxZoom: true,
+      keyboard: true,
+      maxBounds: L.latLngBounds([
+        [4.0, 116.0],
+        [21.5, 127.5],
+      ]),
+      maxBoundsViscosity: 0.2,
     });
 
     const updateGridScale = () => {
@@ -3208,6 +3359,7 @@ function LeafletMap({
     updateGridScale();
 
     mapRef.current = map;
+    setMapInstance(map);
     defaultBoundsRef.current = L.latLngBounds([
       [4.5, 116.5],
       [21.5, 127.5],
@@ -3316,11 +3468,6 @@ function LeafletMap({
       .then((geojson) => {
         if (disposed || mapRef.current !== map || !geojson) return;
         renderRegionGeoJson(initialRegionKey, geojson);
-        if (savedViewRef.current) {
-          map.setView(savedViewRef.current.center, savedViewRef.current.zoom, { animate: false });
-        } else {
-          map.setView(initialPreset.center, initialPreset.zoom, { animate: false });
-        }
       })
       .catch(() => {
         // Ignore aborted or unavailable map data during component cleanup.
@@ -3337,13 +3484,13 @@ function LeafletMap({
         try {
           bufferGroupRef.current.clearLayers();
           mapRef.current.removeLayer(bufferGroupRef.current);
-        } catch {}
+        } catch { }
         bufferGroupRef.current = null;
       }
       if (activeStreakLayerRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(activeStreakLayerRef.current);
-        } catch {}
+        } catch { }
         activeStreakLayerRef.current = null;
       }
       if (nightLightOverlayRef.current && mapRef.current) {
@@ -3628,12 +3775,12 @@ function LeafletMap({
         if (typeof (canvasRendererRef.current as any)._update === 'function') {
           try {
             (canvasRendererRef.current as any)._update();
-          } catch {}
+          } catch { }
         }
         if (typeof (canvasRendererRef.current as any).requestRedraw === 'function') {
           try {
             (canvasRendererRef.current as any).requestRedraw();
-          } catch {}
+          } catch { }
         }
       }
 
@@ -3650,7 +3797,7 @@ function LeafletMap({
           if (b && typeof b.isValid === 'function' && b.isValid()) {
             selectedEntityBounds = b;
           }
-        } catch {}
+        } catch { }
       }
       if (!selectedEntityBounds && activeRegionBoundsRef.current && typeof activeRegionBoundsRef.current.isValid === 'function' && activeRegionBoundsRef.current.isValid()) {
         selectedEntityBounds = activeRegionBoundsRef.current;
@@ -3661,28 +3808,28 @@ function LeafletMap({
           if (b && typeof b.isValid === 'function' && b.isValid()) {
             selectedEntityBounds = b;
           }
-        } catch {}
+        } catch { }
       }
       if (!selectedEntityBounds) {
         const currentKey = activeChunkKeyRef.current || selectedRegionKey || 'panay';
         const treeNode = findRegionTreeNode(currentKey);
         if (treeNode?.bounds) {
           selectedEntityBounds = L.latLngBounds(treeNode.bounds);
-        } else if (currentKey === 'philippines') {
-          selectedEntityBounds = L.latLngBounds(PHILIPPINES_BOUNDS);
-        } else {
+        } else if (currentKey === 'panay') {
           selectedEntityBounds = PANAY_BOUNDS;
+        } else {
+          selectedEntityBounds = L.latLngBounds(PHILIPPINES_BOUNDS);
         }
       }
 
       if (selectedEntityBounds && typeof selectedEntityBounds.isValid === 'function' && selectedEntityBounds.isValid()) {
         try {
           map.fitBounds(selectedEntityBounds, { padding: [30, 30], animate: false });
-        } catch {}
+        } catch { }
       } else if (PANAY_BOUNDS && typeof PANAY_BOUNDS.isValid === 'function' && PANAY_BOUNDS.isValid()) {
         try {
           map.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: false });
-        } catch {}
+        } catch { }
       }
 
       // Synchronize active hazard event simulation
@@ -3831,7 +3978,7 @@ function LeafletMap({
           if (b && b.isValid && b.isValid()) {
             provinceBounds = b;
           }
-        } catch {}
+        } catch { }
       }
 
       if (!provinceBounds) {
@@ -3847,29 +3994,31 @@ function LeafletMap({
       const preset = REGION_PRESETS[selectedRegionKey];
 
       try {
-        // If a municipality is actively selected, do not alter camera zoom or bounds
+        currentMap.invalidateSize();
+
+        // Only update camera target if no individual municipality is selected
         if (!selectedIdRef.current) {
-          if (selectedRegionKey === 'philippines') {
+          if (selectedRegionKey === 'philippines' || selectedRegionKey === 'nationwide') {
             activeRegionBoundsRef.current = L.latLngBounds(PHILIPPINES_BOUNDS);
-            currentMap.fitBounds(PHILIPPINES_BOUNDS, { padding: [20, 20], animate: false });
+            setCameraBounds(L.latLngBounds(PHILIPPINES_BOUNDS));
           } else if (selectedRegionKey === 'panay') {
             activeRegionBoundsRef.current = PANAY_BOUNDS;
-            currentMap.fitBounds(PANAY_BOUNDS, { padding: [20, 20], animate: false });
+            setCameraBounds(PANAY_BOUNDS);
           } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
             activeRegionBoundsRef.current = provinceBounds;
-            currentMap.fitBounds(provinceBounds, { padding: [20, 20], maxZoom: 11, animate: false });
+            setCameraBounds(provinceBounds);
           } else if (preset) {
-            currentMap.setView(preset.center, preset.zoom, { animate: false });
+            setCameraTarget({ lat: preset.center[0], lng: preset.center[1], zoom: preset.zoom || 10 });
           }
         } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
           activeRegionBoundsRef.current = provinceBounds;
         }
 
-        if (selectedRegionKey && selectedRegionKey !== 'philippines') {
+        if (selectedRegionKey && selectedRegionKey !== 'philippines' && selectedRegionKey !== 'nationwide') {
           attachNeonStreak(selectedRegionKey, chunkData);
         }
       } catch (err) {
-        console.warn('[PanayMap] Error zooming to region/province:', err);
+        console.warn('[PanayMap] Error setting region/province camera target:', err);
       }
 
       setTimeout(() => {
@@ -3985,7 +4134,7 @@ function LeafletMap({
       if (activeStreakLayerRef.current && mapRef.current) {
         try {
           mapRef.current.removeLayer(activeStreakLayerRef.current);
-        } catch {}
+        } catch { }
         activeStreakLayerRef.current = null;
       }
       Object.values(layersRef.current).forEach((l: any) => {
@@ -3998,49 +4147,143 @@ function LeafletMap({
               'polygon-highlight-settled',
               'lgu-active-stroke'
             );
-          } catch {}
+          } catch { }
         }
       });
       lastFocusedIdRef.current = null;
+      setCameraTarget(null);
+      setCameraBounds(null);
+      return;
+    }
+
+    // STRICT ONE-SHOT GUARD: Never re-run camera fit if we already focused this entity
+    if (lastFocusedIdRef.current === selectedId) {
       return;
     }
 
     const map = mapRef.current;
     if (!map || !(map as any)._loaded) return;
 
+    // Immediately mark as focused so re-renders cannot re-trigger camera moves
+    lastFocusedIdRef.current = selectedId;
+
+    isProgrammaticMoveRef.current = true;
+
+    try {
+      map.invalidateSize();
+    } catch { }
+
+    let targetBounds: L.LatLngBounds | null = null;
+    let targetLat: number | null = null;
+    let targetLng: number | null = null;
+    let targetRegion: string | null = null;
+
     const lguLookup = findLguQuickLookup(selectedId);
     if (lguLookup) {
-      if (lastFocusedIdRef.current !== selectedId) {
-        lastFocusedIdRef.current = selectedId;
-        // Do NOT call map.fitBounds() or map.setZoom() — preserve user's manual zoom level.
-        // Optional gentle panTo only if the municipality center is not currently in view:
+      targetRegion = lguLookup.region_code;
+      if (lguLookup.bbox) {
         try {
-          const centerLat = lguLookup.center ? lguLookup.center[0] : (lguLookup.bbox[0][0] + lguLookup.bbox[1][0]) / 2;
-          const centerLng = lguLookup.center ? lguLookup.center[1] : (lguLookup.bbox[0][1] + lguLookup.bbox[1][1]) / 2;
-          const currentBounds = map.getBounds();
-          if (currentBounds && typeof currentBounds.contains === 'function' && !currentBounds.contains([centerLat, centerLng])) {
-            map.panTo([centerLat, centerLng], { animate: true });
-          }
-        } catch {}
+          targetBounds = L.latLngBounds(lguLookup.bbox);
+        } catch { }
       }
-
-      const targetRegion = lguLookup.region_code;
-      if (targetRegion && targetRegion !== activeChunkKeyRef.current) {
-        fetchRegionChunk(targetRegion).then((chunkData) => {
-          if (chunkData && selectedIdRef.current === selectedId) {
-            activeChunkKeyRef.current = targetRegion;
-            onRegionChange?.(targetRegion);
-            renderRegionGeoJson(targetRegion, chunkData);
-            attachNeonStreak(selectedId, chunkData);
-          }
-        });
+      if (lguLookup.center) {
+        targetLat = lguLookup.center[0];
+        targetLng = lguLookup.center[1];
+      } else if (lguLookup.bbox) {
+        targetLat = (lguLookup.bbox[0][0] + lguLookup.bbox[1][0]) / 2;
+        targetLng = (lguLookup.bbox[0][1] + lguLookup.bbox[1][1]) / 2;
+      }
+    } else {
+      const treeNode = findRegionTreeNode(selectedId);
+      if (treeNode) {
+        targetRegion = treeNode.chunkKey || treeNode.id;
+        if (treeNode.bounds) {
+          try {
+            targetBounds = L.latLngBounds(treeNode.bounds);
+          } catch { }
+        }
+        if (treeNode.center) {
+          targetLat = treeNode.center[0];
+          targetLng = treeNode.center[1];
+        }
       } else {
-        attachNeonStreak(selectedId);
+        const centroid = centroidsRef.current?.get(selectedId) || (selectedId ? centroidsRef.current?.get(selectedId.toLowerCase().trim()) : null);
+        if (centroid) {
+          targetLat = centroid[0];
+          targetLng = centroid[1];
+        } else {
+          const muni = municipalitiesByIdRef.current?.get(selectedId) || (selectedId ? municipalitiesByIdRef.current?.get(selectedId.toLowerCase().trim()) : null);
+          if (muni?.name) {
+            const fallbackLgu = findLguQuickLookup(muni.name);
+            if (fallbackLgu) {
+              targetRegion = fallbackLgu.region_code;
+              if (fallbackLgu.bbox) targetBounds = L.latLngBounds(fallbackLgu.bbox);
+              if (fallbackLgu.center) {
+                targetLat = fallbackLgu.center[0];
+                targetLng = fallbackLgu.center[1];
+              }
+            }
+          }
+          const layer = layersRef.current[selectedId] || (selectedId ? layersRef.current[selectedId.toLowerCase().trim()] : null);
+          if (layer && typeof (layer as any).getBounds === 'function') {
+            try {
+              const lb = (layer as any).getBounds();
+              if (lb && typeof lb.isValid === 'function' && lb.isValid()) {
+                targetBounds = lb;
+                const c = lb.getCenter();
+                targetLat = c.lat;
+                targetLng = c.lng;
+              }
+            } catch { }
+          }
+        }
       }
+    }
+
+    let cameraMoved = false;
+    if (targetBounds && typeof targetBounds.isValid === 'function' && targetBounds.isValid()) {
+      try {
+        map.fitBounds(targetBounds, {
+          maxZoom: 12,
+          padding: [40, 40],
+          animate: true,
+          duration: 1.0,
+        });
+        cameraMoved = true;
+        setCameraBounds(targetBounds);
+      } catch (err) {
+        console.warn('Could not fit bounds, falling back to flyTo:', err);
+      }
+    }
+
+    if (!cameraMoved && targetLat != null && targetLng != null && !isNaN(targetLat) && !isNaN(targetLng)) {
+      map.flyTo([targetLat, targetLng], 11, {
+        animate: true,
+        duration: 1.0,
+      });
+      setCameraTarget({ lat: targetLat, lng: targetLng, zoom: 11 });
+    }
+
+    const isPanayTarget = ['iloilo', 'capiz', 'aklan', 'antique', 'panay'].includes(targetRegion || '');
+    const isCurrentPanay = ['iloilo', 'capiz', 'aklan', 'antique', 'panay'].includes(activeChunkKeyRef.current || '');
+
+    if (targetRegion && targetRegion !== activeChunkKeyRef.current && !(isPanayTarget && isCurrentPanay && activeChunkKeyRef.current === 'panay')) {
+      fetchRegionChunk(targetRegion).then((chunkData) => {
+        if (chunkData && selectedIdRef.current === selectedId) {
+          activeChunkKeyRef.current = targetRegion;
+          onRegionChange?.(targetRegion);
+          renderRegionGeoJson(targetRegion, chunkData);
+          attachNeonStreak(selectedId, chunkData);
+        }
+      });
     } else {
       attachNeonStreak(selectedId);
     }
-  }, [selectedId, attachNeonStreak]);
+
+    setTimeout(() => {
+      isProgrammaticMoveRef.current = false;
+    }, 1200);
+  }, [selectedId]);
 
   // Render distinct color-coded GDACS hazard markers and interactive popups
   useEffect(() => {
@@ -4098,7 +4341,7 @@ function LeafletMap({
         if (e) {
           try {
             L.DomEvent.stopPropagation(e);
-          } catch {}
+          } catch { }
         }
         setSelectedGdacsAlert(alert);
         window.dispatchEvent(
@@ -4159,82 +4402,22 @@ function LeafletMap({
 
   // Smoothly center/fly map to active hazard coordinates whenever active event updates
   useEffect(() => {
-    const map = mapRef.current;
-    // Only attempt camera animation if map is ready, event ID exists, and Map tab is actively visible
-    if (!map || !activeEventId || !isActiveTab) return;
+    // If MapCameraController handles the camera, don't hijack it here during background polls
+    if (!activeEventId || !isActiveTab) return;
+    if (lastFlownEventIdRef.current === activeEventId) return;
 
-    // Check if the map container element has valid rendered dimensions
-    const container = mapElement.current;
-    if (!container || container.offsetWidth === 0 || container.offsetHeight === 0) {
-      return;
+    lastFlownEventIdRef.current = activeEventId;
+
+    const matchingAlert = gdacsAlerts?.find(
+      (a) => String(activeEventId) === String(a.id) || String(activeEventId) === `gdacs-${a.event_id}`
+    );
+    const lat = matchingAlert?.latitude ?? activeEvent?.latitude;
+    const lng = matchingAlert?.longitude ?? activeEvent?.longitude;
+
+    if (lat != null && lng != null && mapRef.current) {
+      mapRef.current.flyTo([lat, lng], 8, { animate: true, duration: 0.8 });
     }
-
-    try {
-      // Check if matching alert in gdacsAlerts
-      const matchingAlert = gdacsAlerts?.find(
-        (a) =>
-          String(activeEventId) === String(a.id) ||
-          String(activeEventId) === `gdacs-${a.event_id}` ||
-          String(activeEventId) === String(a.event_id)
-      );
-
-      let lat = matchingAlert?.latitude ?? matchingAlert?.coordinates?.[0];
-      let lng = matchingAlert?.longitude ?? matchingAlert?.coordinates?.[1];
-
-      if ((lat == null || lng == null) && activeEvent) {
-        lat = activeEvent.latitude ?? activeEvent.coordinates?.[0];
-        lng = activeEvent.longitude ?? activeEvent.coordinates?.[1];
-      }
-
-      // Defensive validation: ensure coordinates are valid, finite numbers
-      if (
-        lat != null &&
-        lng != null &&
-        typeof lat === 'number' &&
-        typeof lng === 'number' &&
-        !isNaN(lat) &&
-        !isNaN(lng) &&
-        isFinite(lat) &&
-        isFinite(lng)
-      ) {
-        const targetLat = lat;
-        const targetLng = lng;
-        const currentEvt = activeEvent || matchingAlert;
-
-        if (currentEvt) {
-          runSimulationForCurrentRegion(currentEvt);
-        }
-
-        if (lastFlownEventIdRef.current !== activeEventId) {
-          lastFlownEventIdRef.current = activeEventId;
-
-          // Concurrently attempt regional chunk loading; fallback to epicenter buffer circle if no chunk covers it
-          loadRegionByCoordinates(targetLat, targetLng).then((loaded) => {
-            if (!loaded) {
-              drawEpicenterBuffer(targetLat, targetLng);
-            } else {
-              clearEpicenterBuffer();
-            }
-            if (currentEvt) {
-              runSimulationForCurrentRegion(currentEvt);
-            }
-            checkViewportFeatures();
-          });
-
-          const rawZoom = typeof map.getZoom === 'function' ? map.getZoom() : 8;
-          const currentZoom = typeof rawZoom === 'number' && isFinite(rawZoom) ? rawZoom : 8;
-          const targetZoom = Math.max(currentZoom, 8);
-
-          map.setView([targetLat, targetLng], targetZoom, {
-            animate: false,
-          });
-        }
-      }
-    } catch (err) {
-      // Suppress any silent Leaflet canvas/tile animation exceptions
-      console.warn('[PanayMap] Suppressed camera flyTo exception during event transition:', err);
-    }
-  }, [activeEventId, activeEvent, gdacsAlerts, isActiveTab]);
+  }, [activeEventId, isActiveTab]);
 
   return (
     <div
@@ -4242,6 +4425,13 @@ function LeafletMap({
       onMouseEnter={() => onMapHoverChange?.(true)}
       onMouseLeave={() => onMapHoverChange?.(false)}
     >
+      <MapCameraController
+        map={mapInstance || mapRef.current}
+        targetLocation={cameraTarget}
+        selectedBounds={cameraBounds}
+        selectedId={selectedId}
+      />
+
       {/* Static initial class; applyMapLock() mutates classList directly without re-rendering LeafletMap */}
       <div
         ref={mapElement}
@@ -4326,40 +4516,53 @@ function LeafletMap({
         loadingMessage={isRefreshingMap ? 'Refreshing basemap tiles...' : loadingMessage}
       />
 
-      {/* Maximized / Fullscreen Floating Active Disaster Event Contextual Pill */}
-      {isMaximized && activeEvent && (() => {
-        const alertLvl = (activeEvent as any).alertLevel || activeEvent.alert_level;
-        const theme = getAlertTheme(alertLvl, activeEvent.severity);
-        const alertLabel = (alertLvl || activeEvent.severity || 'Active Baseline').toUpperCase();
+      {/* Maximized / Fullscreen Persistent Exit / Back Navigation & Disaster Pill */}
+      {isMaximized && (
+        <div className="absolute top-3 left-3 z-[1001] flex items-center gap-2 pointer-events-auto max-w-[calc(100%-80px)]">
+          <button
+            type="button"
+            onClick={() => onToggleMaximize?.()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-lg text-xs font-medium backdrop-blur-md transition z-[1001] min-h-[44px] cursor-pointer shrink-0"
+            title="Exit full map"
+            aria-label="Exit maximized map"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Dashboard</span>
+          </button>
 
-        return (
-          <div className="absolute top-3 left-14 z-[1000] pointer-events-auto">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-xl text-xs text-slate-200">
-              {/* Status Dot */}
-              <span className={`w-2 h-2 rounded-full shrink-0 ${theme.dot} animate-pulse`} />
+          {activeEvent && (() => {
+            const alertLvl = (activeEvent as any).alertLevel || activeEvent.alert_level;
+            const theme = getAlertTheme(alertLvl, activeEvent.severity);
+            const alertLabel = (alertLvl || activeEvent.severity || 'Active Baseline').toUpperCase();
 
-              {/* Event Name */}
-              <span className="font-semibold text-white truncate max-w-[220px]">
-                {activeEvent.name}
-              </span>
+            return (
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 shadow-xl text-xs text-slate-200 min-h-[44px] truncate">
+                {/* Status Dot */}
+                <span className={`w-2 h-2 rounded-full shrink-0 ${theme.dot} animate-pulse`} />
 
-              {/* Event Date */}
-              {activeEvent.date && (
-                <span className="text-slate-400 font-mono text-[10px] border-l border-slate-700 pl-2">
-                  {activeEvent.date}
+                {/* Event Name */}
+                <span className="font-semibold text-white truncate max-w-[200px]">
+                  {activeEvent.name}
                 </span>
-              )}
 
-              {/* Dynamic Alert Level Badge */}
-              <span
-                className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wide border ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
-              >
-                {alertLabel}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
+                {/* Event Date */}
+                {activeEvent.date && (
+                  <span className="text-slate-400 font-mono text-[10px] border-l border-slate-700 pl-2 shrink-0">
+                    {activeEvent.date}
+                  </span>
+                )}
+
+                {/* Dynamic Alert Level Badge */}
+                <span
+                  className={`px-1.5 py-0.5 text-[9px] font-bold rounded uppercase tracking-wide border shrink-0 ${theme.badgeBg} ${theme.badgeText} ${theme.badgeBorder}`}
+                >
+                  {alertLabel}
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }
@@ -4437,14 +4640,14 @@ function MapLockOverlay({
           type="button"
           id="night-glow-toggle-button"
           onClick={onToggleNightGlow}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${nightGlowMode
-            ? 'bg-amber-100 border border-amber-400 text-amber-950 hover:bg-amber-200/80 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/60 dark:hover:bg-amber-900/60'
-            : 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700'
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${nightGlowMode
+            ? 'bg-amber-100 border-amber-300 text-amber-900 hover:bg-amber-200/80 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 shadow-sm'
+            : 'bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800'
             }`}
           aria-label={nightGlowMode ? 'Switch to Standard Vector Map' : 'Switch to NASA Black Marble Night Glow'}
           title="Toggle VIIRS Night Glow radiance layer"
         >
-          <Sparkles className={`w-3.5 h-3.5 ${nightGlowMode ? 'text-amber-900 dark:text-amber-300 animate-pulse' : 'text-slate-300'}`} />
+          <Sparkles className={`w-3.5 h-3.5 ${nightGlowMode ? 'text-amber-800 dark:text-amber-400 animate-pulse' : 'text-slate-500 dark:text-slate-400'}`} />
           <span className="hidden sm:inline">{nightGlowMode ? 'Night Glow' : 'Vector Map'}</span>
         </button>
       )}
@@ -4454,14 +4657,14 @@ function MapLockOverlay({
           type="button"
           id="impact-buffers-overlay-toggle"
           onClick={onToggleImpactBuffers}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${showImpactBuffers
-            ? 'bg-amber-500/20 text-amber-900 dark:text-amber-300 border border-amber-500/40 shadow-sm'
-            : 'bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700'
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${showImpactBuffers
+            ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 shadow-sm'
+            : 'bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800'
             }`}
           aria-label={showImpactBuffers ? 'Hide Impact Buffer Rings & Substations' : 'Show Impact Buffer Rings & Substations'}
           title="Toggle Hazard Impact Buffers & Grid Substations"
         >
-          <Radio className={`w-3.5 h-3.5 ${showImpactBuffers ? 'text-amber-600 dark:text-amber-400 animate-pulse' : 'text-slate-400'}`} />
+          <Radio className={`w-3.5 h-3.5 ${showImpactBuffers ? 'text-amber-800 dark:text-amber-400 animate-pulse' : 'text-slate-500 dark:text-slate-400'}`} />
           <span className="hidden sm:inline">Buffers</span>
         </button>
       )}
@@ -4471,11 +4674,11 @@ function MapLockOverlay({
         type="button"
         id="map-reset-view-button"
         onClick={onReset}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 shadow-lg backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800 border shadow-sm backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
         aria-label={`Reset map view to ${defaultRegionName}`}
         title={`Re-center on ${defaultRegionName}`}
       >
-        <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
+        <RotateCcw className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
         <span className="hidden sm:inline">Reset View</span>
         <span className="sm:hidden">Reset</span>
       </button>
@@ -4486,11 +4689,11 @@ function MapLockOverlay({
           type="button"
           id="force-refresh-map-button"
           onClick={onRefreshMap}
-          className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-medium shadow-lg backdrop-blur-md transition-colors cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+          className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-xl bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800 border shadow-sm backdrop-blur-md transition-colors text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
           title="Force redraw map canvas & reload basemap tiles (Shortcut: R)"
           aria-label="Force redraw map canvas & reload basemap tiles"
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-slate-300 ${isRefreshing ? 'animate-spin text-ocean-400' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${isRefreshing ? 'animate-spin text-ocean-500 dark:text-ocean-400' : ''}`} />
           <span className="hidden sm:inline">Refresh Map</span>
           <span className="sm:hidden">Refresh</span>
         </button>
@@ -4501,25 +4704,22 @@ function MapLockOverlay({
         type="button"
         id="lock-map-toggle"
         onClick={handleToggleLock}
-        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md shadow-lg transition-all text-xs font-semibold cursor-pointer active:scale-95 border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${
-          isMapLocked
-            ? nightGlowMode
-              ? 'bg-amber-950/40 text-amber-300 border-amber-600/60 shadow-amber-500/10 hover:bg-amber-900/50'
-              : 'bg-amber-500/15 text-amber-900 dark:text-amber-300 border-amber-500/40 shadow-sm hover:bg-amber-500/25'
-            : 'bg-slate-800/70 border-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-700/80'
-        }`}
+        className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl backdrop-blur-md shadow-sm transition-all text-xs font-semibold cursor-pointer active:scale-95 border focus:outline-none focus:ring-2 focus:ring-amber-500/50 ${isMapLocked
+          ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40 shadow-sm'
+          : 'bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800'
+          }`}
         aria-label={isMapLocked ? 'Map locked: click to unlock pan and zoom' : 'Map unlocked: click to lock viewport'}
         title={isMapLocked ? 'Map locked (Click to unlock pan & zoom)' : 'Lock map viewport (Disable pan & zoom)'}
         aria-pressed={isMapLocked}
       >
         {isMapLocked ? (
           <>
-            <Lock className={`w-3.5 h-3.5 ${nightGlowMode ? 'text-amber-400' : 'text-amber-800 dark:text-amber-400'}`} />
+            <Lock className="w-3.5 h-3.5 text-amber-800 dark:text-amber-400" />
             <span className="hidden sm:inline">Locked</span>
           </>
         ) : (
           <>
-            <Unlock className="w-3.5 h-3.5 text-slate-400" />
+            <Unlock className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span className="hidden sm:inline">Lock Map</span>
           </>
         )}
@@ -4531,19 +4731,19 @@ function MapLockOverlay({
           type="button"
           id="fullscreen-map-toggle"
           onClick={onToggleMaximize}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 text-slate-300 hover:text-white border border-slate-700/60 shadow-lg backdrop-blur-md transition-all text-xs font-medium cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800 border shadow-sm backdrop-blur-md transition-all text-xs font-semibold cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
           title="Toggle Fullscreen Map View"
           aria-label={isMaximized ? 'Exit Fullscreen Map View' : 'Toggle Fullscreen Map View'}
           aria-pressed={isMaximized}
         >
           {isMaximized ? (
             <>
-              <Minimize2 className="w-3.5 h-3.5 text-slate-400" />
+              <Minimize2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline">Minimize</span>
             </>
           ) : (
             <>
-              <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+              <Maximize2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
               <span className="hidden sm:inline">Fullscreen</span>
             </>
           )}
@@ -4556,14 +4756,14 @@ function MapLockOverlay({
           type="button"
           id="map-header-collapse-toggle"
           onClick={onToggleCollapseHeader}
-          className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-all flex items-center justify-center shadow-lg backdrop-blur-md cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
+          className="p-2 rounded-xl bg-white/90 text-slate-700 border-slate-300 hover:bg-slate-100 dark:bg-slate-900/80 dark:text-slate-300 dark:border-slate-700/80 dark:hover:bg-slate-800 border transition-all flex items-center justify-center shadow-sm backdrop-blur-md cursor-pointer active:scale-95 focus:outline-none focus:ring-2 focus:ring-ocean-500/50"
           title={isHeaderCollapsed ? "Expand Map Header" : "Collapse Map Header"}
           aria-label="Toggle map header visibility"
         >
           {isHeaderCollapsed ? (
-            <ChevronDown className="w-4 h-4 text-amber-400" />
+            <ChevronDown className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           ) : (
-            <ChevronUp className="w-4 h-4 text-slate-300" />
+            <ChevronUp className="w-4 h-4 text-slate-500 dark:text-slate-400" />
           )}
         </button>
       )}
@@ -4572,121 +4772,9 @@ function MapLockOverlay({
 }
 
 
-// ─── VIIRSScaleRuler ─────────────────────────────────────────────────────────
-// Compact dual-axis NASA VIIRS Day/Night Band (DNB) spatial resolution scale ruler.
-// Strictly faithful to NASA DNB spatial resolution where 1 pixel = 500m nominal.
-// Automatically adjusts its pixel-to-meter ratio accurately across zoom levels,
-// mobile viewports, and custom scale calibration without warping or distortion.
-interface VIIRSScaleRulerProps {
-  pinned: boolean;
-  nightGlow?: boolean;
-  mapHovered?: boolean;
-  showGrid?: boolean;
-  onToggleGrid?: () => void;
-  zoom?: number;
-  scaleCalibration?: number; // Multiplier: 1.0 = nominal 500m/pixel (1 DNB = 500m)
-}
-
-function VIIRSScaleRuler({
-  pinned,
-  nightGlow = false,
-  mapHovered = false,
-  showGrid = false,
-  onToggleGrid,
-  zoom = 8,
-  scaleCalibration = 1.0,
-}: VIIRSScaleRulerProps) {
-  // ── NASA VIIRS Day/Night Band (DNB) Spatial Scale Math (1 DNB = 500m Nominal) ──
-  const effectiveCalibration = typeof scaleCalibration === 'number' && isFinite(scaleCalibration) && scaleCalibration > 0
-    ? scaleCalibration
-    : 1.0;
-  const calibratedDnbMeters = 500 * effectiveCalibration;
-
-  // Web Mercator ground resolution at latitude ~11°N (Panay Island & Western Visayas)
-  const latRad = (11 * Math.PI) / 180;
-  const metersPerPixel = (156543.03392 * Math.cos(latRad)) / Math.pow(2, zoom);
-
-  // Target on-screen pixel width (~140px-180px for the widget ruler bar)
-  const targetPx = 160;
-
-  // Standard cartographic round distances in meters
-  const NICE_DISTANCES = [
-    250, 500, 1000, 2000, 2500, 5000, 10000, 15000, 20000, 25000, 30000, 50000, 75000, 100000, 150000, 200000
-  ];
-
-  let chosenDistance = NICE_DISTANCES[0];
-  let minDiff = Infinity;
-  for (const dist of NICE_DISTANCES) {
-    const px = dist / metersPerPixel;
-    const diff = Math.abs(px - targetPx);
-    if (diff < minDiff && px >= 90 && px <= 240) {
-      minDiff = diff;
-      chosenDistance = dist;
-    }
-  }
-
-  // Exact DNB pixel count represented by this distance
-  const totalDnbPixels = Math.round(chosenDistance / calibratedDnbMeters);
-  const dnbLabel = totalDnbPixels >= 1 ? `${totalDnbPixels}` : (chosenDistance / calibratedDnbMeters).toFixed(1);
-
-  // Human-readable metric labels
-  let maxLabel: string;
-  let midLabel: string;
-  if (chosenDistance >= 1000) {
-    const totalKm = chosenDistance / 1000;
-    maxLabel = `${totalKm >= 10 ? Math.round(totalKm) : totalKm.toFixed(1)} km`;
-    const midKm = totalKm / 2;
-    midLabel = `${midKm >= 10 ? Math.round(midKm) : midKm.toFixed(1)} km`;
-  } else {
-    maxLabel = `${chosenDistance} m`;
-    midLabel = `${Math.round(chosenDistance / 2)} m`;
-  }
-
-  return (
-    <div className="absolute bottom-4 right-4 z-[500] w-64 sm:w-72 p-3.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-md">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-1.5">
-          <Ruler className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
-            500m VIIRS Scale
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleGrid?.();
-          }}
-          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            showGrid
-              ? "bg-sky-500 text-white shadow-sm"
-              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
-          }`}
-        >
-          {showGrid ? "GRID ON" : "GRID OFF"}
-        </button>
-      </div>
-
-      {/* Ruler Visual */}
-      <div className="pt-1">
-        <div className="flex justify-between items-end text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-300 mb-1">
-          <span>0</span>
-          <span>{midLabel}</span>
-          <span>{maxLabel}</span>
-        </div>
-        <div className="flex w-full h-2.5 rounded border border-slate-400 dark:border-slate-600 overflow-hidden bg-slate-200 dark:bg-slate-800">
-          <div className="w-1/2 h-full bg-sky-500" />
-          <div className="w-1/2 h-full bg-slate-400 dark:bg-slate-600" />
-        </div>
-        <div className="mt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between">
-          <span>1 DNB Pixel ≈ {Math.round(calibratedDnbMeters)}m</span>
-          <span className="font-mono font-medium">{dnbLabel} DNB ({maxLabel})</span>
-        </div>
-      </div>
-    </div>
-  );
-}
+// ─── VIIRSScaleRuler Re-export ─────────────────────────────────────────────────
+export { default as VIIRSScaleRuler } from '@/components/ViirsScaleRuler';
+export type { ViirsScaleRulerProps as VIIRSScaleRulerProps } from '@/components/ViirsScaleRuler';
 
 function updateLayerStyle(
   layer: any,

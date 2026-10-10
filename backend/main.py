@@ -632,12 +632,13 @@ def get_events():
             ev_id = str(event.get("id", "")).strip()
             name = str(event.get("name", "")).strip()
 
-            # Filter out erroneous/non-existent and pre-VIIRS events
+            # Filter out erroneous/non-existent, duplicate, and pre-VIIRS events
             if (
-                ev_id in {"gdacs-1568718", "1568718", "panay-earthquake-1990", "19900614", "gdacs-19900614", "odette", "typhoon-tino", "gdacs-tc-odette-2021"}
+                ev_id in {"gdacs-1568718", "1568718", "panay-earthquake-1990", "19900614", "gdacs-19900614", "odette", "typhoon-tino", "gdacs-tc-odette-2021", "panay-grid-collapse-2024"}
                 or "1990" in name
                 or "Panay Fault" in name
                 or ("Odette" in name and "Rai" not in name)
+                or "(January 2024)" in name
             ):
                 continue
 
@@ -659,6 +660,7 @@ def get_events():
             event["startDate"] = event.get("start_date") or (preset_match.get("startDate") if preset_match else date_val)
             event["endDate"] = event.get("end_date") or (preset_match.get("endDate") if preset_match else None)
             event["type"] = event.get("type") or (preset_match.get("type") if preset_match else "typhoon" if "typhoon" in event.get("category", "").lower() else "grid_failure" if "power" in event.get("category", "").lower() else "monsoon_flood")
+            event["severity"] = event.get("severity") or (preset_match.get("severity") if preset_match else None)
             event["resource_url"] = event.get("resource_url") or (preset_match.get("resource_url") if preset_match else None)
 
             # Enrich root cause contextual parameters

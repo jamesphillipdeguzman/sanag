@@ -273,13 +273,15 @@ export default function RecoveryChart({
     return map;
   }, [endDate, records, startDate]);
 
-  // Filter municipalities according to selected regional scope
-  const scopedMunicipalities = useMemo(() => {
-    if (scopeFilter === 'panay') {
-      const panayList = municipalities.filter((m) => isPanayProvince(m.province));
-      return panayList.length > 0 ? panayList : municipalities;
+  // 1. Resolve candidate dataset based on selected scope
+  const candidateLgus = useMemo(() => {
+    if (scopeFilter === 'nationwide') {
+      // Must include all nationwide hubs / LGUs (187 monitored units)
+      return municipalities;
     }
-    return municipalities;
+    // Default to Panay Island (95 monitored units)
+    const panayList = municipalities.filter((m) => isPanayProvince(m.province));
+    return panayList.length > 0 ? panayList : municipalities;
   }, [municipalities, scopeFilter]);
 
   // Dynamic count of Panay Island LGUs within available dataset
@@ -293,40 +295,100 @@ export default function RecoveryChart({
     return municipalities.length > 0 ? municipalities.length : 187;
   }, [municipalities]);
 
+  // Helper to determine initial/Day-0 recovery score for a municipality
+  const getDay0Score = (m: Municipality): number => {
+    const mRecords = recordsByPcode.get(m.id) || (m.pcode ? recordsByPcode.get(m.pcode) : null);
+    if (mRecords && mRecords.length > 0) {
+      const sortedRecords = [...mRecords].sort((r1, r2) => r1.date.localeCompare(r2.date));
+      const first = sortedRecords[0];
+      if (first && first.r_t != null) {
+        return Math.max(0, Math.min(100, Math.round(first.r_t * 100)));
+      }
+    }
+    return (m as any).day0Score ?? (m as any).initialRecoveryScore ?? (m as any).recoveryCurve?.[0] ?? m.recoveryScore ?? 100;
+  };
+
+  // Computed ranking lookup based on sorted Day-0 recovery score within active scope
+  const activeScopeRankMap = useMemo(() => {
+    const sorted = [...candidateLgus].sort(
+      (a, b) => getDay0Score(a) - getDay0Score(b) || a.name.localeCompare(b.name)
+    );
+    const map = new Map<string, number>();
+    sorted.forEach((m, idx) => {
+      map.set(m.id, idx + 1);
+      if (m.pcode) map.set(m.pcode, idx + 1);
+    });
+    return map;
+  }, [candidateLgus, recordsByPcode]);
+
   // Determine which municipalities to display based on viewMode, scopeFilter, or selectedId
   const featured = useMemo(() => {
     if (selectedId) {
-      const sel = municipalities.find((m) => m.id === selectedId);
+      const sel = municipalities.find((m) => m.id === selectedId || (m.pcode && m.pcode === selectedId));
       if (sel) return [sel];
     }
 
-    const pool = scopedMunicipalities;
+    const pool = candidateLgus;
 
     if (viewMode === 'critical') {
-      // Top 4 municipalities with the lowest Day-0 recovery scores across the active event within scope,
-      // directly aligned with the sorting and data shown in the Municipal Resilience Index table
+      // 2. Compute "Most Critical / Hardest-Hit" targets from the active candidate pool
+      // Sort by Day-0 recovery score ascending (or highest initial drop/deficit)
       return [...pool]
-        .filter((m) => records.length === 0 || (recordsByPcode.get(m.id)?.length ?? 0) > 0)
-        .sort((a, b) => a.recoveryScore - b.recoveryScore || a.name.localeCompare(b.name))
+        .sort((a, b) => {
+          const scoreA = getDay0Score(a);
+          const scoreB = getDay0Score(b);
+          return scoreA - scoreB || a.name.localeCompare(b.name);
+        })
         .slice(0, 4);
     }
 
-    // Default viewMode === 'hubs': Largest municipality per province within scope, sorted by score
+    // Default viewMode === 'hubs': Largest municipality per province within scope
     const byProvince = new Map<string, Municipality>();
     for (const m of pool) {
-      if (!byProvince.has(m.province) || m.population > byProvince.get(m.province)!.population) {
+      if (!byProvince.has(m.province) || (m.population || 0) > (byProvince.get(m.province)!.population || 0)) {
         byProvince.set(m.province, m);
       }
     }
-    return Array.from(byProvince.values()).sort((a, b) => b.recoveryScore - a.recoveryScore);
-  }, [municipalities, scopedMunicipalities, selectedId, viewMode, records.length, recordsByPcode]);
+    const hubs = Array.from(byProvince.values()).sort((a, b) => (b.population || 0) - (a.population || 0));
+    return scopeFilter === 'panay' ? hubs : hubs.slice(0, 6);
+  }, [municipalities, candidateLgus, selectedId, viewMode, scopeFilter, recordsByPcode]);
 
+  // 3. Fallback / Recovery Curves Generation
+  // Ensure the chart curves generator receives the computed criticalTargets from the nationwide pool
   const series = useMemo(() => {
-    // 1. Check if database has actual observations for selected municipalities and date range
-    const actualSeries = featured
-      .map((m) => ({
-        municipality: m,
-        data: (recordsByPcode.get(m.id) ?? [])
+    // Generate dates range array between startDate and endDate
+    const dates: string[] = [];
+    let effectiveStart = startDate || currentEvent?.startDate || currentEvent?.date || eventDate || '';
+    let effectiveEnd = endDate || currentEvent?.endDate || '';
+    if (!effectiveStart && records.length > 0) {
+      const sortedRecs = [...records].map((r) => r.date).filter(Boolean).sort();
+      if (sortedRecs.length > 0) {
+        effectiveStart = sortedRecs[0];
+        effectiveEnd = effectiveEnd || sortedRecs[sortedRecs.length - 1];
+      }
+    }
+    if (!effectiveEnd && effectiveStart) {
+      const d = new Date(`${effectiveStart}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + 30);
+      effectiveEnd = d.toISOString().slice(0, 10);
+    }
+
+    if (effectiveStart && effectiveEnd && effectiveStart <= effectiveEnd) {
+      const cur = new Date(`${effectiveStart}T00:00:00Z`);
+      const end = new Date(`${effectiveEnd}T00:00:00Z`);
+      let count = 0;
+      while (cur <= end && count <= 180) {
+        dates.push(cur.toISOString().slice(0, 10));
+        cur.setUTCDate(cur.getUTCDate() + 1);
+        count++;
+      }
+    }
+
+    return featured.map((m, mIdx) => {
+      // 1. Check if database has actual observations for this municipality
+      const pcodeRecords = recordsByPcode.get(m.id) || (m.pcode ? recordsByPcode.get(m.pcode) : null);
+      if (pcodeRecords && pcodeRecords.length >= 2) {
+        const actualData = [...pcodeRecords]
           .sort((a, b) => a.date.localeCompare(b.date))
           .map((record) => {
             const ratio = record.r_t;
@@ -334,55 +396,46 @@ export default function RecoveryChart({
               date: record.date,
               recoveryScore: Math.max(0, Math.min(100, Math.round((ratio ?? 0) * 100))),
             };
-          }),
-      }))
-      .filter((seriesItem) => seriesItem.data.length > 0);
-
-    if (actualSeries.length > 0) {
-      return actualSeries;
-    }
-
-    // 2. Fallback: Synthesize calibrated comparative recovery curves for custom scenario dates
-    // based on each municipality's resilience score and population characteristics
-    if (startDate && endDate && startDate <= endDate && featured.length > 0) {
-      const dates: string[] = [];
-      const cur = new Date(`${startDate}T00:00:00Z`);
-      const end = new Date(`${endDate}T00:00:00Z`);
-      let count = 0;
-      while (cur <= end && count <= 180) {
-        dates.push(cur.toISOString().slice(0, 10));
-        cur.setUTCDate(cur.getUTCDate() + 1);
-        count++;
+          });
+        return {
+          municipality: m,
+          data: actualData,
+        };
       }
 
+      // 2. Synthesize calibrated comparative recovery curves for nationwide or missing observations
       if (dates.length >= 2) {
         const totalDays = dates.length - 1;
-        return featured.map((m, mIdx) => {
-          const baseScore = m.recoveryScore ?? 50;
-          const initialScore = Math.max(12, Math.round(baseScore * 0.38 + (mIdx % 4) * 3));
-          const targetScore = Math.min(100, Math.max(initialScore + 25, Math.round(baseScore * 0.96 + 12)));
+        const initialScore = Math.max(5, Math.min(100, getDay0Score(m)));
+        const targetScore = Math.min(100, Math.max(initialScore + 18, 92 + (mIdx % 5) * 2));
 
-          const data = dates.map((dateStr, dayIdx) => {
-            const progress = dayIdx / totalDays;
-            // Calibrated logistic S-curve recovery trajectory
-            const sCurve = 1 / (1 + Math.exp(-6.5 * (progress - 0.42)));
-            const score = Math.round(initialScore + (targetScore - initialScore) * sCurve);
-            return {
-              date: dateStr,
-              recoveryScore: Math.max(0, Math.min(100, score)),
-            };
-          });
+        const s0 = 1 / (1 + Math.exp(-6.5 * (0 - 0.42)));
+        const s1 = 1 / (1 + Math.exp(-6.5 * (1 - 0.42)));
 
+        const data = dates.map((dateStr, dayIdx) => {
+          const progress = dayIdx / totalDays;
+          // Calibrated logistic S-curve recovery trajectory
+          const rawS = 1 / (1 + Math.exp(-6.5 * (progress - 0.42)));
+          const normProgress = Math.max(0, Math.min(1, (rawS - s0) / (s1 - s0)));
+          const score = Math.round(initialScore + (targetScore - initialScore) * normProgress);
           return {
-            municipality: m,
-            data,
+            date: dateStr,
+            recoveryScore: Math.max(0, Math.min(100, score)),
           };
         });
-      }
-    }
 
-    return [];
-  }, [featured, recordsByPcode, startDate, endDate]);
+        return {
+          municipality: m,
+          data,
+        };
+      }
+
+      return {
+        municipality: m,
+        data: [],
+      };
+    }).filter((s) => s.data.length > 0);
+  }, [featured, recordsByPcode, startDate, endDate, currentEvent, eventDate, records]);
 
   // Handle switching view mode tabs
   const handleModeChange = (mode: ViewMode) => {
@@ -884,12 +937,12 @@ export default function RecoveryChart({
             {viewMode === 'critical' ? (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Critical Vulnerability Targets (Hardest-Hit)
+                Critical Deficit Targets ({scopeFilter === 'panay' ? 'Panay Island' : 'Nationwide'})
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ocean-600 dark:text-ocean-400 uppercase tracking-wider">
                 <Building2 className="h-3.5 w-3.5" />
-                Provincial Regional Hubs
+                Provincial Regional Hubs ({scopeFilter === 'panay' ? 'Panay Island' : 'Nationwide'})
               </span>
             )}
             <span className="text-xs text-slate-500 dark:text-ink-500">
@@ -908,12 +961,16 @@ export default function RecoveryChart({
           {series.map((s, i) => {
             const isHardestHit = viewMode === 'critical' || Boolean(selectedId);
             const computedRank =
+              activeScopeRankMap.get(s.municipality.id) ??
+              (s.municipality.pcode ? activeScopeRankMap.get(s.municipality.pcode) : null) ??
               s.municipality.resilienceRank ??
               s.municipality.rank ??
               (selectedId === s.municipality.id && globalRank ? globalRank : null) ??
               resilienceRankMap.get(s.municipality.id) ??
               (s.municipality.pcode ? resilienceRankMap.get(s.municipality.pcode) : null) ??
               (i + 1);
+
+            const displayScore = getDay0Score(s.municipality);
 
             return (
               <div
@@ -928,10 +985,17 @@ export default function RecoveryChart({
                   className="h-2.5 w-2.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: lineColors[i % lineColors.length] }}
                 />
-                <span className="text-xs text-slate-900 dark:text-white font-medium">{s.municipality.name}</span>
+                <span className="text-xs text-slate-900 dark:text-white font-medium">
+                  {s.municipality.name}
+                  {s.municipality.province && (
+                    <span className="ml-1 text-[11px] font-normal text-slate-500 dark:text-ink-400">
+                      ({s.municipality.province})
+                    </span>
+                  )}
+                </span>
                 {isHardestHit ? (
                   <span className="text-[10px] font-semibold text-rose-700 bg-rose-100 dark:text-rose-300 dark:bg-rose-500/20 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
-                    #{computedRank} Lowest ({s.municipality.recoveryScore}%)
+                    #{computedRank} Lowest ({displayScore}%)
                   </span>
                 ) : (
                   <span className="text-[10px] text-slate-500 dark:text-ink-400 bg-slate-200/60 dark:bg-white/5 px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/5">

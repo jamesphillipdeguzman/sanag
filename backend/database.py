@@ -191,42 +191,9 @@ def seed_historical_event_profiles(conn: sqlite3.Connection):
             ),
         )
 
-    # 2. Ensure canonical aliases exist:
-    # panay-grid-collapse-2024 <-> panay-blackout-2024
-    cursor.execute("SELECT * FROM events WHERE id = 'panay-blackout-2024'")
-    blackout_row = cursor.fetchone()
-    cursor.execute("SELECT * FROM events WHERE id = 'panay-grid-collapse-2024'")
-    collapse_row = cursor.fetchone()
-
-    grid_profile = HISTORICAL_EVENT_PROFILES["panay-grid-collapse-2024"]
-    if blackout_row and not collapse_row:
-        cursor.execute(
-            """
-            INSERT OR REPLACE INTO events (
-                id, municipality_code, name, description, date, category, image_url,
-                start_date, end_date, type, resource_url,
-                event_type, disaster_category, root_cause_summary, infrastructure_impact
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "panay-grid-collapse-2024",
-                blackout_row["municipality_code"] or "PANAY_ALL",
-                "Panay Island Grid Collapse (January 2024)",
-                blackout_row["description"],
-                blackout_row["date"],
-                blackout_row["category"],
-                blackout_row["image_url"],
-                blackout_row["start_date"],
-                blackout_row["end_date"],
-                "grid_failure",
-                blackout_row["resource_url"],
-                grid_profile["event_type"],
-                grid_profile["disaster_category"],
-                grid_profile["root_cause_summary"],
-                grid_profile["infrastructure_impact"],
-            ),
-        )
+    # 2. Ensure dated duplicate is removed and canonical entry has clean title:
+    cursor.execute("DELETE FROM events WHERE id = 'panay-grid-collapse-2024' OR name LIKE '%(January 2024)%'")
+    cursor.execute("UPDATE events SET name = 'Panay Island Grid Collapse' WHERE id = 'panay-blackout-2024'")
 
     # typhoon-odette-2021 <-> typhoon-rai-2021
     cursor.execute("SELECT * FROM events WHERE id = 'typhoon-rai-2021'")
@@ -308,7 +275,7 @@ def get_event_profile(event_id: str) -> Optional[Dict[str, str]]:
     if "volcan" in lower or "eruption" in lower or "taal" in lower or "mayon" in lower or "kanlaon" in lower or "bulusan" in lower or lower == "vo":
         return HISTORICAL_EVENT_PROFILES["volcanic-eruption"]
     if "grid" in lower or "blackout" in lower or "trip" in lower:
-        return HISTORICAL_EVENT_PROFILES["panay-grid-collapse-2024"]
+        return HISTORICAL_EVENT_PROFILES.get("panay-blackout-2024") or HISTORICAL_EVENT_PROFILES.get("panay-grid-collapse-2024")
     if "odette" in lower or "rai" in lower:
         return HISTORICAL_EVENT_PROFILES["typhoon-odette-2021"]
     if "kalmaegi" in lower or "tino" in lower or "typhoon" in lower or "cyclone" in lower:

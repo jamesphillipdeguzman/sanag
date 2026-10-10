@@ -291,6 +291,13 @@ html.dark .leaflet-map {
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
+/* Top clearance for Leaflet zoom controls on mobile to avoid collisions with headers/pills */
+@media (max-width: 639px) {
+  .leaflet-top.leaflet-left {
+    margin-top: 4.5rem;
+  }
+}
+
 .leaflet-container {
   font: inherit;
   background: #f1f5f9;
@@ -883,3 +890,103 @@ select option {
     transform: rotate(-35deg) translate3d(-140px, 70px, 0) scaleX(0.4);
   }
 }
+
+/* Container: static locked celestial starfield */
+.celestial-starfield {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+/* Layer 1: Static Background Field (completely still, never moves or blinks) */
+.stars-layer-1 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1.5px;
+  height: 1.5px;
+  background: transparent;
+  opacity: 0.35;
+  box-shadow: 
+    60px 80px #94a3b8, 160px 220px #64748b, 240px 60px #94a3b8, 
+    340px 290px #64748b, 460px 140px #94a3b8, 620px 320px #64748b, 
+    720px 85px #94a3b8, 830px 230px #64748b, 940px 350px #94a3b8, 
+    1020px 110px #94a3b8, 1140px 260px #64748b, 1180px 160px #94a3b8,
+    90px 370px #64748b, 210px 410px #94a3b8, 410px 390px #64748b,
+    670px 420px #94a3b8, 890px 400px #64748b, 1070px 420px #94a3b8;
+}
+
+/* Layer 2: Sparse Shimmer Set A (shimmers once every 11 seconds, then rests) */
+.stars-layer-2 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1.5px;
+  height: 1.5px;
+  background: transparent;
+  opacity: 0.2;
+  box-shadow: 
+    180px 130px #38bdf8,
+    510px 190px #ffffff,
+    880px 140px #67e8f9;
+  animation: rareShimmerA 11s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Layer 3: Sparse Shimmer Set B (shimmers once every 14 seconds, staggered offset) */
+.stars-layer-3 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  border-radius: 9999px;
+  background: transparent;
+  opacity: 0.15;
+  box-shadow: 
+    310px 170px #ffffff,
+    760px 240px #38bdf8,
+    1040px 180px #ffffff;
+  animation: rareShimmerB 14s cubic-bezier(0.4, 0, 0.2, 1) infinite 5s;
+}
+
+/* Subtle, locked-coordinate shimmer animations (opacity only, zero transforms) */
+@keyframes rareShimmerA {
+  0%, 80%, 100% {
+    opacity: 0.2;
+  }
+  90% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes rareShimmerB {
+  0%, 82%, 100% {
+    opacity: 0.15;
+  }
+  91% {
+    opacity: 0.9;
+  }
+}
+
+/* Custom subtle horizontal scrollbar for timeline */
+.timeline-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(51, 65, 85, 0.8) rgba(15, 23, 42, 0.6);
+}
+.timeline-scroll::-webkit-scrollbar {
+  height: 5px;
+}
+.timeline-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 9999px;
+}
+.timeline-scroll::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 9999px;
+}
+.timeline-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.6);
+}

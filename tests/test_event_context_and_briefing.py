@@ -38,7 +38,7 @@ class TestEventContextSchemaAndSeeding:
         cursor.execute(
             """
             SELECT event_type, disaster_category, root_cause_summary, infrastructure_impact
-            FROM events WHERE id = 'panay-grid-collapse-2024'
+            FROM events WHERE id = 'panay-blackout-2024'
             """
         )
         panay = cursor.fetchone()

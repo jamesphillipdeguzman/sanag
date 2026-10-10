@@ -72,7 +72,14 @@ export default function HomeView({
         {/* ========================================================================= */}
         {/* HERO SECTION & NARRATIVE HOOK                                             */}
         {/* ========================================================================= */}
-        <div className="relative rounded-3xl border border-slate-200/80 dark:border-slate-800/70 bg-white/70 dark:bg-slate-900/40 p-6 sm:p-10 lg:p-12 backdrop-blur-2xl shadow-sm dark:shadow-[0_12px_40px_rgba(0,0,0,0.25)] overflow-hidden">
+        <div className="relative rounded-3xl border border-[#162638]/80 bg-gradient-to-br from-[#080f18] via-[#060c14] to-[#04080e] p-6 sm:p-10 lg:p-12 overflow-hidden shadow-2xl backdrop-blur-2xl">
+          {/* Atmospheric Twinkling Starfield */}
+          <div className="celestial-starfield" aria-hidden="true">
+            <div className="stars-layer-1" />
+            <div className="stars-layer-2" />
+            <div className="stars-layer-3" />
+          </div>
+
           {/* Background Nightlight Silhouette & Photon Scatter */}
           <div className="absolute inset-0 opacity-20 dark:opacity-30 pointer-events-none flex items-center justify-end overflow-hidden pr-6">
             <div className="w-[380px] h-[380px] sm:w-[480px] sm:h-[480px]">
@@ -86,19 +93,19 @@ export default function HomeView({
               {/* Badge / Pill */}
               <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3.5 py-1 mb-4">
                 <span className="text-cyan-500 dark:text-cyan-400 font-bold text-xs">✦</span>
-                <span className="text-[11px] font-bold text-cyan-700 dark:text-cyan-300 uppercase tracking-widest">
+                <span className="text-[11px] font-bold text-cyan-300 uppercase tracking-widest">
                   SATELLITE RADIANCE & DISASTER ANALYTICS
                 </span>
               </div>
 
               {/* Provocative Hook */}
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-[1.15] mb-4">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-[1.15] mb-4">
                 What if we could pinpoint electrical grid collapse{' '}
                 <span className="gradient-text">before field reports even arrive?</span>
               </h1>
 
               {/* Subtitle */}
-              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed mb-8 max-w-2xl">
+              <p className="text-sm sm:text-base text-slate-300 leading-relaxed mb-8 max-w-2xl">
                 SANAG transforms NOAA VIIRS nightlight telemetry and NASA Black Marble data into near-real-time visibility on blackout zones, municipal restoration speeds, and vulnerable communities across Panay Island and beyond.
               </p>
 
@@ -116,17 +123,17 @@ export default function HomeView({
                 <button
                   type="button"
                   onClick={() => onNavigateTab?.('map')}
-                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-slate-300/80 dark:border-slate-700/80 bg-white/80 dark:bg-slate-800/70 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-semibold text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700/80 text-slate-200 font-semibold text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
                 >
-                  <Globe className="h-4 w-4 text-cyan-500 dark:text-cyan-400" />
+                  <Globe className="h-4 w-4 text-cyan-400" />
                   <span>Inspect Spatial Grid (Step 2)</span>
                 </button>
 
                 {activeEvent && (
-                  <div className="w-full sm:w-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs font-semibold backdrop-blur-md">
+                  <div className="w-full sm:w-auto flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-semibold backdrop-blur-md">
                     <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                    <span className="text-slate-500 dark:text-slate-400">Baseline:</span>
-                    <span className="truncate max-w-[200px] font-bold text-slate-900 dark:text-white">
+                    <span className="text-slate-400">Baseline:</span>
+                    <span className="truncate max-w-[200px] font-bold text-white">
                       {activeEvent.name}
                     </span>
                     <span className="font-mono text-[10px] text-slate-400">({activeEvent.date})</span>
@@ -135,22 +142,22 @@ export default function HomeView({
               </div>
             </div>
 
-            {/* Right Column (lg:col-span-5): Visual stage container hosting sanag-hero.webp */}
-            <div className="lg:col-span-5 relative flex items-center justify-center p-2 sm:p-4 overflow-hidden rounded-2xl">
-              {/* Soft ambient background glow */}
-              <div className="absolute inset-0 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+            {/* Right Column (lg:col-span-5): Floating satellite visual */}
+            <div className="lg:col-span-5 relative flex items-center justify-center p-2 lg:p-0">
+              {/* Soft radial cyan bloom centered behind the satellite dish and Earth */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
-              {/* Hero Image */}
+              {/* Satellite Graphic with screen blending */}
               <img
                 src="/sanag-hero.webp"
                 alt="Satellite earth radiance scanning visualization"
-                className="relative z-10 w-full max-w-[440px] lg:max-w-none h-auto object-contain select-none drop-shadow-[0_12px_40px_rgba(6,182,212,0.18)]"
+                className="relative z-10 w-full max-w-[480px] lg:max-w-none h-auto object-contain select-none mix-blend-screen opacity-95 drop-shadow-[0_0_40px_rgba(6,182,212,0.22)]"
                 width={1200}
                 height={896}
                 loading="eager"
               />
 
-              {/* Subtle shooting star orbital streak */}
+              {/* Shooting Star effect */}
               <span className="shooting-star pointer-events-none" aria-hidden="true" />
             </div>
           </div>
