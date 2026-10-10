@@ -7,7 +7,7 @@
 [![YouTube Demo](https://img.shields.io/badge/Video%20Demo-YouTube-red?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)
 
 > 🌐 **Live Web Application:** **[https://sanag.vercel.app/](https://sanag.vercel.app/)**  
-> 📺 **Video Demonstration:** **[https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID](https://www.youtube.com/watch?v=YOUR_DEMO_VIDEO_ID)** *(Replace with your YouTube demo link)*
+> 📺 **Video Demonstration:** **[hhttps://www.youtube.com/watch?v=IfkmCGMWioED](https://www.youtube.com/watch?v=IfkmCGMWioE)**
 
 SANAG is a web-based disaster recovery dashboard that uses **NASA VIIRS nighttime-light satellite data** to analyze how areas of Panay Island are affected by major disasters or power disruptions and how quickly nighttime-light activity returns toward normal.
 
