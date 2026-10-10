@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import L from 'leaflet';
 import {
   Compass,
   ChevronRight,
@@ -8,7 +9,6 @@ import {
   MapPin,
   Check,
   Globe,
-  Layers,
 } from 'lucide-react';
 import {
   PHILIPPINES_REGION_TREE,
@@ -117,7 +117,7 @@ export interface RegionTreeSelectorProps {
   selectedMunicipalityId?: string | null;
   selectedMunicipalityName?: string | null;
   onSelectRegion: (key: string) => void;
-  onSelectMunicipality?: (id: string) => void;
+  onSelectMunicipality?: (id: string, lguPayload?: any) => void;
   className?: string;
 }
 
@@ -131,18 +131,33 @@ export default function RegionTreeSelector({
 }: RegionTreeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  // Expanded nodes set: by default expand Visayas and Western Visayas so Panay provinces are readily visible
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(() => {
     return new Set(['visayas', 'panay_guimaras', 'panay']);
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  // Prevent Leaflet from capturing mouse events and wheel scrolling
+  useEffect(() => {
+    if (!isOpen || !panelRef.current) return;
+    const el = panelRef.current;
+    try {
+      L.DomEvent.disableClickPropagation(el);
+      L.DomEvent.disableScrollPropagation(el);
+    } catch (err) {
+      console.warn('[RegionTreeSelector] Error disabling Leaflet propagation:', err);
+    }
+  }, [isOpen]);
 
   // Close popover when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -186,7 +201,6 @@ export default function RegionTreeSelector({
     if (activeNode) {
       setExpandedNodes((prev) => {
         const next = new Set(prev);
-        // Ensure its parent is open
         if (activeNode.parentPath) {
           if (activeNode.parentPath.includes('Luzon')) next.add('luzon');
           if (activeNode.parentPath.includes('Visayas')) next.add('visayas');
@@ -236,41 +250,54 @@ export default function RegionTreeSelector({
   const handleSelect = (nodeId: string) => {
     onSelectRegion(nodeId);
     if (onSelectMunicipality) {
-      onSelectMunicipality(''); // Clear municipality selection so scope switches to selected region/province
+      onSelectMunicipality('');
     }
     setIsOpen(false);
   };
 
-  const handleSelectMunicipality = (node: RegionTreeNode) => {
+  const handleSelectMunicipality = (lguOrNode: any) => {
+    if (!lguOrNode) return;
+    const pcode = lguOrNode.pcode || lguOrNode.id;
+    const name = lguOrNode.name;
+    const province = lguOrNode.province;
+    const lat = lguOrNode.lat ?? lguOrNode.center?.[0] ?? lguOrNode.centroid?.[1] ?? lguOrNode.coordinates?.[1];
+    const lng = lguOrNode.lng ?? lguOrNode.center?.[1] ?? lguOrNode.centroid?.[0] ?? lguOrNode.coordinates?.[0];
+    const payload = {
+      ...lguOrNode,
+      id: pcode || name,
+      pcode,
+      name,
+      province,
+      lat: lat != null ? Number(lat) : undefined,
+      lng: lng != null ? Number(lng) : undefined,
+      centroid: lat != null && lng != null ? [Number(lat), Number(lng)] : undefined,
+      coordinates: lat != null && lng != null ? [Number(lat), Number(lng)] : undefined,
+      center: lat != null && lng != null ? [Number(lat), Number(lng)] : undefined,
+    };
+
     if (onSelectMunicipality) {
-      if (node.chunkKey && node.chunkKey !== currentRegionKey) {
-        onSelectRegion(node.chunkKey);
-      }
-      onSelectMunicipality(node.pcode || node.id);
+      onSelectMunicipality(pcode || name, payload);
     } else {
-      onSelectRegion(node.chunkKey || node.id);
+      onSelectRegion(lguOrNode.region_code || lguOrNode.chunkKey || lguOrNode.id);
     }
     setIsOpen(false);
+    setSearchQuery('');
   };
 
-  // Determine full display path for breadcrumb info
   const currentPathLabel = useMemo(() => {
     return getRegionNodePath(currentRegionKey);
   }, [currentRegionKey]);
 
-  // Dynamically resolve active boundary, level, and display name
   const activeBoundary: SelectedBoundary = useMemo(() => {
-    // 1. If an individual municipality is explicitly selected:
     if (selectedMunicipalityId) {
       const targetName = selectedMunicipalityName || undefined;
 
-      // Try quick lookup index
       let lgu: LguLookupEntry | null = null;
       try {
         if (typeof findLguQuickLookup === 'function') {
           lgu = findLguQuickLookup(selectedMunicipalityId) || (targetName ? findLguQuickLookup(targetName) : null);
         }
-      } catch {}
+      } catch { }
 
       if (lgu) {
         const name = lgu.name;
@@ -282,7 +309,6 @@ export default function RegionTreeSelector({
         };
       }
 
-      // Try hierarchical tree fallback
       const treeFallback =
         findLguTreeFallback(selectedMunicipalityId, PHILIPPINES_REGION_TREE) ||
         (targetName ? findLguTreeFallback(targetName, PHILIPPINES_REGION_TREE) : null);
@@ -295,7 +321,6 @@ export default function RegionTreeSelector({
         };
       }
 
-      // Try tree node map
       const treeNode =
         findRegionTreeNode(selectedMunicipalityId) ||
         (targetName ? findRegionTreeNode(targetName) : null);
@@ -327,7 +352,6 @@ export default function RegionTreeSelector({
       };
     }
 
-    // 2. Defaulting or regional scope selected:
     if (!currentRegionKey || currentRegionKey === 'panay' || currentRegionKey === 'panay-cluster') {
       return DEFAULT_BOUNDARY;
     }
@@ -370,7 +394,6 @@ export default function RegionTreeSelector({
     return DEFAULT_BOUNDARY;
   }, [selectedMunicipalityId, selectedMunicipalityName, currentRegionKey]);
 
-  // Filter tree nodes if search query is present
   const { filteredTree, autoExpandedIds } = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) {
@@ -413,18 +436,21 @@ export default function RegionTreeSelector({
     return { filteredTree: filtered, autoExpandedIds: autoExp };
   }, [searchQuery]);
 
-  // Direct municipality matches across all nationwide LGUs
   const matchingLgus = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (q.length < 2) return [];
     const all = getAllIndexedLgus();
     const results: LguLookupEntry[] = [];
+    const seenPcodes = new Set<string>();
     for (const lgu of all) {
+      const uniqueKey = `${lgu.pcode || ''}-${lgu.name}`.toLowerCase();
+      if (seenPcodes.has(uniqueKey)) continue;
       if (
         lgu.name.toLowerCase().includes(q) ||
         lgu.province.toLowerCase().includes(q) ||
         lgu.pcode.toLowerCase().includes(q)
       ) {
+        seenPcodes.add(uniqueKey);
         results.push(lgu);
         if (results.length >= 12) break;
       }
@@ -432,7 +458,6 @@ export default function RegionTreeSelector({
     return results;
   }, [searchQuery]);
 
-  // When searching, auto-expand matching branches
   const effectiveExpanded = useMemo(() => {
     if (searchQuery.trim()) {
       return new Set([...expandedNodes, ...autoExpandedIds]);
@@ -441,8 +466,8 @@ export default function RegionTreeSelector({
   }, [expandedNodes, autoExpandedIds, searchQuery]);
 
   return (
-    <div ref={containerRef} className={`relative inline-block text-left ${className}`}>
-      {/* Trigger Button with Dynamic Administrative Prefix and Badge */}
+    <div ref={containerRef} className={`static sm:relative inline-block text-left ${className}`}>
+      {/* Trigger Button */}
       <button
         type="button"
         id="panay-map-region-selector-trigger"
@@ -475,20 +500,21 @@ export default function RegionTreeSelector({
       {/* Popover Dropdown Panel */}
       {isOpen && (
         <>
-          {/* Fullscreen transparent backdrop for robust outside click closing in normal & maximized views */}
+          {/* Transparent Backdrop placed BEHIND panel */}
           <div
-            className="fixed inset-0 z-[9998] bg-transparent cursor-default"
+            className="fixed inset-0 z-[1000] bg-transparent cursor-default"
             onClick={() => setIsOpen(false)}
             aria-hidden="true"
           />
 
           <div
+            ref={panelRef}
             role="tree"
             aria-label="Philippine Region and Province Selector"
-            className="absolute top-full left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 mt-2 z-[9999] w-[320px] xs:w-[360px] sm:w-[400px] max-w-[calc(100vw-24px)] max-h-[75vh] flex flex-col rounded-2xl border border-slate-200/90 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl overflow-hidden animate-fade-in text-slate-800 dark:text-slate-100"
+            className="absolute top-full mt-2 z-[1050] left-1/2 -translate-x-1/2 w-[calc(100vw-32px)] max-w-[360px] sm:left-0 sm:translate-x-0 sm:w-[340px] max-h-[75vh] flex flex-col rounded-2xl border border-slate-700/80 bg-slate-900/95 p-3 shadow-2xl backdrop-blur-xl overflow-hidden animate-fade-in text-slate-800 dark:text-slate-100 pointer-events-auto select-auto"
           >
             {/* Header & Search Bar */}
-            <div className="p-2.5 sm:p-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 shrink-0 space-y-2">
+            <div className="pb-2.5 mb-1 border-b border-slate-700/80 bg-transparent shrink-0 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                   <Globe className="h-3.5 w-3.5 text-sky-500" />
@@ -553,54 +579,65 @@ export default function RegionTreeSelector({
             </div>
 
             {/* Hierarchical Scrollable Tree Content */}
-            <div className="flex-1 min-h-0 max-h-[60vh] overflow-y-auto p-2 space-y-1 overscroll-contain no-scrollbar">
+            <div className="flex-1 min-h-0 max-h-[360px] overflow-y-auto p-2 space-y-1 overscroll-contain pointer-events-auto">
               {/* Direct Municipality Results Section */}
-              {matchingLgus.length > 0 && (
-                <div className="mb-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-ocean-600 dark:text-ocean-400 flex items-center justify-between">
-                    <span>Municipalities & LGUs ({matchingLgus.length})</span>
-                    <span className="text-[9px] font-normal text-slate-400">Instant Zoom</span>
-                  </div>
-                  <div className="space-y-0.5 mt-1">
-                    {matchingLgus.map((lgu) => (
-                      <div
-                        key={lgu.pcode || lgu.name}
-                        onClick={() => {
-                          if (onSelectMunicipality) {
-                            onSelectMunicipality(lgu.pcode || lgu.name);
-                          } else {
-                            onSelectRegion(lgu.region_code);
-                          }
-                          setIsOpen(false);
-                          setSearchQuery('');
-                        }}
-                        className="group flex items-center justify-between py-1.5 px-2 rounded-xl text-xs hover:bg-ocean-500/15 dark:hover:bg-ocean-500/20 text-slate-800 dark:text-slate-100 cursor-pointer transition-colors"
-                        title={`Focus directly to ${lgu.name}, ${lgu.province}`}
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
-                          <span className="font-semibold truncate">{lgu.name}</span>
-                          <span className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
-                            ({lgu.province})
-                          </span>
+              {/* Direct Municipality Results Section */}
+              {matchingLgus.length > 0 && (() => {
+                const uniqueLgus = Array.from(
+                  new Map(
+                    matchingLgus.map((lgu) => [
+                      `${(lgu.name || '').toLowerCase().trim()}-${(lgu.province || lgu.region_code || '').toLowerCase().trim()}`,
+                      lgu,
+                    ])
+                  ).values()
+                );
+
+                return (
+                  <div className="mb-2 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+                    <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-ocean-600 dark:text-ocean-400 flex items-center justify-between">
+                      <span>Municipalities & LGUs ({uniqueLgus.length})</span>
+                      <span className="text-[9px] font-normal text-slate-400">Instant Zoom</span>
+                    </div>
+                    <div className="space-y-0.5 mt-1">
+                      {uniqueLgus.map((lgu) => (
+                        <div
+                          key={`search-lgu-${lgu.pcode || lgu.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectMunicipality(lgu);
+                          }}
+                          className="group flex items-center justify-between py-1.5 px-2 rounded-xl text-xs hover:bg-ocean-500/15 dark:hover:bg-ocean-500/20 text-slate-800 dark:text-slate-100 cursor-pointer transition-colors"
+                          title={`Focus directly to ${lgu.name}, ${lgu.province || ''}`}
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
+                            <span className="font-semibold truncate">{lgu.name}</span>
+                            {lgu.province && (
+                              <span className="text-[10.5px] text-slate-500 dark:text-slate-400 truncate">
+                                ({lgu.province})
+                              </span>
+                            )}
+                          </div>
+                          {lgu.region_code && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 uppercase shrink-0 ml-1.5">
+                              {lgu.region_code}
+                            </span>
+                          )}
                         </div>
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 uppercase shrink-0 ml-1.5">
-                          {lgu.region_code}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {filteredTree.length === 0 && matchingLgus.length === 0 ? (
                 <div className="py-8 text-center text-xs text-slate-400 dark:text-slate-500">
                   No matching regions, provinces, or municipalities found for "{searchQuery}".
                 </div>
               ) : (
-                filteredTree.map((node) => (
+                filteredTree.map((node, index) => (
                   <TreeNodeItem
-                    key={node.id}
+                    key={`tree-node-${node.id || node.name}-${index}`}
                     node={node}
                     currentRegionKey={currentRegionKey}
                     selectedMunicipalityId={selectedMunicipalityId}
@@ -687,6 +724,17 @@ function TreeNodeItem({
       </span>
     );
 
+  const handleRowClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (node.type === 'island_group') {
+      onToggleExpand(node.id, e);
+    } else if (node.type === 'municipality') {
+      onSelectMunicipality?.(node);
+    } else {
+      onSelect(node.id);
+    }
+  };
+
   return (
     <div className="space-y-0.5 select-none" role="treeitem" aria-expanded={hasChildren ? isExpanded : undefined}>
       <div
@@ -695,24 +743,17 @@ function TreeNodeItem({
           ? 'bg-ocean-500/20 text-ocean-900 dark:text-white font-bold border border-ocean-500/40 shadow-sm'
           : 'hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
           }`}
-        onClick={() => {
-          // If island group, toggling expand feels more natural than selecting root
-          if (node.type === 'island_group') {
-            onToggleExpand(node.id);
-          } else if (node.type === 'municipality') {
-            onSelectMunicipality?.(node);
-          } else {
-            onSelect(node.id);
-          }
-        }}
+        onClick={handleRowClick}
       >
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {/* Chevron expand/collapse toggle */}
           {hasChildren ? (
             <button
               type="button"
-              onClick={(e) => onToggleExpand(node.id, e)}
-              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand(node.id, e);
+              }}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-colors shrink-0 z-10"
               title={isExpanded ? 'Collapse' : 'Expand'}
               aria-label={isExpanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
             >
@@ -724,15 +765,16 @@ function TreeNodeItem({
             </button>
           ) : (
             <span className="w-5 shrink-0 flex items-center justify-center">
-              <MapPin className={`h-3 w-3 shrink-0 ${node.type === 'municipality' ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'}`} />
+              <MapPin
+                className={`h-3 w-3 shrink-0 ${node.type === 'municipality' ? 'text-cyan-500 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500'
+                  }`}
+              />
             </span>
           )}
 
-          {/* Node name */}
           <span className="truncate flex-1 font-medium">{node.name}</span>
         </div>
 
-        {/* Right side metadata badge and active checkmark */}
         <div className="flex items-center gap-1.5 shrink-0 ml-2">
           {typeBadge}
           {isSelected && (
@@ -741,12 +783,11 @@ function TreeNodeItem({
         </div>
       </div>
 
-      {/* Render children recursively if expanded */}
       {hasChildren && isExpanded && node.children && (
         <div className="border-l border-slate-200 dark:border-white/10 ml-3.5 pl-0.5 space-y-0.5">
-          {node.children.map((child) => (
+          {node.children.map((child, index) => (
             <TreeNodeItem
-              key={child.id}
+              key={`tree-child-${child.id || child.name}-${depth}-${index}`}
               node={child}
               currentRegionKey={currentRegionKey}
               selectedMunicipalityId={selectedMunicipalityId}

@@ -44,7 +44,7 @@ export interface MediaEventData {
   severity?: string;
 }
 
-interface EventSelectorPanelProps {
+export interface EventSelectorPanelProps {
   /** Curated historical events from the database */
   events: DisasterEvent[];
   activeEvent?: DisasterEvent | null;
@@ -60,6 +60,82 @@ interface EventSelectorPanelProps {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+export type EventSeverityTier = 'Low' | 'Moderate' | 'High' | 'Critical';
+
+/**
+ * Standardize historical disaster severity resolution:
+ * Resolves event object to accurate realistic tier ('Low' | 'Moderate' | 'High' | 'Critical')
+ */
+export function resolveEventSeverity(event: any): EventSeverityTier {
+  if (!event) return 'Moderate';
+
+  // Support string or object input
+  const evtObj = typeof event === 'string' ? { severity: event, name: event } : event;
+
+  // 1. If explicit severity already exists and is valid
+  if (evtObj.severity && ['Low', 'Moderate', 'High', 'Critical'].includes(evtObj.severity)) {
+    return evtObj.severity as EventSeverityTier;
+  }
+  if (evtObj.severity === 'Severe') {
+    return 'Critical';
+  }
+
+  // 2. Map known historical major events to realistic tiers
+  const title = (evtObj.title || evtObj.name || evtObj.id || '').toLowerCase();
+
+  // Super Typhoons & Island-wide Grid Failures -> Critical
+  if (
+    title.includes('odette') ||
+    title.includes('rai') ||
+    title.includes('grid collapse') ||
+    title.includes('blackout') ||
+    title.includes('yolanda') ||
+    title.includes('haiyan') ||
+    title.includes('kalmaegi')
+  ) {
+    return 'Critical';
+  }
+
+  // Severe storms & major flooding -> High
+  if (
+    title.includes('kristine') ||
+    title.includes('trami') ||
+    title.includes('paeng') ||
+    title.includes('nalgae') ||
+    title.includes('gaemi') ||
+    title.includes('carina') ||
+    title.includes('molave') ||
+    title.includes('quinta') ||
+    title.includes('phanfone') ||
+    title.includes('ursula') ||
+    title.includes('hagupit') ||
+    title.includes('ruby')
+  ) {
+    return 'High';
+  }
+
+  // Tropical storms & localized depressions -> Moderate
+  if (title.includes('agaton') || title.includes('megi') || title.includes('monsoon')) {
+    return 'Moderate';
+  }
+
+  // Alert level fallback if present
+  const alert = (evtObj.alert_level || '').toUpperCase();
+  if (alert === 'RED') return 'Critical';
+  if (alert === 'ORANGE') return 'High';
+  if (alert === 'GREEN') return 'Low';
+
+  // Default fallback
+  return 'Moderate';
+}
+
+export const EVENT_SEVERITY_BADGE_CLASSES: Record<EventSeverityTier, string> = {
+  Low: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-500/30',
+  Moderate: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-950/60 dark:text-sky-300 dark:border-sky-500/30',
+  High: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-500/30',
+  Critical: 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-500/30',
+};
 
 function getHistoricalIcon(event: DisasterEvent) {
   const type = event.type?.toLowerCase() ?? '';
@@ -288,6 +364,15 @@ export default function EventSelectorPanel({
     return 'grid';
   });
 
+  // Ensure dated duplicate is excluded and events are clean
+  const cleanEvents = useMemo(() => {
+    return (events || []).filter((e) => {
+      if (e.id === 'panay-grid-collapse-2024') return false;
+      if (e.name && e.name.includes('(January 2024)')) return false;
+      return true;
+    });
+  }, [events]);
+
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
     if (typeof window !== 'undefined') {
@@ -310,7 +395,7 @@ export default function EventSelectorPanel({
           </span>
           {activeTab === 'historical' && (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-600 border border-slate-300 dark:bg-white/5 dark:text-ink-400 dark:border-white/10">
-              {events.length} Incidents Tracked
+              {cleanEvents.length} Incidents Tracked
             </span>
           )}
 
@@ -364,7 +449,7 @@ export default function EventSelectorPanel({
             onClick={() => setActiveTab('historical')}
             icon={<Satellite className="h-3.5 w-3.5 shrink-0" />}
             label="Historical Case Studies"
-            badge={String(events.length)}
+            badge={String(cleanEvents.length)}
           />
           <TabButton
             id="tab-gdacs"
@@ -387,7 +472,7 @@ export default function EventSelectorPanel({
       >
         <ErrorBoundary name="Historical Event Monitoring" resetKey={activeEvent?.id}>
           <HistoricalPanel
-            events={events}
+            events={cleanEvents}
             activeEvent={activeEvent}
             onSelectEvent={onSelectEvent}
             onDismissEvent={onDismissEvent}
@@ -530,7 +615,7 @@ function HistoricalPanel({
       const name = (evt.name || '').toLowerCase();
       const type = (evt.type || '').toLowerCase();
       const desc = (evt.description || '').toLowerCase();
-      const severity = (evt.severity || '').toLowerCase();
+      const severity = resolveEventSeverity(evt).toLowerCase();
       const category = (evt.category || '').toLowerCase();
       const rawDate = String(evt.startDate || evt.date || evt.endDate || '').toLowerCase();
       const formattedDate = formatEventDate(evt.startDate || evt.date).toLowerCase();
@@ -568,72 +653,69 @@ function HistoricalPanel({
       </div>
 
       {/* Event Selector Dropdown Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-        {/* Primary Control Cluster: Event Dropdown & Search Input */}
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-          {/* Event Dropdown */}
-          <div className="flex items-center gap-2 shrink-0">
-            <label htmlFor="historical-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
-              Event Dropdown:
-            </label>
-            <div className="relative min-w-[200px] sm:min-w-[230px]">
-              <select
-                id="historical-event-select"
-                value={filteredEvents.some((evt) => evt.id === activeEvent?.id) ? activeEvent?.id || '' : ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  const chosen = filteredEvents.find((evt) => evt.id === val) || sortedEvents.find((evt) => evt.id === val);
-                  if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
-                  onSelectEvent(val);
-                }}
-                className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer"
-              >
-                {!filteredEvents.some((evt) => evt.id === activeEvent?.id) && (
-                  <option value="" disabled>
-                    {filteredEvents.length === 0 ? 'No matching events' : 'Choose an event...'}
+      <div className="flex flex-col gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 w-full max-w-full">
+        {/* Primary Control Cluster: Event Dropdown */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full">
+          <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 shrink-0">
+            Event Dropdown:
+          </span>
+          <div className="flex items-center gap-2 w-full min-w-0">
+            <select
+              id="historical-event-select"
+              value={filteredEvents.some((evt) => evt.id === activeEvent?.id) ? activeEvent?.id || '' : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                const chosen = filteredEvents.find((evt) => evt.id === val) || sortedEvents.find((evt) => evt.id === val);
+                if (chosen && !isEventCompatibleWithRegion(chosen, selectedRegionKey)) return;
+                onSelectEvent(val);
+              }}
+              className="flex-1 min-w-0 w-full truncate rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium transition-all bg-white text-slate-800 border border-slate-300 shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700/80 dark:shadow-none dark:hover:border-slate-600 dark:focus:ring-cyan-500/30 dark:focus:border-cyan-500 cursor-pointer"
+            >
+              {!filteredEvents.some((evt) => evt.id === activeEvent?.id) && (
+                <option value="" disabled className="bg-white dark:bg-slate-900 text-slate-500">
+                  {filteredEvents.length === 0 ? 'No matching events' : 'Choose an event...'}
+                </option>
+              )}
+              {filteredEvents.map((evt) => {
+                const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
+                return (
+                  <option
+                    key={evt.id}
+                    value={evt.id}
+                    disabled={!isCompatible}
+                    className={!isCompatible ? 'text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900 font-normal' : 'text-slate-900 dark:text-white bg-white dark:bg-slate-900 font-medium'}
+                  >
+                    {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
                   </option>
-                )}
-                {filteredEvents.map((evt) => {
-                  const isCompatible = isEventCompatibleWithRegion(evt, selectedRegionKey);
-                  return (
-                    <option
-                      key={evt.id}
-                      value={evt.id}
-                      disabled={!isCompatible}
-                      className={!isCompatible ? 'text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-950 font-normal' : 'text-slate-900 dark:text-white font-medium'}
-                    >
-                      {evt.name} {!isCompatible ? `(Incompatible with ${regionName})` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
+                );
+              })}
+            </select>
           </div>
+        </div>
 
-          {/* Search Input Field with distinct flexible sizing */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs sm:max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            <input
-              type="text"
-              id="historical-event-search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search events by name, type, or date..."
-              className="w-full text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none transition-colors"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                title="Clear search filter"
-                aria-label="Clear search filter"
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
+        {/* Search Input Field with full responsive width */}
+        <div className="relative w-full max-w-full box-border">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            id="historical-event-search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search events by name, type, or date..."
+            className="w-full max-w-full box-border text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-colors"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              title="Clear search filter"
+              aria-label="Clear search filter"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Informational Warning Banner: neatly stacked or side-by-side without overlap */}
@@ -669,15 +751,16 @@ function HistoricalPanel({
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredEvents.map((event) => {
+          {filteredEvents.map((event, idx) => {
             const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
-            const severityColor = getSeverityColor(event.severity);
+            const severity      = resolveEventSeverity(event);
+            const badgeColors   = EVENT_SEVERITY_BADGE_CLASSES[severity];
             const typeBadge     = getEventTypeBadge(event.type);
             const formattedDate = formatEventDate(event.startDate || event.date);
 
             return (
-              <div key={event.id} className="relative">
+              <div key={`grid-event-${event.id}-${event.name || ''}-${idx}`} className="relative">
                 <div
                   role="button"
                   tabIndex={isCompatible ? 0 : -1}
@@ -761,15 +844,8 @@ function HistoricalPanel({
                     >
                       {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
                     </span>
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                      style={{
-                        color: severityColor,
-                        backgroundColor: `${severityColor}18`,
-                        border: `1px solid ${severityColor}35`,
-                      }}
-                    >
-                      {event.severity}
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border shrink-0 ${badgeColors}`}>
+                      {severity}
                     </span>
                   </div>
 
@@ -803,7 +879,7 @@ function HistoricalPanel({
                           name: event.name,
                           date: formattedDate,
                           type: event.type,
-                          severity: event.severity,
+                          severity,
                         });
                       }}
                       className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors py-0.5 px-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-500/10 cursor-pointer"
@@ -833,15 +909,16 @@ function HistoricalPanel({
       ) : (
         /* List View: single-column compact rows */
         <div className="flex flex-col gap-2.5">
-          {filteredEvents.map((event) => {
+          {filteredEvents.map((event, idx) => {
             const isSelected    = !!activeEvent && String(event.id) === String(activeEvent.id);
             const isCompatible  = isEventCompatibleWithRegion(event, selectedRegionKey);
-            const severityColor = getSeverityColor(event.severity);
+            const severity      = resolveEventSeverity(event);
+            const badgeColors   = EVENT_SEVERITY_BADGE_CLASSES[severity];
             const typeBadge     = getEventTypeBadge(event.type);
             const formattedDate = formatEventDate(event.startDate || event.date);
 
             return (
-              <div key={event.id} className="relative">
+              <div key={`list-event-${event.id}-${event.name || ''}-${idx}`} className="relative">
                 <div
                   role="button"
                   tabIndex={isCompatible ? 0 : -1}
@@ -909,15 +986,8 @@ function HistoricalPanel({
                       {event.viirs_data_available !== false ? 'VIIRS Ready' : 'VIIRS Pending'}
                     </span>
 
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0"
-                      style={{
-                        color: severityColor,
-                        backgroundColor: `${severityColor}18`,
-                        border: `1px solid ${severityColor}35`,
-                      }}
-                    >
-                      {event.severity}
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-medium border shrink-0 ${badgeColors}`}>
+                      {severity}
                     </span>
 
                     <button
@@ -928,7 +998,7 @@ function HistoricalPanel({
                           name: event.name,
                           date: formattedDate,
                           type: event.type,
-                          severity: event.severity,
+                          severity,
                         });
                       }}
                       className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors px-2 py-0.5 rounded bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 cursor-pointer"
@@ -1132,100 +1202,87 @@ function GdacsPanel({
       </div>
 
       {/* Event Selector Dropdown Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-        {/* Primary Control Cluster: Event Dropdown & Search Input */}
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
-          {/* Event Dropdown */}
-          <div className="flex items-center gap-2 shrink-0">
-            <label htmlFor="gdacs-event-select" className="text-xs font-semibold text-slate-700 dark:text-ink-200 shrink-0">
-              Event Dropdown:
-            </label>
-            <div className="relative min-w-[200px] sm:min-w-[230px]">
-              <select
-                id="gdacs-event-select"
-                value={filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) ? activeAlertId : ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val) return;
-                  const chosen = filteredAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val)
-                    || sortedAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val);
-                  if (chosen) {
-                    handleCardClick(chosen);
-                    const el = document.getElementById(`gdacs-alert-card-${val}`);
-                    if (el) {
-                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                    }
+      <div className="flex flex-col gap-3 mb-3.5 p-3 rounded-xl bg-slate-100/90 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 w-full max-w-full">
+        {/* Row 1: Event Dropdown & Refresh Button Group */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 w-full">
+          <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 shrink-0">
+            Event Dropdown:
+          </span>
+          <div className="flex items-center gap-2 w-full min-w-0">
+            <select
+              id="gdacs-event-select"
+              value={filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) ? activeAlertId : ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) return;
+                const chosen = filteredAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val)
+                  || sortedAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val);
+                if (chosen) {
+                  handleCardClick(chosen);
+                  const el = document.getElementById(`gdacs-alert-card-${val}`);
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                   }
-                }}
-                disabled={loading || sortedAlerts.length === 0}
-                className="w-full text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-2.5 pr-8 text-slate-800 dark:text-white shadow-sm focus:border-emerald-500 focus:outline-none cursor-pointer disabled:opacity-50"
-              >
-                {!filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) && (
-                  <option value="" disabled>
-                    {loading ? 'Loading live hazards...' : filteredAlerts.length === 0 ? 'No matching live hazards' : 'Choose a live hazard...'}
-                  </option>
-                )}
-                {filteredAlerts.map((alert) => {
-                  const alertAny = alert as any;
-                  const alertId = String(alert.event_id ?? alert.id ?? '');
-                  const alertName = alert.name || alertAny.eventname || alertAny.title || 'Live Hazard';
-                  const alertLevel = (alert.alert_level || alertAny.severity || 'Alert').toUpperCase();
-                  const alertDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate);
-                  return (
-                    <option key={alertId} value={alertId} className="text-slate-900 dark:text-white font-medium">
-                      {alertName} ({alertLevel} · {alertDate})
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          </div>
-
-          {/* Search Input Field */}
-          <div className="relative flex-1 min-w-[200px] max-w-xs sm:max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
-            <input
-              type="text"
-              id="gdacs-event-search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search live hazards by name, type, or alert level..."
+                }
+              }}
               disabled={loading || sortedAlerts.length === 0}
-              className="w-full text-xs rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-1.5 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 focus:outline-none transition-colors disabled:opacity-50"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                title="Clear search filter"
-                aria-label="Clear search filter"
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex h-4 w-4 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
+              className="flex-1 min-w-0 w-full truncate rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium transition-all bg-white text-slate-800 border border-slate-300 shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700/80 dark:shadow-none dark:hover:border-slate-600 dark:focus:ring-cyan-500/30 dark:focus:border-cyan-500 cursor-pointer disabled:opacity-50"
+            >
+              {!filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) && (
+                <option value="" disabled className="bg-white dark:bg-slate-900 text-slate-500">
+                  {loading ? 'Loading live hazards...' : filteredAlerts.length === 0 ? 'No matching live hazards' : 'Choose a live hazard...'}
+                </option>
+              )}
+              {filteredAlerts.map((alert) => {
+                const alertAny = alert as any;
+                const alertId = String(alert.event_id ?? alert.id ?? '');
+                const alertName = alert.name || alertAny.eventname || alertAny.title || 'Live Hazard';
+                const alertLevel = (alert.alert_level || alertAny.severity || 'Alert').toUpperCase();
+                const alertDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate);
+                return (
+                  <option key={alertId} value={alertId} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900 font-medium">
+                    {alertName} ({alertLevel} · {alertDate})
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              type="button"
+              onClick={fetchAlerts}
+              disabled={loading}
+              className="shrink-0 p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 shadow-sm dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-300 dark:border-slate-700/80 dark:shadow-none min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer disabled:opacity-50 transition-colors"
+              title="Refresh alerts"
+              aria-label="Refresh alerts"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+            </button>
           </div>
         </div>
 
-        {/* Refresh button with last fetch timestamp */}
-        <button
-          type="button"
-          onClick={fetchAlerts}
-          disabled={loading}
-          title="Refresh live GDACS alerts"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-ink-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shrink-0 shadow-sm"
-        >
-          {loading
-            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            : <RefreshCw className="h-3.5 w-3.5" />
-          }
-          <span className="hidden sm:inline">Refresh Alerts</span>
-          {lastFetchLabel && !loading && (
-            <span className="text-[10px] text-slate-400 dark:text-ink-500 hidden md:inline">
-              · {lastFetchLabel}
-            </span>
+        {/* Row 2: Live Hazards Search Bar */}
+        <div className="relative w-full max-w-full box-border">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
+          <input
+            type="text"
+            id="gdacs-event-search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search live hazards by name, type, or alert level..."
+            disabled={loading || sortedAlerts.length === 0}
+            className="w-full max-w-full box-border text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-colors disabled:opacity-50"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              title="Clear search filter"
+              aria-label="Clear search filter"
+              className="absolute right-2 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Loading skeleton */}

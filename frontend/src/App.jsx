@@ -6,7 +6,7 @@ import Navbar from './components/Navbar.tsx'
 import HomeView from './pages/HomeView.tsx'
 import SummaryView from './pages/SummaryView.tsx'
 import PanayMap from './components/PanayMap.tsx'
-import EventSelectorPanel from './components/EventSelectorPanel.tsx'
+import EventSelectorPanel, { resolveEventSeverity } from './components/EventSelectorPanel.tsx'
 import GuideGlossary from './components/GuideGlossary.tsx'
 import RecoveryChart from './components/RecoveryChart.tsx'
 import ServerStatusBanner from './components/ServerStatusBanner.tsx'
@@ -171,8 +171,9 @@ function mapApiEvent(event) {
     event.affected_population ?? event.affectedPopulation ?? mockMatch?.affectedPopulation ?? 0
   )
 
-  const alertLevel = event.alert_level || (event.severity === 'Severe' ? 'Red' : event.severity === 'High' ? 'Orange' : 'Green')
-  const severity = event.severity || (alertLevel === 'Red' ? 'Severe' : alertLevel === 'Orange' ? 'High' : 'Moderate')
+  const resolvedSeverity = resolveEventSeverity(event.severity || mockMatch?.severity || event)
+  const alertLevel = event.alert_level || (resolvedSeverity === 'Critical' ? 'Red' : resolvedSeverity === 'High' ? 'Orange' : 'Green')
+  const severity = resolvedSeverity
 
   const eventDate = event.startDate || event.start_date || event.date || ''
   const computedEndDate = event.endDate || event.end_date || (eventDate ? formatIsoDate(addDays(eventDate, 30)) : '')
@@ -870,6 +871,9 @@ function App() {
     fetchEvents()
   }, [fetchEvents])
 
+  const activeEventRef = useRef(activeEvent)
+  activeEventRef.current = activeEvent
+
   const fetchActiveEventRadiance = useCallback(async (eventId, sDate, eDate, signal) => {
     if (!eventId || !sDate) return
     try {
@@ -884,17 +888,17 @@ function App() {
           date: item.observation_date,
         }))
         setMunicipalities((current) => {
-          const mapped = applyRecoveryScores(current, records, sDate, eDate, activeEvent)
+          const mapped = applyRecoveryScores(current, records, sDate, eDate, activeEventRef.current)
           setRecoveryDate(payload.data[0]?.observation_date ?? sDate)
           return mapped
         })
       }
     } catch (error) {
-      if (error?.name !== 'AbortError') {
+      if (error?.name !== 'AbortError' && !error?.message?.includes('aborted')) {
         // Fall back gracefully if spatial data is not available for this event
       }
     }
-  }, [activeEvent])
+  }, [])
 
   useEffect(() => {
     if (!activeEventId || !recoveryStartDate) return
@@ -926,20 +930,22 @@ function App() {
         if (maxDate) setLatestObservationDate(maxDate)
 
         // Re-compute and re-sort municipal resilience scores uniformly across all municipalities
-        setMunicipalities((current) => applyRecoveryScores(current, payload.data, sDate, eDate, activeEvent))
+        setMunicipalities((current) => applyRecoveryScores(current, payload.data, sDate, eDate, activeEventRef.current))
         setRecoveryDate(sDate)
       }
     } catch (error) {
-      if (error.name !== 'AbortError') setEventsError(error.message)
+      if (error?.name !== 'AbortError' && !error?.message?.includes('aborted')) {
+        setEventsError(error.message)
+      }
     }
-  }, [activeEvent])
+  }, [])
 
   useEffect(() => {
     if (!activeEvent?.date || !recoveryStartDate || !recoveryEndDate || recoveryStartDate > recoveryEndDate) return
     const controller = new AbortController()
     fetchRecoveryScores(recoveryStartDate, recoveryEndDate, controller.signal)
     return () => controller.abort()
-  }, [activeEvent?.date, recoveryEndDate, recoveryStartDate, fetchRecoveryScores])
+  }, [activeEventId, activeEvent?.date, recoveryEndDate, recoveryStartDate, fetchRecoveryScores])
 
   // Register global refetch handler for server health reconnects
   useEffect(() => {
@@ -1096,9 +1102,16 @@ function App() {
                 </ErrorBoundary>
               </div>
 
-              {/* Step 1 -> Step 2 Forward Continuity Breadcrumb */}
+              {/* Step 1 Sequential Back / Next Navigation */}
               <div className="pt-6 border-t border-slate-200/80 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('home')}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
+                >
+                  <span>Home</span>
+                </button>
+                <div className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-left order-first sm:order-none">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">Step 1 Complete</span>
                   <span className="mx-2">·</span>
                   <span>Baseline calibrated for {activeEvent?.name || 'Selected Incident'}</span>
@@ -1106,9 +1119,9 @@ function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectTab('map')}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shadow-md shadow-cyan-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-cyan-600/20 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
                 >
-                  <span>Proceed to Step 2: Inspect Satellite Map →</span>
+                  <span>Step 2: Inspect Map →</span>
                 </button>
               </div>
             </div>
@@ -1145,19 +1158,26 @@ function App() {
               />
             </ErrorBoundary>
 
-            {/* Step 2 -> Step 3 Forward Continuity Breadcrumb */}
+            {/* Step 2 Sequential Back / Next Navigation */}
             <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-900/60 backdrop-blur-md shadow-sm">
-              <div className="text-xs text-slate-600 dark:text-slate-300">
-                <span className="font-semibold text-slate-900 dark:text-white">Finished inspecting spatial blackouts?</span>
+              <button
+                type="button"
+                onClick={() => handleSelectTab('events')}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
+              >
+                <span>← Step 1: Events</span>
+              </button>
+              <div className="text-xs text-slate-600 dark:text-slate-300 text-center sm:text-left order-first sm:order-none">
+                <span className="font-semibold text-slate-900 dark:text-white">Step 2: Spatial Map</span>
                 <span className="mx-2 hidden sm:inline">·</span>
                 <span className="text-slate-500 dark:text-slate-400">Compare municipal trajectory trends against electric cooperatives.</span>
               </div>
               <button
                 type="button"
                 onClick={() => handleSelectTab('recovery')}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs shadow-md shadow-violet-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-violet-600/20 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer shrink-0"
               >
-                <span>Proceed to Step 3: Compare Recovery Trajectories →</span>
+                <span>Step 3: Recovery Metrics →</span>
               </button>
             </div>
           </div>
@@ -1234,9 +1254,16 @@ function App() {
                 />
               </div>
 
-              {/* Step 3 -> Step 4 Forward Continuity Breadcrumb */}
+              {/* Step 3 Sequential Back / Next Navigation */}
               <div className="pt-6 border-t border-slate-200/80 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-xs text-slate-500 dark:text-slate-400">
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('map')}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl border border-slate-300 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-sm transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
+                >
+                  <span>← Step 2: Map</span>
+                </button>
+                <div className="text-xs text-slate-500 dark:text-slate-400 text-center sm:text-left order-first sm:order-none">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">Step 3 Complete</span>
                   <span className="mx-2">·</span>
                   <span>Radiance restoration trajectories benchmarked</span>
@@ -1244,9 +1271,9 @@ function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectTab('summary')}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[44px] rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all hover:scale-[1.01] active:scale-[0.98] cursor-pointer"
                 >
-                  <span>Proceed to Step 4: View Executive Summary & AI Briefing →</span>
+                  <span>Step 4: Executive Summary →</span>
                 </button>
               </div>
             </div>

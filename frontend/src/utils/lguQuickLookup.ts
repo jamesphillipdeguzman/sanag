@@ -65,7 +65,7 @@ export function getAllIndexedLgus(): LguLookupEntry[] {
   const seen = new Set<string>();
   const list: LguLookupEntry[] = [];
   for (const entry of Object.values(lookupIndex)) {
-    const key = entry.pcode || entry.name;
+    const key = (entry.pcode ? `${entry.pcode}-${entry.name}` : entry.name).toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
       list.push(entry);

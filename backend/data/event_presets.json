@@ -36,20 +36,8 @@
     "infrastructure_impact": "Localized feeder trips and pole destabilization in saturated soils; moderate recovery timeline."
   },
   {
-    "id": "panay-grid-collapse-2024",
-    "name": "Panay Island Grid Collapse",
-    "startDate": "2024-01-02",
-    "endDate": "2024-02-01",
-    "type": "grid_failure",
-    "category": "Power Disruption",
-    "event_type": "Grid Disturbance / Frequency Trip",
-    "disaster_category": "Cascading System Separation",
-    "root_cause_summary": "Unplanned, rapid tripping of multiple base-load generation units across Panay (including PEDC and PCPC units) leading to island-wide under-frequency cascade tripping and complete separation from the Negros-Panay submarine interconnect.",
-    "infrastructure_impact": "Zero structural physical damage to distribution poles or substations; rapid, steep V-shaped recovery curve observed as plants resynchronize and black-start protocols activate."
-  },
-  {
     "id": "panay-blackout-2024",
-    "name": "Panay Island Grid Collapse (January 2024)",
+    "name": "Panay Island Grid Collapse",
     "startDate": "2024-01-02",
     "endDate": "2024-02-01",
     "type": "grid_failure",

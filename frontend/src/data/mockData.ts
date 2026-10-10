@@ -216,8 +216,13 @@ export function getRecoveryStatusColor(status: RecoveryStatus): string {
   return getRecoveryColor(status === 'restored' ? 95 : status === 'recovering' || status === 'warning' ? 75 : 30);
 }
 
-export function getSeverityColor(severity: DisasterEvent['severity']): string {
-  return severity === 'Severe' ? '#f43f5e' : severity === 'High' ? '#fbbf24' : '#599ffd';
+export function getSeverityColor(severity?: string): string {
+  const norm = (severity || '').toLowerCase();
+  if (norm === 'critical' || norm === 'severe' || norm === 'red') return '#f43f5e';
+  if (norm === 'high' || norm === 'orange') return '#fbbf24';
+  if (norm === 'moderate' || norm === 'medium' || norm === 'blue' || norm === 'sky') return '#38bdf8';
+  if (norm === 'low' || norm === 'green') return '#10b981';
+  return '#38bdf8';
 }
 
 export { formatAffectedPopulation, formatAffectedCompact } from '../utils/formatters';
@@ -243,6 +248,30 @@ export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[
     const region = properties.ADM1_EN ?? properties.region_name ?? (['Iloilo', 'Capiz', 'Aklan', 'Antique'].includes(province) ? 'Region VI (Western Visayas)' : undefined);
     const pop = properties.population ? Number(properties.population) : Math.round(area * 860);
 
+    let lat: number | undefined;
+    let lng: number | undefined;
+    const geom: any = feature.geometry;
+    if (geom && geom.coordinates) {
+      let totalLat = 0;
+      let totalLng = 0;
+      let count = 0;
+      const traverse = (coords: any) => {
+        if (!Array.isArray(coords)) return;
+        if (coords.length >= 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+          totalLng += coords[0];
+          totalLat += coords[1];
+          count += 1;
+        } else {
+          coords.forEach(traverse);
+        }
+      };
+      traverse(geom.coordinates);
+      if (count > 0) {
+        lat = Number((totalLat / count).toFixed(4));
+        lng = Number((totalLng / count).toFixed(4));
+      }
+    }
+
     return {
       id,
       name,
@@ -258,6 +287,9 @@ export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[
       currentRadiance: 4 + (recoveryScore / 100) * 8,
       estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
       area,
+      coordinates: lat != null && lng != null ? [lat, lng] : undefined,
+      latitude: lat,
+      longitude: lng,
     };
   });
 }

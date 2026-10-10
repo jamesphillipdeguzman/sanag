@@ -492,7 +492,11 @@ export async function safeJsonParse<T = unknown>(
       text = await input.text();
     }
     return JSON.parse(text) as T;
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.name === 'AbortError' || err?.message?.includes('aborted')) {
+      // Cleanly ignore expected unmount / stale cancellations
+      return fallback;
+    }
     console.error(
       `[apiService] JSON parse error: ${(err as Error)?.message}. ` +
       `Payload length: ${text.length} chars. ` +
@@ -534,7 +538,11 @@ export async function apiFetchJson<T = unknown>(
   try {
     rawText = await response.text();
     return JSON.parse(rawText) as T;
-  } catch (parseError) {
+  } catch (parseError: any) {
+    if (parseError?.name === 'AbortError' || parseError?.message?.includes('aborted')) {
+      // Cleanly ignore expected unmount / stale cancellations
+      return null as unknown as T;
+    }
     console.error(
       `[apiService] JSON parse error for URL "${urlStr}": ${(parseError as Error)?.message}. ` +
       `Payload length: ${rawText.length} bytes/chars. ` +

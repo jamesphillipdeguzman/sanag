@@ -22,16 +22,17 @@ export interface NavTabItem {
   id: TabId;
   label: string;
   href: string;
+  stepNumber?: number;
   step?: string;
   icon?: React.ReactNode;
 }
 
 export const navLinks: NavTabItem[] = [
   { id: 'home', label: 'Home', href: '#home' },
-  { id: 'events', label: 'Events', href: '#events', step: 'Step 1' },
-  { id: 'map', label: 'Map', href: '#map', step: 'Step 2' },
-  { id: 'recovery', label: 'Recovery', href: '#recovery', step: 'Step 3' },
-  { id: 'summary', label: 'Summary', href: '#summary', step: 'Step 4' },
+  { id: 'events', label: 'Events', href: '#events', stepNumber: 1 },
+  { id: 'map', label: 'Map', href: '#map', stepNumber: 2 },
+  { id: 'recovery', label: 'Recovery', href: '#recovery', stepNumber: 3 },
+  { id: 'summary', label: 'Summary', href: '#summary', stepNumber: 4 },
   { id: 'guide', label: 'Guide & Glossary', href: '#guide' },
 ];
 
@@ -150,21 +151,22 @@ export default function Navbar({
                   key={link.href}
                   href={link.href}
                   onClick={(e) => handleTabClick(e, link)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer ${isActive
+                  className={`group px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap cursor-pointer ${isActive
                     ? 'bg-white dark:bg-slate-800 text-ocean-600 dark:text-ocean-300 font-bold border border-slate-200/80 dark:border-white/10 shadow-sm shadow-ocean-500/10'
                     : 'text-slate-600 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-white/5 border border-transparent'
                     }`}
                 >
                   {isActive && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 animate-pulse" />
+                    <span className="h-1.5 w-1.5 rounded-full bg-ocean-500 animate-pulse shrink-0" />
                   )}
                   <span>{link.label}</span>
-                  {link.step && (
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-semibold transition-colors inline-block ${isActive
-                      ? 'bg-ocean-500/20 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
-                      : 'bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-300/60 dark:border-slate-700/60'
-                      }`}>
-                      {link.step}
+                  {link.stepNumber !== undefined && (
+                    <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-mono font-bold shrink-0 transition-colors ${
+                      isActive 
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm shadow-cyan-500/50' 
+                        : 'bg-slate-800 text-slate-400 border border-slate-700/80 group-hover:border-slate-500 group-hover:text-slate-200'
+                    }`}>
+                      {link.stepNumber}
                     </span>
                   )}
                 </a>
@@ -290,21 +292,25 @@ export default function Navbar({
                     key={link.href}
                     href={link.href}
                     onClick={(e) => handleTabClick(e, link)}
-                    className={`px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${isActive
+                    className={`group px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-between ${isActive
                       ? 'bg-ocean-500/15 text-ocean-600 dark:text-ocean-300 border border-ocean-500/30'
                       : 'text-slate-700 dark:text-ink-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5'
                       }`}
                   >
                     <div className="flex items-center gap-2">
                       <span>{link.label}</span>
-                      {link.step && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium bg-slate-200/80 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                          {link.step}
+                      {link.stepNumber !== undefined && (
+                        <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-mono font-bold shrink-0 transition-colors ${
+                          isActive 
+                            ? 'bg-cyan-500 text-slate-950 shadow-sm shadow-cyan-500/50' 
+                            : 'bg-slate-800 text-slate-400 border border-slate-700/80 group-hover:border-slate-500 group-hover:text-slate-200'
+                        }`}>
+                          {link.stepNumber}
                         </span>
                       )}
                     </div>
                     {isActive && (
-                      <span className="h-2 w-2 rounded-full bg-ocean-500" />
+                      <span className="h-2 w-2 rounded-full bg-ocean-500 shrink-0" />
                     )}
                   </a>
                 );

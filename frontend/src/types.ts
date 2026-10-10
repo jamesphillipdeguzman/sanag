@@ -28,7 +28,7 @@ export interface DisasterEvent {
   date: string;
   startDate?: string;
   endDate: string;
-  severity: 'Severe' | 'High' | 'Moderate';
+  severity: 'Severe' | 'High' | 'Moderate' | 'Critical' | 'Low' | string;
   type: DisasterType;
   affectedPopulation: number;
   description: string;
