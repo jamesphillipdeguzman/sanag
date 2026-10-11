@@ -148,10 +148,6 @@ function MapLoadingSkeleton({ regionKey = 'panay' }: MapLoadingSkeletonProps) {
     const preset = REGION_PRESETS[normKey];
     const chunk = REGIONAL_CHUNKS.find((c) => c.key === normKey);
 
-    const isPanay =
-      normKey.includes('panay') ||
-      ['iloilo', 'capiz', 'aklan', 'antique'].includes(normKey);
-
     const name =
       preset?.name ||
       chunk?.label ||
@@ -159,10 +155,41 @@ function MapLoadingSkeleton({ regionKey = 'panay' }: MapLoadingSkeletonProps) {
         ? regionKey.charAt(0).toUpperCase() + regionKey.slice(1)
         : 'Philippine Nationwide');
 
-    // Panay shows its 4 provinces, other regions show their identified area or sub-provinces
-    const pills = isPanay
-      ? ['Iloilo', 'Capiz', 'Aklan', 'Antique']
-      : [name.replace(/\s*\(.*?\)\s*/g, '')];
+    // Canonical province / focus area breakdown per regional chunk
+    const PROVINCE_MAP: Record<string, string[]> = {
+      panay: ['Iloilo', 'Capiz', 'Aklan', 'Antique'],
+      panay_guimaras: ['Iloilo', 'Negros Occ.', 'Capiz', 'Aklan', 'Antique', 'Guimaras'],
+      iloilo: ['Iloilo City', 'Passi', 'Pototan', 'Oton'],
+      capiz: ['Roxas City', 'Panay', 'Pontevedra', 'Sigma'],
+      aklan: ['Kalibo', 'Malay (Boracay)', 'Ibajay', 'Numancia'],
+      antique: ['San Jose', 'Sibalom', 'Hamtic', 'Culasi'],
+      guimaras: ['Jordan', 'Buenavista', 'Nueva Valencia', 'San Lorenzo', 'Sibunag'],
+      central_visayas: ['Cebu', 'Bohol', 'Negros Oriental', 'Siquijor'],
+      cebu_bohol: ['Cebu', 'Bohol'],
+      cebu: ['Cebu City', 'Mandaue', 'Lapu-Lapu', 'Talisay'],
+      bohol: ['Tagbilaran', 'Panglao', 'Tubigon', 'Ubay'],
+      ncr: ['Manila', 'Quezon City', 'Makati', 'Taguig', 'Pasig'],
+      calabarzon_mimaropa: ['Batangas', 'Cavite', 'Laguna', 'Rizal', 'Quezon'],
+      ncr_southern_tagalog: ['Metro Manila', 'Batangas', 'Cavite', 'Laguna', 'Rizal'],
+      central_luzon: ['Pampanga', 'Bulacan', 'Bataan', 'Zambales', 'Tarlac', 'Nueva Ecija'],
+      bicol: ['Albay', 'Camarines Sur', 'Sorsogon', 'Catanduanes'],
+      eastern_visayas: ['Leyte', 'Samar', 'Eastern Samar', 'Southern Leyte', 'Biliran'],
+      mindanao_south: ['Davao del Sur', 'Davao del Norte', 'Sarangani', 'South Cotabato'],
+      davao: ['Davao City', 'Tagum', 'Panabo', 'Digos'],
+    };
+
+    let pills: string[] = PROVINCE_MAP[normKey] || [];
+
+    if (pills.length === 0) {
+      if (normKey.includes('panay') && (normKey.includes('guimaras') || normKey.includes('negros'))) {
+        pills = PROVINCE_MAP.panay_guimaras;
+      } else if (normKey.includes('panay')) {
+        pills = PROVINCE_MAP.panay;
+      } else {
+        // Fallback: clean name without parentheses
+        pills = [name.replace(/\s*\(.*?\)\s*/g, '').trim()];
+      }
+    }
 
     return { regionName: name, badges: pills };
   }, [regionKey]);
