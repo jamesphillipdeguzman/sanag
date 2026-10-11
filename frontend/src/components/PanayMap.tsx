@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -46,6 +47,10 @@ export interface PanayMapProps {
   isActiveTab?: boolean;
   nightGlowMode?: boolean;
   onNightGlowModeChange?: (enabled: boolean) => void;
+}
+
+export interface MapLoadingSkeletonProps {
+  regionKey?: string;
 }
 
 export interface LeafletMapProps {
@@ -137,14 +142,41 @@ const TILE_LAYER_OPTIONS: L.TileLayerOptions = {
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
 };
 
-function MapLoadingSkeleton() {
+function MapLoadingSkeleton({ regionKey = 'panay' }: MapLoadingSkeletonProps) {
+  const { regionName, badges } = useMemo(() => {
+    const normKey = (regionKey || 'panay').toLowerCase();
+    const preset = REGION_PRESETS[normKey];
+    const chunk = REGIONAL_CHUNKS.find((c) => c.key === normKey);
+
+    const isPanay =
+      normKey.includes('panay') ||
+      ['iloilo', 'capiz', 'aklan', 'antique'].includes(normKey);
+
+    const name =
+      preset?.name ||
+      chunk?.label ||
+      (normKey !== 'all' && normKey !== 'philippines'
+        ? regionKey.charAt(0).toUpperCase() + regionKey.slice(1)
+        : 'Philippine Nationwide');
+
+    // Panay shows its 4 provinces, other regions show their identified area or sub-provinces
+    const pills = isPanay
+      ? ['Iloilo', 'Capiz', 'Aklan', 'Antique']
+      : [name.replace(/\s*\(.*?\)\s*/g, '')];
+
+    return { regionName: name, badges: pills };
+  }, [regionKey]);
+
   return (
     <div
       className="leaflet-map relative flex flex-col items-center justify-center p-6 text-center overflow-hidden border border-slate-200 dark:border-white/5 bg-slate-50/90 dark:bg-ink-950/70 select-none rounded-xl transition-colors"
-      aria-label="Loading Panay Island nightlight telemetry"
+      aria-label={`Loading ${regionName} nightlight telemetry`}
     >
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden opacity-60">
-        <div className="absolute w-[440px] h-[440px] rounded-full border border-ocean-500/20 dark:border-ocean-500/10 animate-ping" style={{ animationDuration: '4s' }} />
+        <div
+          className="absolute w-[440px] h-[440px] rounded-full border border-ocean-500/20 dark:border-ocean-500/10 animate-ping"
+          style={{ animationDuration: '4s' }}
+        />
         <div className="absolute w-[320px] h-[320px] rounded-full border border-ocean-500/25 dark:border-ocean-500/15" />
         <div className="absolute w-[200px] h-[200px] rounded-full border border-ocean-500/30 dark:border-ocean-500/20" />
         <div className="absolute w-[90px] h-[90px] rounded-full border border-ocean-500/35 dark:border-ocean-500/30" />
@@ -168,24 +200,27 @@ function MapLoadingSkeleton() {
         </div>
 
         <h4 className="text-base font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-          Loading Panay Island Municipality Boundaries
+          Loading {regionName} Municipality Boundaries
         </h4>
         <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
-          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across Panay Island LGUs...
+          Retrieving VIIRS radiance baselines and computing spatial restoration indexes across {regionName} LGUs...
         </p>
 
         <div className="w-52 h-1.5 bg-slate-200 dark:bg-ink-800/80 rounded-full mt-4 overflow-hidden relative border border-slate-300/50 dark:border-white/5">
           <div className="absolute inset-y-0 w-2/5 bg-gradient-to-r from-transparent via-ocean-500 dark:via-ocean-400 to-emerald-500 dark:to-emerald-400 rounded-full animate-shimmer" />
         </div>
 
-        <div className="flex items-center gap-1.5 mt-3.5 text-[10px] font-medium text-slate-500 dark:text-ink-400">
-          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300">Iloilo</span>
-          <span className="text-slate-400 dark:text-ink-600">·</span>
-          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300">Capiz</span>
-          <span className="text-slate-400 dark:text-ink-600">·</span>
-          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300">Aklan</span>
-          <span className="text-slate-400 dark:text-ink-600">·</span>
-          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300">Antique</span>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3.5 text-[10px] font-medium text-slate-500 dark:text-ink-400">
+          {badges.map((badge, idx) => (
+            <React.Fragment key={badge}>
+              <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-300">
+                {badge}
+              </span>
+              {idx < badges.length - 1 && (
+                <span className="text-slate-400 dark:text-ink-600">·</span>
+              )}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>
@@ -679,7 +714,7 @@ export default function PanayMap({
               onMouseLeave={() => setAudioHovered(false)}
             >
               {isLoading && allMunicipalities.length === 0 ? (
-                <MapLoadingSkeleton />
+                <MapLoadingSkeleton regionKey={currentRegionKey} />
               ) : (
                 <>
                   <LeafletMap
