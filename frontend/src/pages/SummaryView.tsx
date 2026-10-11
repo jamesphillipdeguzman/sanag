@@ -30,6 +30,7 @@ interface SummaryViewProps {
   onNavigateTab?: (tab: TabId) => void;
   selectedRegionKey?: string;
   recoveryDate?: string | null;
+  selectedMunicipality?: Municipality | null;
 }
 
 interface StatCardProps {
@@ -79,58 +80,117 @@ export default function SummaryView({
   onNavigateTab,
   selectedRegionKey,
   recoveryDate,
+  selectedMunicipality,
 }: SummaryViewProps) {
   // Focus headline metrics on Panay Island LGUs by default
   const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
-  const PANAY_PCODE_PREFIXES = useMemo(() => ['ph06004', 'ph06006', 'ph06019', 'ph06030'], []);
+  const PANAY_PCODE_PREFIXES = useMemo(() => ['ph0604', 'ph0606', 'ph0619', 'ph0630'], []);
 
   const panayMunicipalities = useMemo(() => {
-    const list = municipalities.filter((m) => {
+    // 1. If an individual municipality is selected (e.g. Agoncillo on the map),
+    // scope to that municipality and its province
+    if (selectedMunicipality) {
+      const muniName = (selectedMunicipality.name || '').toLowerCase();
+      const muniPcode = (selectedMunicipality.pcode || '').toLowerCase();
+      const muniProv = (selectedMunicipality.province || '').toLowerCase();
+
+      const matched = municipalities.filter((m) => {
+        if (muniProv && (m.province || '').toLowerCase() === muniProv) return true;
+        if (muniName && (m.name || '').toLowerCase() === muniName) return true;
+        if (muniPcode && (m.pcode || '').toLowerCase() === muniPcode) return true;
+        return false;
+      });
+
+      if (matched.length > 0) return matched;
+    }
+
+    // 2. If the active event defined critical/impacted LGUs, scope to those
+    const criticalList = activeEvent?.critical_municipalities ?? [];
+    if (criticalList.length > 0) {
+      const targetPcodes = new Set(
+        criticalList.map((c: any) => (c.pcode || c.code || '').toLowerCase()).filter(Boolean)
+      );
+      const targetNames = new Set(
+        criticalList.map((c: any) => (c.name || '').toLowerCase()).filter(Boolean)
+      );
+
+      const eventMatched = municipalities.filter(
+        (m) =>
+          (m.pcode && targetPcodes.has(m.pcode.toLowerCase())) ||
+          (m.name && targetNames.has(m.name.toLowerCase()))
+      );
+      if (eventMatched.length > 0) return eventMatched;
+    }
+
+    // 3. If a region or province dropdown key is selected
+    if (selectedRegionKey && selectedRegionKey !== 'all') {
+      const regMatched = municipalities.filter(
+        (m) => (m.province || '').toLowerCase() === selectedRegionKey.toLowerCase()
+      );
+      if (regMatched.length > 0) return regMatched;
+    }
+
+    // 4. Default baseline: Panay Island filter
+    const defaultGrid = municipalities.filter((m) => {
       const prov = (m.province || '').toLowerCase().trim();
-      if (prov) {
-        return PANAY_PROVINCE_SET.has(prov);
-      }
+      if (prov) return PANAY_PROVINCE_SET.has(prov);
       if (m.pcode) {
         const pcodeLower = m.pcode.toLowerCase();
         return PANAY_PCODE_PREFIXES.some((prefix) => pcodeLower.startsWith(prefix));
       }
       return false;
     });
-    return list.length > 0 ? list : municipalities;
-  }, [municipalities, PANAY_PROVINCE_SET, PANAY_PCODE_PREFIXES]);
+
+    return defaultGrid.length > 0 ? defaultGrid : municipalities;
+  }, [
+    municipalities,
+    activeEvent,
+    selectedMunicipality,
+    selectedRegionKey,
+    PANAY_PROVINCE_SET,
+    PANAY_PCODE_PREFIXES,
+  ]);
+
+  const isPanayScope = useMemo(() => {
+    if (panayMunicipalities.length === 0) return true;
+    return panayMunicipalities.every((m) => {
+      const prov = (m.province || '').toLowerCase().trim();
+      return prov ? PANAY_PROVINCE_SET.has(prov) : true;
+    });
+  }, [panayMunicipalities, PANAY_PROVINCE_SET]);
 
   const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 95;
 
   const avgRecovery = panayMunicipalities.length > 0
     ? Math.round(
-        panayMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) /
-          panayMunicipalities.length
-      )
+      panayMunicipalities.reduce((sum, m) => sum + (m.recoveryScore ?? 0), 0) /
+      panayMunicipalities.length
+    )
     : 0;
 
   const restoredCount = panayMunicipalities.filter((m) => m.status === 'restored').length;
   const criticalCount = panayMunicipalities.filter((m) => m.status === 'critical').length;
 
   const affectedPopulation = useMemo(() => {
-    const affectedLGUs = panayMunicipalities.filter(
-      (m) =>
-        m.status === 'critical' ||
-        m.status === 'warning' ||
-        (m.recoveryScore !== undefined && m.recoveryScore < 60)
-    );
+    const affectedLGUs = panayMunicipalities.filter((m) => {
+      const score = m.recoveryScore != null
+        ? (m.recoveryScore > 1 ? m.recoveryScore : m.recoveryScore * 100)
+        : 100;
+      return m.status === 'critical' || m.status === 'warning' || score < 60;
+    });
+
     if (affectedLGUs.length > 0) {
       return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0);
     }
-    const unrestored = panayMunicipalities.filter((m) => m.status !== 'restored');
-    if (unrestored.length > 0) {
-      return unrestored.reduce((sum, m) => sum + (m.population || 0), 0);
-    }
-    return activeEvent?.affectedPopulation || 0;
-  }, [panayMunicipalities, activeEvent?.affectedPopulation]);
+
+    return 0;
+  }, [panayMunicipalities]);
 
   const stationsByProvince = useMemo(() => {
     return getStationsByProvince();
   }, []);
+
+
 
   // Collapsed by default: empty record
   const [expandedProvinces, setExpandedProvinces] = useState<Record<string, boolean>>({});
@@ -214,7 +274,9 @@ export default function SummaryView({
               </h2>
             </div>
             <span className="text-xs text-slate-400 font-mono">
-              Panay Grid · {totalPanayLgus} Monitored LGUs
+              {panayMunicipalities.some(m => (m.province || '').toLowerCase().includes('batangas'))
+                ? 'Batangas Grid'
+                : 'Panay Grid'} · {totalPanayLgus} Monitored LGUs
             </span>
           </div>
 
@@ -255,127 +317,128 @@ export default function SummaryView({
         </div>
 
         {/* TRANSMISSION & SUBSTATION INFRASTRUCTURE */}
-        <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-cyan-500" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Transmission & Substation Infrastructure
-              </h2>
+        {isPanayScope && (
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                  Transmission & Substation Infrastructure
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  14 Active Stations · 187 Monitored LGUs
+                </span>
+                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
+                <div className="flex items-center gap-1.5 text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={handleExpandAll}
+                    className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors cursor-pointer"
+                  >
+                    Expand All
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-600">|</span>
+                  <button
+                    type="button"
+                    onClick={handleCollapseAll}
+                    className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    Collapse All
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                14 Active Stations · 187 Monitored LGUs
-              </span>
-              <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
-              <div className="flex items-center gap-1.5 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={handleExpandAll}
-                  className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors cursor-pointer"
-                >
-                  Expand All
-                </button>
-                <span className="text-slate-300 dark:text-slate-600">|</span>
-                <button
-                  type="button"
-                  onClick={handleCollapseAll}
-                  className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                >
-                  Collapse All
-                </button>
+
+            <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-start">
+                {stationsByProvince.map((group) => {
+                  const isExpanded = !!expandedProvinces[group.province];
+                  return (
+                    <div
+                      key={group.province}
+                      className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/40 p-3 sm:p-3.5 flex flex-col transition-all"
+                    >
+                      {/* Collapsible Header Button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleProvince(group.province)}
+                        className="flex items-center justify-between w-full text-left p-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition group cursor-pointer"
+                        aria-expanded={isExpanded}
+                      >
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <Zap className="h-4 w-4 text-amber-500 shrink-0" />
+                          <span className="font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-800 dark:text-slate-100 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
+                            {group.province}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Active badge */}
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 shrink-0">
+                            {group.active_count} / {group.count} Active
+                          </span>
+
+                          {/* Animated Chevron Indicator */}
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180 text-amber-500 dark:text-amber-400' : ''
+                              }`}
+                          />
+                        </div>
+                      </button>
+
+                      {/* Collapsible Content: Substation Cards List */}
+                      {isExpanded && (
+                        <div className="mt-3 space-y-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/60 transition-all duration-200 animate-fade-in">
+                          {group.stations.map((station) => (
+                            <div
+                              key={station.id}
+                              className="rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800/60 p-2.5 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
+                            >
+                              <div className="flex items-start justify-between gap-1.5 mb-1">
+                                <div className="min-w-0">
+                                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                    {station.name}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                                    {station.operator}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${station.operationalStatus === 'Energized'
+                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                    : station.operationalStatus === 'Islanded'
+                                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                      : station.operationalStatus === 'Tripped'
+                                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                        : 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40'
+                                    }`}
+                                >
+                                  {station.operationalStatus || 'Energized'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-slate-500 dark:text-slate-400">
+                                <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
+                                  {station.voltage}
+                                </span>
+                                <span className="truncate max-w-[140px] text-right" title={station.coverage?.join(', ')}>
+                                  {station.coverage?.join(', ') || 'District Grid'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
 
-          <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-start">
-              {stationsByProvince.map((group) => {
-                const isExpanded = !!expandedProvinces[group.province];
-                return (
-                  <div
-                    key={group.province}
-                    className="rounded-xl border border-slate-200/80 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-950/40 p-3 sm:p-3.5 flex flex-col transition-all"
-                  >
-                    {/* Collapsible Header Button */}
-                    <button
-                      type="button"
-                      onClick={() => toggleProvince(group.province)}
-                      className="flex items-center justify-between w-full text-left p-1 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition group cursor-pointer"
-                      aria-expanded={isExpanded}
-                    >
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <Zap className="h-4 w-4 text-amber-500 shrink-0" />
-                        <span className="font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-800 dark:text-slate-100 group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
-                          {group.province}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Active badge */}
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/20 shrink-0">
-                          {group.active_count} / {group.count} Active
-                        </span>
-
-                        {/* Animated Chevron Indicator */}
-                        <ChevronDown
-                          className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
-                            isExpanded ? 'rotate-180 text-amber-500 dark:text-amber-400' : ''
-                          }`}
-                        />
-                      </div>
-                    </button>
-
-                    {/* Collapsible Content: Substation Cards List */}
-                    {isExpanded && (
-                      <div className="mt-3 space-y-2.5 pt-2.5 border-t border-slate-200/60 dark:border-slate-800/60 transition-all duration-200 animate-fade-in">
-                        {group.stations.map((station) => (
-                          <div
-                            key={station.id}
-                            className="rounded-lg bg-white/90 dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800/60 p-2.5 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors"
-                          >
-                            <div className="flex items-start justify-between gap-1.5 mb-1">
-                              <div className="min-w-0">
-                                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                                  {station.name}
-                                </h4>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                                  {station.operator}
-                                </p>
-                              </div>
-                              <span
-                                className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
-                                  station.operationalStatus === 'Energized'
-                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                    : station.operationalStatus === 'Islanded'
-                                    ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                    : station.operationalStatus === 'Tripped'
-                                    ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                                    : 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40'
-                                }`}
-                              >
-                                {station.operationalStatus || 'Energized'}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-slate-500 dark:text-slate-400">
-                              <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
-                                {station.voltage}
-                              </span>
-                              <span className="truncate max-w-[140px] text-right" title={station.coverage?.join(', ')}>
-                                {station.coverage?.join(', ') || 'District Grid'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* BOTTOM: AI Situational Briefing Container (Gemini synthesis, structured vs markdown view toggle, and regeneration controls) */}
         <div>

@@ -189,8 +189,8 @@ def get_municipality_population_lookup() -> Dict[str, int]:
 
 def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: Optional[str]) -> int:
     """
-    Sums the population totals of all municipalities flagged as affected
-    or under critical thresholds (R(t) < 0.60 or < 0.90) for an event date.
+    Sums the population totals of all municipalities flagged as severely affected
+    (critical threshold R(t) < 0.60) for an event date.
     """
     if not event_date:
         return 0
@@ -237,7 +237,6 @@ def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: Option
             return 0
 
         crit_warn_pop = 0
-        unrestored_pop = 0
 
         for r in rows:
             rad = r["daily_radiance"]
@@ -249,12 +248,12 @@ def compute_event_affected_population(cursor: sqlite3.Cursor, event_date: Option
             name = (r["municipality_name"] or "").lower()
             pop = pop_lookup.get(pcode, pop_lookup.get(name, 80000))
 
+            # Only accumulate populations that experienced an actual severe outage (>= 40% deficit)
             if r_t < 0.60:
                 crit_warn_pop += pop
-            if r_t < 0.90:
-                unrestored_pop += pop
 
-        return crit_warn_pop if crit_warn_pop > 0 else unrestored_pop
+        # Return strictly the critically affected population; do not dump the full baseline
+        return crit_warn_pop
     except Exception as e:
         print(f"Error computing affected population for date {event_date}: {e}")
         return 0

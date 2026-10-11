@@ -167,10 +167,24 @@ function mapApiEvent(event) {
   }
 
   const mockMatch = mockEvents.find((e) => e.id === String(event.id) || e.name === event.name)
-  const affectedPopulation = Number(
-    event.affected_population ?? event.affectedPopulation ?? mockMatch?.affectedPopulation ?? 0
-  )
 
+  const rawPop = event.affected_population ?? event.affectedPopulation;
+  let affectedPopulation = 0;
+
+  const numRawPop = rawPop != null ? Number(rawPop) : 0;
+  const numMockPop = mockMatch?.affectedPopulation ? Number(mockMatch.affectedPopulation) : 0;
+
+  // Reject macro/national baselines (> 15M)
+  if (numRawPop > 0 && numRawPop < 15000000) {
+    affectedPopulation = numRawPop;
+  } else if (rawCat.includes('volcano') || type === 'volcano' || (event.name || '').toLowerCase().includes('taal')) {
+    // 14km high-risk lakeshore hazard zone for Taal
+    affectedPopulation = 420000;
+  } else if (numMockPop > 0 && numMockPop < 15000000) {
+    affectedPopulation = numMockPop;
+  } else {
+    affectedPopulation = 0;
+  }
   const resolvedSeverity = resolveEventSeverity(event.severity || mockMatch?.severity || event)
   const alertLevel = event.alert_level || (resolvedSeverity === 'Critical' ? 'Red' : resolvedSeverity === 'High' ? 'Orange' : 'Green')
   const severity = resolvedSeverity
@@ -553,7 +567,7 @@ function App() {
             )
           }
         }
-      }).catch(() => {}).finally(() => {
+      }).catch(() => { }).finally(() => {
         setImportingId(null)
       })
     } catch {
@@ -612,8 +626,8 @@ function App() {
     ? hasRecoveryDateRange
       ? formatIsoDate(recoveryDateRange.endDate)
       : (activeEvent.endDate && activeEvent.endDate !== activeEvent.date && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
-          ? formatIsoDate(activeEvent.endDate)
-          : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
+        ? formatIsoDate(activeEvent.endDate)
+        : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
     : ''
 
   const handleRegionChange = useCallback((newKey) => {
@@ -781,10 +795,10 @@ function App() {
 
         const records = (radiancePayload?.data && radiancePayload.data.length > 0)
           ? radiancePayload.data.map((item) => ({
-              ...item,
-              daily_radiance: item.post_event_radiance ?? item.daily_radiance,
-              date: item.observation_date,
-            }))
+            ...item,
+            daily_radiance: item.post_event_radiance ?? item.daily_radiance,
+            date: item.observation_date,
+          }))
           : []
 
         const mapped = applyRecoveryScores(baseMunicipalities, records, null, null, activeEvent)
@@ -796,10 +810,10 @@ function App() {
             prev.map((e) =>
               e.id === activeEventId
                 ? {
-                    ...e,
-                    ...(radiancePayload.event.affected_population ? { affectedPopulation: radiancePayload.event.affected_population } : {}),
-                    ...(radiancePayload.event.critical_municipalities ? { critical_municipalities: radiancePayload.event.critical_municipalities } : {}),
-                  }
+                  ...e,
+                  ...(radiancePayload.event.affected_population ? { affectedPopulation: radiancePayload.event.affected_population } : {}),
+                  ...(radiancePayload.event.critical_municipalities ? { critical_municipalities: radiancePayload.event.critical_municipalities } : {}),
+                }
                 : e
             )
           )
@@ -1290,9 +1304,9 @@ function App() {
             onNavigateTab={handleSelectTab}
             selectedRegionKey={selectedRegionKey}
             recoveryDate={recoveryDate}
+            selectedMunicipality={selectedMunicipality}
           />
         )}
-
         {/* Tab 6: Guide & Glossary (#guide) - Standalone Reference Documentation */}
         {activeTab === 'guide' && (
           <section id="guide" className="relative pb-16 overflow-hidden animate-fade-in">
