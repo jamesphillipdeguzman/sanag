@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import httpx
 from gdacs.api import GDACSAPIReader, GDACSAPIError
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -68,32 +69,6 @@ def check_viirs_data_availability(
 # viirs_data_available is intentionally omitted here — it is resolved dynamically at runtime
 # by resolve_fallback_viirs() so it always reflects actual DB observation records.
 _FALLBACK_PH_ALERTS_TEMPLATE: List[Dict[str, Any]] = [
-    {
-        "event_id": "vo-taal-2024",
-        "id": "gdacs-vo-taal-2024",
-        "name": "Eruption Taal",
-        "type": "VO",
-        "category": "Volcanic Eruption",
-        "event_type": "Volcanic Eruption",
-        "disaster_category": "Volcanic Eruption",
-        "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
-        "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization.",
-        "alert_level": "Orange",
-        "alert_score": 2.0,
-        "date": "2024-10-05",
-        "startDate": "2024-10-05",
-        "endDate": "2024-11-05",
-        "description": "Volcanic eruption and explosive ash emissions from Taal Volcano triggering regional power grid insulator washing protocols.",
-        "severity_text": "Ashfall advisory · Insulator washing protocols active",
-        "country": "Philippines",
-        "url": "https://www.gdacs.org",
-        "latitude": 14.002,
-        "longitude": 120.993,
-        "coordinates": [14.002, 120.993],
-        "bbox": [120.5, 13.5, 121.5, 14.5],
-        "geometry": {"type": "Point", "coordinates": [120.993, 14.002]},
-        "is_imported": False,
-    },
     {
         "event_id": "1002891",
         "id": "gdacs-1002891",
@@ -477,92 +452,89 @@ def format_gdacs_feature(
         "viirs_data_available": check_viirs_data_availability(date_clean)
     }
 
-def get_latest_philippines_disasters(limit: int = 50, include_historical: bool = True) -> List[Dict[str, Any]]:
-    """Fetches recent natural disaster events and merges them with verified historical benchmarks for robust simulation."""
+def get_latest_philippines_disasters(limit: int = 250, include_historical: bool = True) -> List[Dict[str, Any]]:
+    """
+    Fetches real-time Philippine natural hazard alerts directly from the GDACS Search API
+    and merges them with verified historical benchmarks.
+    """
+    ph_events = []
+
+    # 1. Directly query the official live GDACS Search API for the Philippines
     try:
-        client = GDACSAPIReader()
-        events_response = getattr(client, "latest_events")(limit=limit)
-        features = events_response.features if hasattr(events_response, 'features') else (
-            events_response.get('features', []) if isinstance(events_response, dict) else events_response
-        )
-        
-        ph_events = []
-        for feature in features:
-            props = feature.get('properties', {}) if isinstance(feature, dict) else getattr(feature, 'properties', {})
-            geom = feature.get('geometry') if isinstance(feature, dict) else getattr(feature, 'geometry', None)
-            bbox = feature.get('bbox') if isinstance(feature, dict) else getattr(feature, 'bbox', None)
+        search_url = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/SEARCH"
+        params = {
+            "eventtypes": "VO,EQ,TC,FL",
+            "country": "Philippines"
+        }
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "SANAG-Disaster-Grid/1.0"
+        }
 
-            countries = props.get('affected_countries') or props.get('countries') or []
-            country_name = props.get('country') or props.get('countryname') or ''
-            iso3 = (props.get('iso3') or '').upper()
-            event_name = str(props.get('name') or props.get('eventname') or '')
-            description = str(props.get('description') or '')
-
-            is_philippines = (
-                iso3 == 'PHL' or
-                'philippines' in country_name.lower() or
-                'philippines' in event_name.lower() or
-                'philippines' in description.lower() or
-                any(
-                    isinstance(c, dict) and (
-                        c.get('iso3', '').upper() == 'PHL' or
-                        'philippines' in str(c.get('countryname', '')).lower()
-                    )
-                    for c in countries
-                )
+        with httpx.Client(timeout=10.0) as http_client:
+            resp = http_client.get(search_url, params=params, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                features = data.get("features", [])
+                for feature in features:
+                    props = feature.get("properties", {})
+                    geom = feature.get("geometry", {})
+                    bbox = feature.get("bbox")
+                    ph_events.append(format_gdacs_feature(props, geom=geom, bbox=bbox))
+    except Exception as api_err:
+        print(f"Direct GDACS search API error: {api_err}, falling back to GDACSAPIReader...")
+        try:
+            client = GDACSAPIReader()
+            events_response = getattr(client, "latest_events")(limit=150)
+            features = events_response.features if hasattr(events_response, 'features') else (
+                events_response.get('features', []) if isinstance(events_response, dict) else events_response
             )
+            for feature in features:
+                props = feature.get('properties', {}) if isinstance(feature, dict) else getattr(feature, 'properties', {})
+                geom = feature.get('geometry') if isinstance(feature, dict) else getattr(feature, 'geometry', None)
+                bbox = feature.get('bbox') if isinstance(feature, dict) else getattr(feature, 'bbox', None)
+                
+                iso3 = (props.get('iso3') or '').upper()
+                country_name = str(props.get('country') or '').lower()
+                event_name = str(props.get('name') or props.get('eventname') or '').lower()
+                
+                if iso3 == 'PHL' or 'philippines' in country_name or 'taal' in event_name:
+                    ph_events.append(format_gdacs_feature(props, geom=geom, bbox=bbox))
+        except Exception as reader_err:
+            print(f"GDACSAPIReader also failed: {reader_err}")
 
-            if is_philippines:
-                ph_events.append(format_gdacs_feature(props, geom=geom, bbox=bbox))
+    # 2. Deduplicate live events
+    seen_ids = set()
+    deduped = []
+    for ev in ph_events:
+        eid = str(ev.get("event_id") or ev.get("id"))
+        if eid and eid not in seen_ids:
+            seen_ids.add(eid)
+            deduped.append(ev)
 
-        seen_ids = set()
-        deduped = []
-        
-        # 1. Add live/recent Philippine events first
-        for ev in ph_events:
-            if ev["event_id"] not in seen_ids:
-                seen_ids.add(ev["event_id"])
-                deduped.append(ev)
+    # 3. Append historical benchmarks (Odette, Yolanda, Panay Blackout, etc.)
+    if include_historical:
+        for fb in _get_fallback_alerts():
+            if fb["event_id"] not in seen_ids:
+                seen_ids.add(fb["event_id"])
+                deduped.append(fb)
 
-        # 2. Always merge historical benchmarks so past storms/earthquakes remain available for simulation
-        if include_historical:
-            for fb in _get_fallback_alerts():
-                if fb["event_id"] not in seen_ids:
-                    seen_ids.add(fb["event_id"])
-                    deduped.append(fb)
+    result_list = deduped if deduped else _get_fallback_alerts()
 
-        result_list = deduped if deduped else _get_fallback_alerts()
+    # 4. Strict reverse-chronological sorting (newest first)
+    result_list.sort(
+        key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
+        reverse=True
+    )
 
-        # Strictly sort in reverse chronological order (newest/most recent first)
-        result_list.sort(
-            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
-            reverse=True
-        )
+    return result_list
 
-        return result_list
-
-    except GDACSAPIError as error:
-        print(f"GDACS API Error: {error}")
-        fallback = _get_fallback_alerts()
-        fallback.sort(
-            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
-            reverse=True
-        )
-        return fallback
-    except Exception as e:
-        print(f"Unexpected error fetching GDACS feed: {e}")
-        fallback = _get_fallback_alerts()
-        fallback.sort(
-            key=lambda ev: str(ev.get("fromdate") or ev.get("startDate") or ev.get("date") or ev.get("pubDate") or ""),
-            reverse=True
-        )
-        return fallback
 
 if __name__ == "__main__":
     alerts = get_latest_philippines_disasters()
     print(f"Fetched {len(alerts)} total events (Live + Historical Benchmarks):")
     for alert in alerts:
-        title = alert.get('title') or alert.get('name') or alert.get('eventname') or 'Untitled'
-        level = alert.get('alert_level') or 'Unknown'
-        date_str = alert.get('date') or 'No date'
-        print(f"- [{date_str}] {title} ({level})")
+        title = alert.get("title") or alert.get("name") or alert.get("eventname") or "Untitled"
+        level = alert.get("alert_level") or "Unknown"
+        date_str = alert.get("date") or "No date"
+        print(f"- [{level}] {title} ({date_str})")

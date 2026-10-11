@@ -290,4 +290,8 @@ def get_presets() -> List[Dict[str, Any]]:
                     presets = data
         except Exception:
             pass
-    return sorted(presets, key=lambda p: str(p.get("startDate") or p.get("date") or ""), reverse=True)
+    return sorted(
+        presets, 
+        key=lambda p: str(p.get("startDate") or p.get("date") or p.get("fromdate") or ""), 
+        reverse=True
+    )
