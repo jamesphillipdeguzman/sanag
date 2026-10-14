@@ -7,31 +7,34 @@ import {
   Sparkles,
   ArrowRight,
   ArrowLeft,
-  Calendar,
-  Layers,
   MapPin,
-  RefreshCw,
   Zap,
   ChevronDown,
 } from 'lucide-react';
 import type { Municipality, DisasterEvent } from '@/types';
-import { formatAffectedPopulation } from '@/data/mockData';
-import { getStationsByProvince } from '@/data/transmissionStations';
+import { formatAffectedPopulation, formatAffectedCompact } from '@/utils/formatters';
+import {
+  ALL_SUBSTATIONS,
+  REGION_PROVINCE_MAP,
+  computeDistanceKm,
+  getStationsByProvince,
+  type TransmissionStation,
+} from '@/data/transmissionStations';
 import AiBriefingCard from '@/components/AiBriefingCard';
 import ErrorBoundary from '@/components/ErrorBoundary';
-import PanaySilhouetteBackground from '@/components/PanaySilhouetteBackground';
 import type { TabId } from '@/components/Navbar';
 import { PANAY_PROVINCE_SET } from '@/utils/regionLookup';
-import { computeScopedMunicipalities, computeKpiMetrics } from '@/utils/kpiAggregation';
+import { computeScopedMunicipalities, computeKpiMetrics, normalizeRecoveryScore } from '@/utils/kpiAggregation';
 import { getRegionDisplayName } from '@/utils/eventScope';
 
-interface SummaryViewProps {
+export interface SummaryViewProps {
   municipalities: Municipality[];
   activeEvent?: DisasterEvent | null;
   events?: DisasterEvent[];
   onSelectEvent?: (id: string) => void;
   onNavigateTab?: (tab: TabId) => void;
   selectedRegionKey?: string;
+  selectedProvinceKey?: string;
   recoveryDate?: string | null;
   selectedMunicipality?: Municipality | null;
 }
@@ -75,14 +78,28 @@ function StatCard({ icon, label, value, accent, badge, subtext }: StatCardProps)
   );
 }
 
+// Helper to safely extract coordinates from municipality
+function getMunicipalityCoords(m?: Municipality | null): [number, number] | null {
+  if (!m) return null;
+  const anyM = m as any;
+  if (Array.isArray(anyM.coordinates) && anyM.coordinates.length >= 2) {
+    return [Number(anyM.coordinates[0]), Number(anyM.coordinates[1])];
+  }
+  if (anyM.lat != null && anyM.lng != null) {
+    return [Number(anyM.lat), Number(anyM.lng)];
+  }
+  if (anyM.latitude != null && anyM.longitude != null) {
+    return [Number(anyM.latitude), Number(anyM.longitude)];
+  }
+  return null;
+}
+
 export default function SummaryView({
   municipalities = [],
   activeEvent,
-  events = [],
-  onSelectEvent,
   onNavigateTab,
   selectedRegionKey,
-  recoveryDate,
+  selectedProvinceKey,
   selectedMunicipality,
 }: SummaryViewProps) {
   // Scoped municipalities for active regional footprint (exactly 95 when 'panay' is scoped)
@@ -105,14 +122,6 @@ export default function SummaryView({
     restoredCount,
   } = kpiMetrics;
 
-  const isPanayScope = useMemo(() => {
-    if (scopedMunicipalities.length === 0) return true;
-    return scopedMunicipalities.every((m) => {
-      const prov = (m.province || '').toLowerCase().trim();
-      return prov ? PANAY_PROVINCE_SET.has(prov) : true;
-    });
-  }, [scopedMunicipalities]);
-
   const regionDisplayName = useMemo(() => {
     if (selectedMunicipality) {
       return `${selectedMunicipality.name}, ${selectedMunicipality.province}`;
@@ -126,20 +135,108 @@ export default function SummaryView({
     return getRegionDisplayName(selectedRegionKey);
   }, [selectedRegionKey]);
 
+  // Task 1: Conditional Population KPI Copy & Styling
+  // Single LGU: Check if recovery score < 90% (active deficit)
+  const lguRecovery = selectedMunicipality ? normalizeRecoveryScore(selectedMunicipality) : 100;
+  const isLguDeficit = selectedMunicipality ? lguRecovery < 90 : false;
+
+  const lguPopValue = isLguDeficit
+    ? formatAffectedPopulation(totalScopedPopulation)
+    : `${formatAffectedCompact(totalScopedPopulation)} total`;
+
+  const lguPopAccent = isLguDeficit
+    ? lguRecovery < 60
+      ? 'text-rose-600 dark:text-rose-300'
+      : 'text-amber-600 dark:text-amber-300'
+    : 'text-slate-800 dark:text-slate-100';
+
+  const lguPopBadge = isLguDeficit ? '< 90% Deficit' : 'Normal Status';
+
+  // Regional Scope: Check if criticalLgus.length > 0
+  const isRegionalDeficit = criticalLgus.length > 0;
+  const regionalPopLabel = isRegionalDeficit ? 'Affected Population' : 'Monitored Population';
+  const regionalPopValue = isRegionalDeficit
+    ? formatAffectedPopulation(criticalPopulation)
+    : `${formatAffectedCompact(totalScopedPopulation)} total`;
+
+  const regionalPopAccent = isRegionalDeficit
+    ? 'text-amber-600 dark:text-amber-300'
+    : 'text-slate-800 dark:text-slate-100';
+
+  const regionalPopBadge = isRegionalDeficit ? 'Impact Zone' : 'Normal Status';
+  const regionalPopSubtext = isRegionalDeficit
+    ? 'Citizens in critical deficit jurisdictions (<60% R(t))'
+    : 'All monitored jurisdictions operating at baseline';
+
+  // Task 2: Dynamic Spatial Scoping for Transmission & Substation Infrastructure
+  const scopedSubstations = useMemo(() => {
+    // 1. Single municipality scope
+    if (selectedMunicipality) {
+      const muniCoords = getMunicipalityCoords(selectedMunicipality);
+      return ALL_SUBSTATIONS.filter((s) => {
+        const matchesMuni =
+          s.municipality.toLowerCase() === selectedMunicipality.name.toLowerCase();
+        if (matchesMuni) return true;
+
+        const matchesProv =
+          s.province.toLowerCase() === selectedMunicipality.province.toLowerCase();
+        if (matchesProv && muniCoords) {
+          return computeDistanceKm(s.coordinates, muniCoords) <= 25;
+        }
+        return false;
+      });
+    }
+
+    // 2. Specific province scope
+    if (selectedProvinceKey) {
+      return ALL_SUBSTATIONS.filter(
+        (s) => s.province.toLowerCase() === selectedProvinceKey.toLowerCase()
+      );
+    }
+
+    // 3. Island / Regional macro scope (e.g., 'panay', 'calabarzon', 'ncr')
+    const regKey = (selectedRegionKey || 'panay').toLowerCase().trim();
+    if (regKey && REGION_PROVINCE_MAP[regKey]) {
+      const allowedProvinces = new Set(
+        REGION_PROVINCE_MAP[regKey].map((p) => p.toLowerCase())
+      );
+      return ALL_SUBSTATIONS.filter((s) => allowedProvinces.has(s.province.toLowerCase()));
+    }
+
+    // Fallback: If scopedMunicipalities has provinces, filter to them
+    if (scopedMunicipalities && scopedMunicipalities.length > 0) {
+      const activeProvs = new Set(
+        scopedMunicipalities.map((m) => (m.province || '').toLowerCase().trim()).filter(Boolean)
+      );
+      const matched = ALL_SUBSTATIONS.filter((s) => activeProvs.has(s.province.toLowerCase()));
+      if (matched.length > 0) return matched;
+    }
+
+    return ALL_SUBSTATIONS;
+  }, [selectedMunicipality, selectedProvinceKey, selectedRegionKey, scopedMunicipalities]);
+
+  const hasDirectSubstation = useMemo(() => {
+    if (!selectedMunicipality) return true;
+    return scopedSubstations.some(
+      (s) => s.municipality.toLowerCase() === selectedMunicipality.name.toLowerCase()
+    );
+  }, [selectedMunicipality, scopedSubstations]);
+
   const stationsByProvince = useMemo(() => {
-    return getStationsByProvince();
-  }, []);
+    return getStationsByProvince(scopedSubstations);
+  }, [scopedSubstations]);
 
-
-
-  // Collapsed by default: empty record
+  // Province expansion state
   const [expandedProvinces, setExpandedProvinces] = useState<Record<string, boolean>>({});
 
   const toggleProvince = (provinceName: string) => {
-    setExpandedProvinces((prev) => ({
-      ...prev,
-      [provinceName]: !prev[provinceName],
-    }));
+    setExpandedProvinces((prev) => {
+      const current = prev[provinceName] ?? (stationsByProvince.length <= 2);
+      return {
+        ...prev,
+        [provinceName]: !current,
+      };
+    });
   };
 
   const handleExpandAll = () => {
@@ -151,7 +248,11 @@ export default function SummaryView({
   };
 
   const handleCollapseAll = () => {
-    setExpandedProvinces({});
+    const allCollapsed: Record<string, boolean> = {};
+    stationsByProvince.forEach((group) => {
+      allCollapsed[group.province] = false;
+    });
+    setExpandedProvinces(allCollapsed);
   };
 
   return (
@@ -176,7 +277,7 @@ export default function SummaryView({
               </span>
             </div>
 
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-900 dark:white leading-tight">
               Executive Synthesis & Situational Briefing
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
@@ -229,7 +330,13 @@ export default function SummaryView({
                   icon={<Activity className="h-5 w-5 text-cyan-500" />}
                   label="Restoration Index R(t)"
                   value={`${avgRecovery}%`}
-                  accent={avgRecovery >= 90 ? 'text-emerald-600 dark:text-emerald-300' : avgRecovery >= 60 ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300'}
+                  accent={
+                    avgRecovery >= 90
+                      ? 'text-emerald-600 dark:text-emerald-300'
+                      : avgRecovery >= 60
+                        ? 'text-amber-600 dark:text-amber-300'
+                        : 'text-rose-600 dark:text-rose-300'
+                  }
                   badge="Target LGU"
                   subtext={`Restoration score for ${selectedMunicipality.name}`}
                 />
@@ -250,12 +357,22 @@ export default function SummaryView({
                   subtext={criticalCount > 0 ? 'Urgent grid restoration required' : 'Within normal operational recovery curve'}
                 />
                 <StatCard
-                  icon={<Users className="h-5 w-5 text-amber-500" />}
+                  icon={
+                    isLguDeficit ? (
+                      <Users className="h-5 w-5 text-amber-500" />
+                    ) : (
+                      <Users className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                    )
+                  }
                   label="LGU Population"
-                  value={formatAffectedPopulation(totalScopedPopulation)}
-                  accent="text-amber-600 dark:text-amber-300"
-                  badge="Target Pop"
-                  subtext={`Registered population of ${selectedMunicipality.name}`}
+                  value={lguPopValue}
+                  accent={lguPopAccent}
+                  badge={lguPopBadge}
+                  subtext={
+                    isLguDeficit
+                      ? `Population under active deficit in ${selectedMunicipality.name}`
+                      : `Registered population of ${selectedMunicipality.name}`
+                  }
                 />
               </>
             ) : (
@@ -285,57 +402,86 @@ export default function SummaryView({
                   subtext={`${criticalCount} of ${totalMonitoredLgus} LGUs below critical threshold`}
                 />
                 <StatCard
-                  icon={<Users className="h-5 w-5 text-amber-500" />}
-                  label="Affected Population"
-                  value={formatAffectedPopulation(criticalPopulation)}
-                  accent="text-amber-600 dark:text-amber-300"
-                  badge="Impact Zone"
-                  subtext="Citizens in critical deficit jurisdictions (<60% R(t))"
+                  icon={
+                    isRegionalDeficit ? (
+                      <Users className="h-5 w-5 text-amber-500" />
+                    ) : (
+                      <Users className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                    )
+                  }
+                  label={regionalPopLabel}
+                  value={regionalPopValue}
+                  accent={regionalPopAccent}
+                  badge={regionalPopBadge}
+                  subtext={regionalPopSubtext}
                 />
               </>
             )}
           </div>
         </div>
 
-        {/* TRANSMISSION & SUBSTATION INFRASTRUCTURE */}
-        {isPanayScope && (
-          <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-cyan-500" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                  Transmission & Substation Infrastructure
-                </h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                  14 Active Stations · 187 Monitored LGUs
-                </span>
-                <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
-                <div className="flex items-center gap-1.5 text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={handleExpandAll}
-                    className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors cursor-pointer"
-                  >
-                    Expand All
-                  </button>
-                  <span className="text-slate-300 dark:text-slate-600">|</span>
-                  <button
-                    type="button"
-                    onClick={handleCollapseAll}
-                    className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Collapse All
-                  </button>
-                </div>
+        {/* TRANSMISSION & SUBSTATION INFRASTRUCTURE (Dynamic Nationwide Spatial Scoping) */}
+        <div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-cyan-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Transmission & Substation Infrastructure
+              </h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                {scopedSubstations.length} Active Stations · {scopedMunicipalities.length} Monitored LGUs
+              </span>
+              <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">·</span>
+              <div className="flex items-center gap-1.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={handleExpandAll}
+                  className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 transition-colors cursor-pointer"
+                >
+                  Expand All
+                </button>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <button
+                  type="button"
+                  onClick={handleCollapseAll}
+                  className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Collapse All
+                </button>
               </div>
             </div>
+          </div>
 
-            <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
+          {/* Fallback note if selected municipality has no direct bulk transmission substation within boundary */}
+          {selectedMunicipality && !hasDirectSubstation && (
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 dark:bg-amber-500/5 p-3 sm:p-3.5 flex items-start gap-2.5 text-amber-800 dark:text-amber-200 text-xs">
+              <MapPin className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+              <p>
+                No direct bulk transmission substations within LGU boundary; supplied via adjacent{' '}
+                <span className="font-semibold underline decoration-amber-500/40">
+                  {selectedMunicipality.province}
+                </span>{' '}
+                grid nodes.
+              </p>
+            </div>
+          )}
+
+          <div className="bg-white/80 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-lg backdrop-blur-xl">
+            {stationsByProvince.length === 0 ? (
+              <div className="p-8 text-center rounded-xl bg-slate-50/70 dark:bg-slate-950/40 border border-slate-200/80 dark:border-slate-800/80">
+                <Zap className="h-8 w-8 text-slate-400 mx-auto mb-2" />
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  {selectedMunicipality
+                    ? `No direct bulk transmission substations within LGU boundary; supplied via adjacent ${selectedMunicipality.province} grid nodes.`
+                    : 'No transmission substations found in current spatial scope.'}
+                </p>
+              </div>
+            ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 items-start">
                 {stationsByProvince.map((group) => {
-                  const isExpanded = !!expandedProvinces[group.province];
+                  const isExpanded = expandedProvinces[group.province] ?? (stationsByProvince.length <= 2);
                   return (
                     <div
                       key={group.province}
@@ -363,8 +509,9 @@ export default function SummaryView({
 
                           {/* Animated Chevron Indicator */}
                           <ChevronDown
-                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isExpanded ? 'rotate-180 text-amber-500 dark:text-amber-400' : ''
-                              }`}
+                            className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
+                              isExpanded ? 'rotate-180 text-amber-500 dark:text-amber-400' : ''
+                            }`}
                           />
                         </div>
                       </button>
@@ -387,14 +534,15 @@ export default function SummaryView({
                                   </p>
                                 </div>
                                 <span
-                                  className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${station.operationalStatus === 'Energized'
-                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
-                                    : station.operationalStatus === 'Islanded'
-                                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
-                                      : station.operationalStatus === 'Tripped'
-                                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
-                                        : 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40'
-                                    }`}
+                                  className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
+                                    station.operationalStatus === 'Energized'
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                                      : station.operationalStatus === 'Islanded'
+                                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                                        : station.operationalStatus === 'Tripped'
+                                          ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                                          : 'bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/40'
+                                  }`}
                                 >
                                   {station.operationalStatus || 'Energized'}
                                 </span>
@@ -404,7 +552,10 @@ export default function SummaryView({
                                 <span className="font-mono font-semibold text-cyan-600 dark:text-cyan-400">
                                   {station.voltage}
                                 </span>
-                                <span className="truncate max-w-[140px] text-right" title={station.coverage?.join(', ')}>
+                                <span
+                                  className="truncate max-w-[140px] text-right"
+                                  title={station.coverage?.join(', ')}
+                                >
                                   {station.coverage?.join(', ') || 'District Grid'}
                                 </span>
                               </div>
@@ -416,12 +567,11 @@ export default function SummaryView({
                   );
                 })}
               </div>
-            </div>
+            )}
           </div>
+        </div>
 
-        )}
-
-        {/* BOTTOM: AI Situational Briefing Container (Gemini synthesis, structured vs markdown view toggle, and regeneration controls) */}
+        {/* BOTTOM: AI Situational Briefing Container */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">

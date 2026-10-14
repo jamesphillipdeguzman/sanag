@@ -30,6 +30,8 @@ import {
   resolveIncidentScope,
 } from '../utils/kpiAggregation';
 import { PANAY_PROVINCE_SET } from '../utils/regionLookup';
+import { formatAffectedPopulation, formatAffectedCompact } from '../utils/formatters';
+import { ALL_SUBSTATIONS, getStationsByProvince, computeDistanceKm } from '../data/transmissionStations';
 import type { Municipality, DisasterEvent } from '../types';
 
 // Mock 95 Panay LGUs across 4 provinces (44 Iloilo, 18 Antique, 17 Aklan, 16 Capiz)
@@ -182,4 +184,67 @@ describe('Phase 2 Unit Tests: KPI Aggregation & Hierarchical Scoping', () => {
     expect(resolveIncidentScope('panay_guimaras', eventWithEpicenter)).toBe('panay_guimaras');
     expect(resolveIncidentScope('central_visayas', eventWithEpicenter)).toBe('central_visayas');
   });
+
+  it('Test 5: Task 1 Conditional Population Copy - Normal LGU drops affected', () => {
+    // Single LGU with R(t) = 100% (e.g. Quezon City)
+    const qc = {
+      recoveryScore: 100,
+      population: 3000000,
+    };
+    const isDeficit = qc.recoveryScore < 90;
+    expect(isDeficit).toBe(false);
+
+    // Population display formatting
+    const formatted = formatAffectedCompact(qc.population);
+    expect(formatted).toBe('3M');
+    const displayVal = isDeficit ? `${formatted} affected` : `${formatted} total`;
+    expect(displayVal).toBe('3M total');
+  });
+
+  it('Test 6: Task 1 Conditional Population Copy - Deficit LGU retains affected', () => {
+    // Single LGU with R(t) = 55% (< 90%)
+    const deficitLgu = {
+      recoveryScore: 55,
+      population: 85000,
+    };
+    const isDeficit = deficitLgu.recoveryScore < 90;
+    expect(isDeficit).toBe(true);
+
+    const displayVal = isDeficit
+      ? formatAffectedPopulation(deficitLgu.population)
+      : `${formatAffectedCompact(deficitLgu.population)} total`;
+    expect(displayVal).toBe('85K affected');
+  });
+
+  it('Test 7: Task 2 Dynamic Spatial Scoping - Panay yields 14 active stations', () => {
+    const panayProvinces = new Set(['iloilo', 'capiz', 'aklan', 'antique']);
+    const panayStations = ALL_SUBSTATIONS.filter(
+      (s) => panayProvinces.has(s.province.toLowerCase()) && s.status === 'active'
+    );
+    expect(panayStations.length).toBe(14);
+
+    const grouped = getStationsByProvince(panayStations);
+    expect(grouped.length).toBe(4);
+  });
+
+  it('Test 8: Task 2 Dynamic Spatial Scoping - Batangas scope displays Batangas assets', () => {
+    const batangasStations = ALL_SUBSTATIONS.filter((s) => s.province.toLowerCase() === 'batangas');
+    expect(batangasStations.length).toBe(3);
+
+    const names = batangasStations.map((s) => s.name);
+    expect(names.includes('Calaca Bulk Substation')).toBe(true);
+    expect(names.includes('Lipa Substation')).toBe(true);
+    expect(names.includes('Batangas City Substation')).toBe(true);
+
+    // Panay stations not included
+    expect(batangasStations.some((s) => s.province === 'iloilo')).toBe(false);
+  });
+
+  it('Test 9: Task 2 Spatial distance computation and fallback detection', () => {
+    // Distance between Calaca Substation [13.9317, 120.8122] and Lipa City [13.9419, 121.1631] (~38km)
+    const dist = computeDistanceKm([13.9317, 120.8122], [13.9419, 121.1631]);
+    expect(dist > 30).toBe(true);
+    expect(dist < 50).toBe(true);
+  });
 });
+
