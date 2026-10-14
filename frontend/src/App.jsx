@@ -29,7 +29,46 @@ import {
   extractCentroid,
 } from './services/simulation.ts'
 import { resolveIncidentScope } from './utils/kpiAggregation.ts'
+import { resolveRegionFromCoordinates } from './utils/regionLookup.ts'
 import './App.css'
+
+export function extractItemCoordinates(item) {
+  if (!item) return null
+  let lat = item.latitude != null ? Number(item.latitude) : null
+  let lng = item.longitude != null ? Number(item.longitude) : null
+
+  if ((lat == null || lng == null) && Array.isArray(item.coordinates) && item.coordinates.length >= 2) {
+    const [c0, c1] = item.coordinates
+    if (c0 >= 100 && c1 < 50) {
+      lng = Number(c0)
+      lat = Number(c1)
+    } else {
+      lat = Number(c0)
+      lng = Number(c1)
+    }
+  } else if ((lat == null || lng == null) && typeof item.coordinates === 'object' && item.coordinates?.lat != null && item.coordinates?.lng != null) {
+    lat = Number(item.coordinates.lat)
+    lng = Number(item.coordinates.lng)
+  } else if ((lat == null || lng == null) && Array.isArray(item.geometry?.coordinates) && item.geometry.coordinates.length >= 2) {
+    lng = Number(item.geometry.coordinates[0])
+    lat = Number(item.geometry.coordinates[1])
+  }
+
+  if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+    return { lat, lng }
+  }
+  return null
+}
+
+export function resolveEventOrAlertRegion(item) {
+  if (!item) return null
+  if (item.regionKey) return item.regionKey
+  const coords = extractItemCoordinates(item)
+  if (coords) {
+    return resolveRegionFromCoordinates(coords.lat, coords.lng)
+  }
+  return null
+}
 
 const VALID_TABS = ['home', 'events', 'map', 'recovery', 'summary', 'guide', 'overview']
 
@@ -345,7 +384,7 @@ function App() {
         setGdacsAlerts(sortedAlerts)
       }
     } catch (err) {
-      console.error('Failed to load GDACS live feed:', err)
+      console.error('Failed to load GDACS feed:', err)
     } finally {
       setIsGdacsLoading(false)
     }
@@ -359,7 +398,7 @@ function App() {
     return new Set(events.map((e) => String(e.id)))
   }, [events])
 
-  const handleSelectEvent = useCallback((eventId) => {
+  const handleSelectEvent = useCallback((eventId, shouldNavigateToMap = false) => {
     setActiveEventId(eventId)
     const targetEvent = events.find((e) =>
       String(e.id) === String(eventId) ||
@@ -379,24 +418,33 @@ function App() {
       setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, targetEvent))
       setIsMapLoading(true)
 
-      // Guard: Explicit user selections or island-wide defaults ('panay', 'panay_guimaras', etc.)
-      // are NOT unconditionally overwritten by targetEvent.epicenterProvince.
-      // Only allow automatic down-scoping if the active filter is unset or 'all'.
-      if (targetEvent.epicenterProvince) {
-        const resolved = resolveIncidentScope(selectedRegionKey, targetEvent)
-        if (resolved !== selectedRegionKey) {
-          setSelectedRegionKey(resolved)
-        }
+      // Unify target region resolution from event coordinates / regionKey
+      let targetRegion = targetEvent.regionKey || resolveEventOrAlertRegion(targetEvent)
+      if (!targetRegion && targetEvent.epicenterProvince) {
+        targetRegion = resolveIncidentScope(selectedRegionKey, targetEvent)
+      }
+      if (targetRegion && targetRegion !== selectedRegionKey) {
+        setSelectedRegionKey(targetRegion)
+      }
+
+      if (shouldNavigateToMap) {
+        handleSelectTab('map')
       }
     }
-  }, [events, selectedRegionKey])
+  }, [events, selectedRegionKey, handleSelectTab])
 
-  const handleImportGdacs = useCallback(async (alert, preconstructedEvent) => {
+  const handleImportGdacs = useCallback(async (alert, preconstructedEvent, shouldNavigateToMap = true) => {
     if (!alert) return
 
     const rawAlertId = alert.event_id != null ? String(alert.event_id) : ''
     const alertId = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : `gdacs-sim-${Date.now()}`)
     const normAlertName = (alert.name || alert.eventname || alert.title || '').toLowerCase().trim()
+
+    // Extract live hazard coordinates and resolve target region
+    const coords = extractItemCoordinates(alert)
+    const lat = coords?.lat ?? (alert.latitude != null ? Number(alert.latitude) : null)
+    const lng = coords?.lng ?? (alert.longitude != null ? Number(alert.longitude) : null)
+    const targetRegion = alert.regionKey || (coords ? resolveRegionFromCoordinates(coords.lat, coords.lng) : 'panay')
 
     // Guard: Check if event already exists in the active events list or matches historical archives
     const existingEvent = events.find((e) => {
@@ -411,28 +459,20 @@ function App() {
     })
 
     if (existingEvent) {
-      handleSelectEvent(existingEvent.id)
+      handleSelectEvent(existingEvent.id, shouldNavigateToMap)
+      if (targetRegion && targetRegion !== selectedRegionKey) {
+        setSelectedRegionKey(targetRegion)
+      }
+      if (shouldNavigateToMap) {
+        handleSelectTab('map')
+      }
       setToastMessage(`✓ Active event baseline set to "${existingEvent.name}". Historical disaster simulation calibrated.`)
       setTimeout(() => setToastMessage(null), 5000)
       return
     }
 
-    // 1. Extract live hazard data: title, coordinates, severity, event type, and date
-    const title = alert.name || alert.eventname || alert.title || 'Live GDACS Hazard Event'
-
-    // Extract coordinates safely
-    let lat = alert.latitude != null ? Number(alert.latitude) : null
-    let lng = alert.longitude != null ? Number(alert.longitude) : null
-    if ((lat == null || lng == null) && Array.isArray(alert.coordinates) && alert.coordinates.length >= 2) {
-      const [c0, c1] = alert.coordinates
-      if (c0 >= 100 && c1 < 50) {
-        lng = Number(c0)
-        lat = Number(c1)
-      } else {
-        lat = Number(c0)
-        lng = Number(c1)
-      }
-    }
+    // 1. Extract hazard data: title, severity, event type, and date
+    const title = alert.name || alert.eventname || alert.title || 'GDACS Alert'
 
     // Severity mapping ('Severe' | 'High' | 'Moderate')
     const rawSev = (alert.severity_text || alert.alert_level || alert.severity || '').toLowerCase()
@@ -498,6 +538,7 @@ function App() {
       latitude: lat,
       longitude: lng,
       coordinates: (lat != null && lng != null) ? [lat, lng] : null,
+      regionKey: targetRegion,
       is_live_simulated: true,
       event_type: isVolcanic ? 'Volcanic Eruption' : undefined,
       disaster_category: isVolcanic ? 'Volcanic Eruption' : undefined,
@@ -546,6 +587,13 @@ function App() {
     setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, temporaryEvent))
     setIsMapLoading(true)
 
+    if (targetRegion && targetRegion !== selectedRegionKey) {
+      setSelectedRegionKey(targetRegion)
+    }
+    if (shouldNavigateToMap) {
+      handleSelectTab('map')
+    }
+
     // Toast feedback
     setToastMessage(`✓ Live hazard "${temporaryEvent.name}" loaded into simulation! Calibrated recovery view updated.`)
     setTimeout(() => setToastMessage(null), 6000)
@@ -584,7 +632,7 @@ function App() {
     } catch {
       setImportingId(null)
     }
-  }, [events, handleSelectEvent])
+  }, [events, handleSelectEvent, selectedRegionKey, handleSelectTab])
 
   const baseActiveEvent = events.find((event) => String(event.id) === String(activeEventId)) ?? events[0] ?? null
 
@@ -1091,10 +1139,10 @@ function App() {
                     </span>
                   </div>
                   <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    Historical Incidents & Live Hazards
+                    Historical Incidents & GDACS Alerts
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-600 dark:text-ink-300 mt-1 max-w-2xl">
-                    Browse historical typhoons and grid collapses, inspect ground photography and news reports, or simulate real-time GDACS multi-hazard alerts.
+                    Browse historical typhoons and grid collapses, inspect ground photography and news reports, or simulate GDACS multi-hazard alerts.
                   </p>
                 </div>
               </div>
@@ -1104,13 +1152,15 @@ function App() {
                   <ErrorBoundary name="Event Selector Panel" resetKey={activeEventId}>
                     <EventSelectorPanel
                       events={events}
+                      gdacsAlerts={gdacsAlerts}
                       activeEvent={activeEvent}
-                      onSelectEvent={handleSelectEvent}
+                      onSelectEvent={(id) => handleSelectEvent(id, true)}
                       onDismissEvent={handleDismissEvent}
-                      onSimulateGdacs={handleImportGdacs}
+                      onSimulateGdacs={(alert, tempEvent) => handleImportGdacs(alert, tempEvent, true)}
                       importingGdacsId={importingId}
                       importedEventIds={importedEventIds}
                       selectedRegionKey={selectedRegionKey}
+                      onNavigateTab={handleSelectTab}
                     />
                   </ErrorBoundary>
                 </div>
@@ -1121,7 +1171,7 @@ function App() {
                   <EventTimeline
                     events={events}
                     activeEventId={activeEventId}
-                    onSelect={handleSelectEvent}
+                    onSelect={(id) => handleSelectEvent(id, true)}
                     onDismiss={handleDismissEvent}
                   />
                 </ErrorBoundary>

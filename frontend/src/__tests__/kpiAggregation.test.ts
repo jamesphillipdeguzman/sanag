@@ -29,7 +29,7 @@ import {
   computeKpiMetrics,
   resolveIncidentScope,
 } from '../utils/kpiAggregation';
-import { PANAY_PROVINCE_SET } from '../utils/regionLookup';
+import { PANAY_PROVINCE_SET, resolveRegionFromCoordinates } from '../utils/regionLookup';
 import { formatAffectedPopulation, formatAffectedCompact } from '../utils/formatters';
 import { ALL_SUBSTATIONS, getStationsByProvince, computeDistanceKm } from '../data/transmissionStations';
 import type { Municipality, DisasterEvent } from '../types';
@@ -245,6 +245,41 @@ describe('Phase 2 Unit Tests: KPI Aggregation & Hierarchical Scoping', () => {
     const dist = computeDistanceKm([13.9317, 120.8122], [13.9419, 121.1631]);
     expect(dist > 30).toBe(true);
     expect(dist < 50).toBe(true);
+  });
+
+  it('Test 10: Task 1 Coordinate Resolver - Super Typhoon Yolanda (11.1, 125.3) resolves eastern_visayas', () => {
+    const region = resolveRegionFromCoordinates(11.1000, 125.3000);
+    expect(region).toBe('eastern_visayas');
+  });
+
+  it('Test 11: Task 1 Coordinate Resolver - Typhoon Kalmaegi / Panay Grid (11.5, 122.3) resolves panay', () => {
+    const region = resolveRegionFromCoordinates(11.5000, 122.3000);
+    expect(region).toBe('panay');
+  });
+
+  it('Test 12: Task 1 Coordinate Resolver - Mt. Kanlaon / Cebu (10.412, 123.133) resolves central_visayas', () => {
+    const region = resolveRegionFromCoordinates(10.4120, 123.1330);
+    expect(region).toBe('central_visayas');
+  });
+
+  it('Test 13: Task 1 Coordinate Resolver - Taal Volcano / Batangas (14.002, 120.993) resolves calabarzon', () => {
+    const region = resolveRegionFromCoordinates(14.0020, 120.9930);
+    expect(region).toBe('calabarzon');
+  });
+
+  it('Test 14: Task 1 Coordinate Resolver - Metro Manila / NCR (14.5995, 121.0364) resolves ncr', () => {
+    const region = resolveRegionFromCoordinates(14.5995, 121.0364);
+    expect(region).toBe('ncr');
+  });
+
+  it('Test 15: Task 1 Coordinate Resolver - Central Luzon (15.4828, 120.7120) resolves central_luzon', () => {
+    const region = resolveRegionFromCoordinates(15.4828, 120.7120);
+    expect(region).toBe('central_luzon');
+  });
+
+  it('Test 16: Task 1 Coordinate Resolver - Out of bounds falls back to nationwide', () => {
+    expect(resolveRegionFromCoordinates(0.0, 0.0)).toBe('nationwide');
+    expect(resolveRegionFromCoordinates(NaN, NaN)).toBe('nationwide');
   });
 });
 

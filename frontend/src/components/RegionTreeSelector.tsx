@@ -372,6 +372,38 @@ export default function RegionTreeSelector({
       };
     }
 
+    if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
+      return {
+        id: 'eastern_visayas',
+        name: 'Eastern Visayas',
+        level: 'region',
+      };
+    }
+
+    if (currentRegionKey === 'calabarzon' || currentRegionKey === 'r4a') {
+      return {
+        id: 'calabarzon',
+        name: 'CALABARZON',
+        level: 'region',
+      };
+    }
+
+    if (currentRegionKey === 'central_visayas' || currentRegionKey === 'r7') {
+      return {
+        id: 'central_visayas',
+        name: 'Central Visayas',
+        level: 'region',
+      };
+    }
+
+    if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
+      return {
+        id: 'central_luzon',
+        name: 'Central Luzon',
+        level: 'region',
+      };
+    }
+
     const node = findRegionTreeNode(currentRegionKey);
     if (node) {
       let level: GeographicLevel = 'region';
@@ -480,7 +512,7 @@ export default function RegionTreeSelector({
         <Compass className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400 shrink-0" />
 
         <span className="text-[11px] font-semibold text-ocean-700 dark:text-ocean-300 hidden md:inline shrink-0">
-          {formatLevelPrefix(activeBoundary.level)}:
+          {activeBoundary.level === 'municipality' || activeBoundary.level === 'city' ? `${formatLevelPrefix(activeBoundary.level)}:` : 'Region:'}
         </span>
 
         <span className="text-xs font-semibold text-slate-800 dark:text-white truncate max-w-[170px] xs:max-w-[210px] sm:max-w-[280px]">

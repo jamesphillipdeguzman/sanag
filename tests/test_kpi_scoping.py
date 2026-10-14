@@ -5,6 +5,7 @@ from backend.calculator import (
     PANAY_PROVINCE_SET,
     is_panay_province,
     resolve_incident_scope,
+    resolve_region_from_coordinates,
     filter_scoped_municipalities,
     aggregate_kpi_metrics,
 )
@@ -335,4 +336,45 @@ class TestNationwideSubstationsDatasetAndScoping:
         panay_provinces = {"iloilo", "capiz", "aklan", "antique"}
         for s in batangas_stations:
             assert s["province"].lower() not in panay_provinces
+
+
+class TestCoordinateToRegionBoundaryResolver:
+    """Verifies coordinate-to-region boundary resolver for hazard epicenter coordinates."""
+
+    def test_super_typhoon_yolanda_resolves_eastern_visayas(self):
+        """Super Typhoon Haiyan (Yolanda) at (11.1°N, 125.3°E) resolves to eastern_visayas."""
+        region = resolve_region_from_coordinates(11.1000, 125.3000)
+        assert region == "eastern_visayas"
+
+    def test_typhoon_kalmaegi_panay_resolves_panay(self):
+        """Typhoon Kalmaegi / Panay Grid at (11.5°N, 122.3°E) resolves to panay."""
+        region = resolve_region_from_coordinates(11.5000, 122.3000)
+        assert region == "panay"
+
+    def test_kanlaon_central_visayas_resolves_central_visayas(self):
+        """Mt. Kanlaon / Cebu at (10.412°N, 123.133°E) resolves to central_visayas."""
+        region = resolve_region_from_coordinates(10.4120, 123.1330)
+        assert region == "central_visayas"
+
+    def test_taal_calabarzon_resolves_calabarzon(self):
+        """Taal Volcano / Batangas at (14.002°N, 120.993°E) resolves to calabarzon."""
+        region = resolve_region_from_coordinates(14.0020, 120.9930)
+        assert region == "calabarzon"
+
+    def test_metro_manila_ncr_resolves_ncr(self):
+        """Metro Manila (NCR) at (14.5995°N, 121.0364°E) resolves to ncr."""
+        region = resolve_region_from_coordinates(14.5995, 121.0364)
+        assert region == "ncr"
+
+    def test_central_luzon_resolves_central_luzon(self):
+        """Central Luzon at (15.4828°N, 120.7120°E) resolves to central_luzon."""
+        region = resolve_region_from_coordinates(15.4828, 120.7120)
+        assert region == "central_luzon"
+
+    def test_outside_bounds_fallback_nationwide(self):
+        """Coordinates outside specific regional bounding boxes fallback to nationwide."""
+        assert resolve_region_from_coordinates(0.0, 0.0) == "nationwide"
+        assert resolve_region_from_coordinates(None, None) == "nationwide"
+        assert resolve_region_from_coordinates("invalid", 121.0) == "nationwide"
+
 
