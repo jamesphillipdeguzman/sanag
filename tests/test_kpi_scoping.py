@@ -193,3 +193,146 @@ class TestKpiAggregationAndScoping:
         assert resolve_incident_scope("panay_guimaras", active_event) == "panay_guimaras"
         assert resolve_incident_scope("central_visayas", active_event) == "central_visayas"
         assert resolve_incident_scope("iloilo", active_event) == "iloilo"
+
+
+class TestConditionalPopulationKpiCopy:
+    """
+    Task 1: Conditional Population KPI Copy.
+    - Normal status (R(t) >= 90%): Drop 'affected', render only count (e.g. '3M' / '3M total').
+    - Deficit status (R(t) < 90%): Retain count + 'affected' (e.g. '3M affected').
+    - Regional scope with critical_count == 0: Drop 'affected', render total.
+    """
+
+    @staticmethod
+    def format_population_display(population: int, is_deficit: bool) -> str:
+        """Mirror frontend formatAffectedPopulation / formatAffectedCompact display logic."""
+        if population >= 1_000_000:
+            compact = f"{population / 1_000_000:.1f}".rstrip("0").rstrip(".") + "M"
+        elif population >= 1_000:
+            compact = f"{round(population / 1_000)}K"
+        else:
+            compact = str(population)
+
+        if is_deficit:
+            return f"{compact} affected"
+        return f"{compact} total"
+
+    def test_single_lgu_operating_normal_drops_affected(self):
+        """Quezon City with R(t) = 100% drops 'affected' and shows '3M total'."""
+        qc = {
+            "name": "Quezon City",
+            "province": "Metro Manila",
+            "population": 3_000_000,
+            "recovery_score": 100,
+        }
+        recovery = qc["recovery_score"]
+        is_deficit = recovery < 90
+        display_val = self.format_population_display(qc["population"], is_deficit)
+
+        assert not is_deficit
+        assert "affected" not in display_val
+        assert "3M" in display_val
+        assert display_val == "3M total"
+
+    def test_single_lgu_under_deficit_retains_affected(self):
+        """LGU with R(t) < 90% retains 'affected' in warning highlight style."""
+        lgu = {
+            "name": "Calaca",
+            "province": "Batangas",
+            "population": 85_000,
+            "recovery_score": 55,
+        }
+        recovery = lgu["recovery_score"]
+        is_deficit = recovery < 90
+        display_val = self.format_population_display(lgu["population"], is_deficit)
+
+        assert is_deficit
+        assert "affected" in display_val
+        assert display_val == "85K affected"
+
+    def test_regional_scope_operating_normal_drops_affected(self):
+        """Regional scope with 0 critical LGUs renders total count without 'affected'."""
+        scoped_lgus = [
+            {"name": "LGU 1", "population": 500_000, "recovery_score": 95},
+            {"name": "LGU 2", "population": 500_000, "recovery_score": 92},
+        ]
+        kpis = aggregate_kpi_metrics(scoped_lgus, None)
+        assert kpis["critical_count"] == 0
+
+        is_regional_deficit = kpis["critical_count"] > 0
+        display_val = self.format_population_display(kpis["total_scoped_population"], is_regional_deficit)
+        assert not is_regional_deficit
+        assert "affected" not in display_val
+        assert display_val == "1M total"
+
+
+class TestNationwideSubstationsDatasetAndScoping:
+    """
+    Task 2: Dynamic Spatial Scoping for Transmission & Substation Infrastructure.
+    - Dataset includes Western Visayas, Southern Tagalog / CALABARZON & NCR, Central Visayas, and Leyte.
+    - Panay Island scope filters to 14 active substations across 4 provinces.
+    - Batangas scope filters to Batangas assets (Calaca, Lipa, Batangas City) and drops Panay.
+    """
+
+    SUBSTATIONS_PATH = ROOT_DIR / "frontend" / "src" / "data" / "philippinesSubstations.json"
+
+    @pytest.fixture
+    def all_substations(self):
+        assert self.SUBSTATIONS_PATH.exists(), f"Missing {self.SUBSTATIONS_PATH}"
+        with open(self.SUBSTATIONS_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_dataset_coverage(self, all_substations):
+        """Verifies dataset covers all required geographic sectors and fields."""
+        provinces = {s["province"].lower() for s in all_substations}
+        # Western Visayas
+        assert {"iloilo", "capiz", "aklan", "antique", "guimaras", "negros occidental"}.issubset(provinces)
+        # CALABARZON & NCR
+        assert {"batangas", "laguna", "cavite", "quezon", "metro manila"}.issubset(provinces)
+        # Central Visayas & Leyte
+        assert {"cebu", "bohol", "leyte"}.issubset(provinces)
+
+        for s in all_substations:
+            assert "id" in s
+            assert "name" in s
+            assert "voltageKv" in s
+            assert "operator" in s
+            assert "province" in s
+            assert "municipality" in s
+            assert len(s["coordinates"]) == 2
+            assert s["status"] in ["active", "standby", "maintenance"]
+
+    def test_panay_island_scope_yields_14_active_stations(self, all_substations):
+        """Panay Island (Iloilo, Capiz, Aklan, Antique) has exactly 14 active substations."""
+        panay_provinces = {"iloilo", "capiz", "aklan", "antique"}
+        panay_stations = [
+            s for s in all_substations
+            if s["province"].lower() in panay_provinces and s["status"] == "active"
+        ]
+        assert len(panay_stations) == 14
+
+        by_province = {}
+        for s in panay_stations:
+            by_province.setdefault(s["province"].lower(), []).append(s)
+
+        assert set(by_province.keys()) == panay_provinces
+        assert len(by_province["iloilo"]) == 6
+        assert len(by_province["capiz"]) == 3
+        assert len(by_province["aklan"]) == 3
+        assert len(by_province["antique"]) == 2
+
+    def test_batangas_scope_dynamically_shifts_from_panay(self, all_substations):
+        """Batangas scope displays Batangas assets (Calaca, Lipa, Batangas City) without Panay."""
+        batangas_stations = [s for s in all_substations if s["province"].lower() == "batangas"]
+        assert len(batangas_stations) == 3
+
+        names = {s["name"] for s in batangas_stations}
+        assert "Calaca Bulk Substation" in names
+        assert "Lipa Substation" in names
+        assert "Batangas City Substation" in names
+
+        # Must not contain any Panay stations
+        panay_provinces = {"iloilo", "capiz", "aklan", "antique"}
+        for s in batangas_stations:
+            assert s["province"].lower() not in panay_provinces
+
