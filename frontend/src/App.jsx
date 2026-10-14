@@ -1291,6 +1291,8 @@ function App() {
                 gdacsAlerts={gdacsAlerts}
                 activeEventId={activeEventId}
                 activeEvent={activeEvent}
+                events={events}
+                onSelectEvent={handleSelectEvent}
                 onSimulateGdacs={handleImportGdacs}
                 selectedRegionKey={selectedRegionKey}
                 onRegionChange={handleRegionChange}
