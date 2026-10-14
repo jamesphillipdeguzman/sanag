@@ -29,6 +29,7 @@ import {
   type ActiveSimulationMap,
 } from '@/services/simulation';
 import GDACSModal from '@/components/GDACSModal';
+import MapTelemetrySidebar from '@/components/MapTelemetrySidebar';
 import { PANAY_TRANSMISSION_STATIONS } from '@/data/transmissionStations';
 
 export interface PanayMapProps {
@@ -41,6 +42,8 @@ export interface PanayMapProps {
   gdacsAlerts?: GdacsAlert[];
   activeEventId?: string | null;
   activeEvent?: DisasterEvent | null;
+  events?: DisasterEvent[];
+  onSelectEvent?: (eventId: string) => void;
   onSimulateGdacs?: (alert: GdacsAlert) => void | Promise<void>;
   selectedRegionKey?: string;
   onRegionChange?: (regionKey: string) => void;
@@ -265,6 +268,8 @@ export default function PanayMap({
   gdacsAlerts = [],
   activeEventId,
   activeEvent,
+  events,
+  onSelectEvent,
   onSimulateGdacs,
   selectedRegionKey: externalRegionKey,
   onRegionChange: externalOnRegionChange,
@@ -1128,291 +1133,33 @@ export default function PanayMap({
           </div>
         </div>
 
-        {/* Detail side panel */}
+        {/* Detail side panel with interactive unified incident dropdown */}
         {!isMaximized && (
-          <div className="lg:col-span-4 flex flex-col w-full max-w-full min-w-0">
-            {selected ? (
-              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 animate-slide-in flex flex-col justify-between h-full shadow-lg dark:shadow-xl transition-colors">
-                <div>
-                  {/* Active Event Context Header */}
-                  <div className="rounded-xl p-3.5 mb-4 border transition-all bg-slate-50 border-slate-200 shadow-sm dark:bg-slate-900/90 dark:border-slate-800/80 dark:shadow-none text-left">
-                    {/* Step Header & Date */}
-                    <div className="flex items-center justify-between text-[11px] mb-1.5 font-mono">
-                      <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                        Selected Incident (Step 1)
-                      </span>
-                      <span className="text-slate-600 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] border border-slate-300/60 dark:border-slate-700/80">
-                        {activeEvent?.date || '2025-11-03'}
-                      </span>
-                    </div>
-
-                    {/* Incident Title */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
-                        {activeEvent?.name || 'Typhoon Kalmaegi (Tino)'}
-                      </h4>
-                    </div>
-
-                    {/* Subtext Footnote / Calibration State */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800/70 text-[11px]">
-                      <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                        Active Baseline Simulation
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
-                        {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '187'} LGUs calibrated
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start justify-between pb-3 mb-4 border-b border-slate-200 dark:border-white/10">
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <MapPin className="h-3.5 w-3.5 text-ocean-500 dark:text-ocean-400" />
-                        <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">{selected.province} Province</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">{selected.name}</h3>
-                        <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/20 px-2 py-0.5 rounded border border-rose-200 dark:border-rose-500/30">
-                          #{selected.resilienceRank ?? selected.rank ?? (selected.id === selectedId && globalRank ? globalRank : null) ?? (resilienceRankMap.get(selected.id) || 1)} Lowest ({selected.recoveryScore}%)
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => onSelect('')}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:text-ink-400 dark:hover:text-white dark:hover:bg-white/10 transition-all cursor-pointer"
-                      title="Deselect municipality"
-                      aria-label="Close details"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {/* Audio-Spatial Indicator Status Badge */}
-                  {isAudioEnabled && (
-                    <div className="flex items-center justify-between text-xs px-3 py-2 rounded-xl bg-slate-50 dark:bg-ink-950/60 border border-emerald-500/30 dark:border-emerald-500/20 mb-4 transition-colors">
-                      <span className="flex items-center gap-1.5 text-slate-700 dark:text-ink-300">
-                        <Volume2 className={`h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 ${isMapAudioPlaying ? 'animate-pulse' : 'opacity-60'}`} />
-                        <span>Spatial Audio Profile</span>
-                      </span>
-                      <span className={`font-semibold text-[11px] px-2 py-0.5 rounded ${liveAudioStatus === 'critical'
-                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300'
-                        : liveAudioStatus === 'warning'
-                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300'
-                          : liveAudioStatus === 'recovering'
-                            ? 'bg-ocean-100 text-ocean-700 dark:bg-ocean-500/20 dark:text-ocean-300'
-                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
-                        }`}>
-                        {isMapAudioPlaying ? audioStatusLabel : `${audioStatusLabel} (Hover Map)`}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Recovery gauge */}
-                  <div className="mb-5 bg-slate-50 dark:bg-ink-950/50 rounded-xl p-3.5 border border-slate-200 dark:border-white/5 transition-colors">
-                    <div className="flex items-end justify-between mb-2">
-                      <span className="text-xs font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider">Recovery Indicator</span>
-                      <span
-                        className="text-3xl font-black tracking-tight"
-                        style={{ color: getRecoveryColor(selected.recoveryScore) }}
-                      >
-                        {selected.recoveryScore}
-                        <span className="text-base text-slate-400 dark:text-ink-500 font-normal">/100</span>
-                      </span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{
-                          width: `${selected.recoveryScore}%`,
-                          backgroundColor: getRecoveryColor(selected.recoveryScore),
-                        }}
-                      />
-                    </div>
-                    <div className="mt-2.5 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{ backgroundColor: getRecoveryStatusColor(selected.status) }}
-                        />
-                        <span className="font-semibold" style={{ color: getRecoveryStatusColor(selected.status) }}>
-                          {statusLabels[selected.status]}
-                        </span>
-                      </div>
-                      <span className="text-slate-500 dark:text-ink-400">Target: 90%+ restored</span>
-                    </div>
-                  </div>
-
-                  {/* Stats grid */}
-                  <div className="grid grid-cols-2 gap-2.5 mb-4">
-                    <MiniStat label="Population" value={selected.population.toLocaleString()} />
-                    <MiniStat label="Days Elapsed" value={`${selected.daysSinceEvent}d`} />
-                    <MiniStat
-                      label="Baseline Radiance"
-                      value={`${selected.baselineRadiance.toFixed(1)} nW`}
-                    />
-                    <MiniStat
-                      label="Observed Radiance"
-                      value={`${selected.currentRadiance.toFixed(1)} nW`}
-                    />
-                  </div>
-                </div>
-
-                {/* Recovery projection */}
-                <div className="rounded-xl bg-slate-50 dark:bg-ink-950/50 border border-slate-200 dark:border-white/5 p-3.5 mt-auto transition-colors">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-medium text-slate-500 dark:text-ink-400">Est. Full Restoration</span>
-                    <span className="text-base font-bold text-slate-900 dark:text-white">
-                      {selected.estimatedDaysToRecover === 0 ? 'Restored' : `~${selected.estimatedDaysToRecover} days`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-200 dark:bg-ink-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-ocean-500 to-emerald-500 transition-all duration-700"
-                        style={{
-                          width: `${Math.max(5, 100 - (selected.estimatedDaysToRecover / 20) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11px] text-slate-500 dark:text-ink-400 whitespace-nowrap">
-                      {selected.estimatedDaysToRecover === 0 ? '100% capacity' : `${selected.estimatedDaysToRecover}d remaining`}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/95 dark:bg-ink-900/60 backdrop-blur-sm p-5 h-full flex flex-col justify-between shadow-lg dark:shadow-xl transition-colors">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/10">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-ink-300">
-                    Municipality Telemetry
-                  </span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-ocean-50 text-ocean-700 border border-ocean-200 dark:bg-ocean-500/10 dark:text-ocean-300 dark:border-ocean-500/20 font-medium">
-                    {currentRegionKey === 'panay' ? 'Panay Grid' : activePreset.name}
-                  </span>
-                </div>
-
-                {/* Active Event Context Header */}
-                <div className="rounded-xl p-3.5 my-3 border transition-all bg-slate-50 border-slate-200 shadow-sm dark:bg-slate-900/90 dark:border-slate-800/80 dark:shadow-none text-left">
-                  {/* Step Header & Date */}
-                  <div className="flex items-center justify-between text-[11px] mb-1.5 font-mono">
-                    <span className="text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                      Selected Incident (Step 1)
-                    </span>
-                    <span className="text-slate-600 dark:text-slate-400 bg-slate-200/70 dark:bg-slate-800 px-2 py-0.5 rounded text-[10px] border border-slate-300/60 dark:border-slate-700/80">
-                      {activeEvent?.date || '2025-11-03'}
-                    </span>
-                  </div>
-
-                  {/* Incident Title */}
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
-                      {activeEvent?.name || 'Typhoon Kalmaegi (Tino)'}
-                    </h4>
-                  </div>
-
-                  {/* Subtext Footnote / Calibration State */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800/70 text-[11px]">
-                    <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                      Active Baseline Simulation
-                    </span>
-                    <span className="text-slate-500 dark:text-slate-400 font-mono text-[10px]">
-                      {(activeEvent as any)?.affectedLgusCount || allMunicipalities.length || '187'} LGUs calibrated
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center text-center py-6">
-                  <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-3 shadow-inner">
-                    <MapPin className="h-6 w-6 text-ocean-500 dark:text-ocean-400 animate-bounce" />
-                  </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Select an LGU Boundary</h4>
-                  <p className="text-xs text-slate-500 dark:text-ink-400 max-w-xs leading-relaxed">
-                    Click any fine-grained municipality polygon or live hazard epicenter on the map to pin its satellite radiance indicators.
-                  </p>
-
-                  {/* Quick sample town buttons */}
-                  <div className="mt-5 w-full">
-                    <span className="text-[11px] font-semibold text-slate-500 dark:text-ink-400 uppercase tracking-wider block mb-2">
-                      Quick Select Major Hubs
-                    </span>
-                    <div className="flex flex-wrap justify-center gap-1.5">
-                      {(() => {
-                        let preferredIds: string[] = [];
-                        if (currentRegionKey === 'mindanao_south') {
-                          preferredIds = [
-                            'PH126303000', // General Santos City
-                            'PH112402000', // Davao City
-                            'PH128002000', // Glan
-                            'PH128001000', // Alabel
-                            'PH112403000', // Digos City
-                            'PH126306000', // Koronadal City
-                            'PH112319000', // Tagum City
-                            'PH128006000', // Malapatan
-                          ];
-                        } else if (currentRegionKey === 'panay' || currentRegionKey === 'panay_guimaras' || currentRegionKey === 'r6_negros') {
-                          preferredIds = ['PH063022000', 'PH060407000', 'PH061914000', 'PH060613000', 'PH060450100'];
-                        } else if (currentRegionKey === 'ncr' || currentRegionKey === 'ncr_southern_tagalog') {
-                          preferredIds = ['PH133901000', 'PH137404000', 'PH137601000', 'PH137403000'];
-                        } else if (currentRegionKey === 'central_visayas' || currentRegionKey === 'cebu_bohol' || currentRegionKey === 'r7') {
-                          preferredIds = ['PH072217000', 'PH072230000', 'PH072226000', 'PH071242000'];
-                        } else if (currentRegionKey === 'mindanao_south' || currentRegionKey === 'r11' || currentRegionKey === 'r12') {
-                          preferredIds = ['PH126303000', 'PH112402000', 'PH128002000', 'PH128001000', 'PH112403000', 'PH126306000', 'PH112319000'];
-                        } else if (currentRegionKey === 'central_luzon' || currentRegionKey === 'r3') {
-                          preferredIds = ['PH035416000', 'PH035401000', 'PH031410000', 'PH036916000'];
-                        } else if (currentRegionKey === 'calabarzon_mimaropa' || currentRegionKey === 'r4a' || currentRegionKey === 'r4b') {
-                          preferredIds = ['PH045801000', 'PH043405000', 'PH042106000', 'PH041005000'];
-                        } else if (currentRegionKey === 'eastern_visayas' || currentRegionKey === 'r8') {
-                          preferredIds = ['PH083747000', 'PH083738000', 'PH083710000', 'PH086003000'];
-                        } else if (currentRegionKey === 'ilocos_cagayan' || currentRegionKey === 'r1' || currentRegionKey === 'r2') {
-                          preferredIds = ['PH012805000', 'PH012928000', 'PH013314000', 'PH015518000', 'PH021529000', 'PH023134000'];
-                        } else if (currentRegionKey === 'car') {
-                          preferredIds = ['PH141102000', 'PH141114000', 'PH143213000'];
-                        } else if (currentRegionKey === 'bicol' || currentRegionKey === 'r5') {
-                          preferredIds = ['PH050506000', 'PH051724000', 'PH056216000'];
-                        } else if (currentRegionKey === 'northern_mindanao_caraga' || currentRegionKey === 'r10' || currentRegionKey === 'r13') {
-                          preferredIds = ['PH104305000', 'PH103504000', 'PH101312000', 'PH160202000', 'PH166724000'];
-                        } else if (currentRegionKey === 'zamboanga_peninsula' || currentRegionKey === 'r9') {
-                          preferredIds = ['PH097332000', 'PH097322000'];
-                        } else if (currentRegionKey === 'barmm') {
-                          preferredIds = ['PH199901000', 'PH193601000'];
-                        }
-
-                        const matched = preferredIds
-                          .map((id) => activeRegionMunicipalities.find((item: Municipality) => item.id === id || item.pcode === id))
-                          .filter((m: Municipality | undefined): m is Municipality => Boolean(m));
-
-                        const matchedIds = new Set(matched.map((m) => m.id));
-                        const remaining = activeRegionMunicipalities.filter((m) => !matchedIds.has(m.id));
-                        const displayList = [...matched, ...remaining].slice(0, 5);
-
-                        return displayList.map((m: Municipality) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => onSelect(m.id)}
-                            className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 hover:bg-ocean-100 hover:border-ocean-300 text-slate-700 hover:text-ocean-900 dark:bg-white/5 dark:hover:bg-ocean-500/20 dark:hover:border-ocean-500/40 dark:text-ink-300 dark:hover:text-white transition-all cursor-pointer"
-                          >
-                            {m.name}
-                          </button>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-[11px] text-slate-500 dark:text-ink-400 text-center">
-                  {currentRegionKey === 'panay'
-                    ? 'Covers 95 fine-grained LGUs in Iloilo, Capiz, Aklan, and Antique'
-                    : `Covers fine-grained municipalities in ${activePreset.name}`}
-                </div>
-              </div>
-            )}
-          </div>
+          <MapTelemetrySidebar
+            selected={selected}
+            selectedId={selectedId}
+            globalRank={globalRank}
+            resilienceRankMap={resilienceRankMap}
+            onSelect={handleSelectMunicipality}
+            activeEvent={activeEvent}
+            activeEventId={activeEventId}
+            events={events}
+            gdacsAlerts={gdacsAlerts}
+            onSelectEvent={onSelectEvent}
+            onSimulateGdacs={onSimulateGdacs}
+            currentRegionKey={currentRegionKey}
+            activePreset={activePreset}
+            onRegionChange={handleRegionChange}
+            onFlyTo={(coords, zoom) => {
+              setTargetLocation({ lat: coords[0], lng: coords[1], zoom: zoom ?? 9 });
+            }}
+            allMunicipalities={allMunicipalities}
+            activeRegionMunicipalities={activeRegionMunicipalities}
+            isAudioEnabled={isAudioEnabled}
+            isMapAudioPlaying={isMapAudioPlaying}
+            liveAudioStatus={liveAudioStatus}
+            audioStatusLabel={audioStatusLabel}
+          />
         )}
       </div>
     </>
@@ -1760,18 +1507,38 @@ const NightLightOverlay = (L.Layer as any).extend({
 
 export interface CameraSyncProps {
   map: L.Map | null;
-  targetLocation?: { lat: number; lng: number } | null;
+  targetLocation?: { lat: number; lng: number; zoom?: number } | null;
   selectedBounds?: L.LatLngBoundsExpression | null;
   selectedId?: string | null;
 }
 
 export function MapCameraController({ map, targetLocation, selectedBounds, selectedId }: CameraSyncProps) {
   const lastFocusedIdRef = useRef<string | null>(null);
+  const lastTargetLocRef = useRef<string | null>(null);
 
   // Serialize primitives so re-created object references don't trigger the effect
   const targetLat = targetLocation?.lat;
   const targetLng = targetLocation?.lng;
+  const targetZoom = targetLocation?.zoom;
 
+  // 1. Programmatic flyTo whenever targetLocation changes (e.g. unified incident dropdown selection)
+  useEffect(() => {
+    if (!map || targetLat == null || targetLng == null || isNaN(targetLat) || isNaN(targetLng)) return;
+
+    const locKey = `${targetLat.toFixed(4)},${targetLng.toFixed(4)},${targetZoom ?? 11}`;
+    if (lastTargetLocRef.current === locKey) return;
+    lastTargetLocRef.current = locKey;
+
+    // If an LGU is actively selected with valid bounds, bounds take priority
+    if (selectedId && selectedBounds) return;
+
+    map.flyTo([targetLat, targetLng], targetZoom ?? 11, {
+      animate: true,
+      duration: 1.2,
+    });
+  }, [map, targetLat, targetLng, targetZoom, selectedId, selectedBounds]);
+
+  // 2. Focused LGU bounds/point synchronization
   useEffect(() => {
     if (!map) return;
 
@@ -1812,12 +1579,12 @@ export function MapCameraController({ map, targetLocation, selectedBounds, selec
 
     // 4. Priority 2: Focus via Point Lat/Lng
     if (targetLat != null && targetLng != null && !isNaN(targetLat) && !isNaN(targetLng)) {
-      map.flyTo([targetLat, targetLng], 11, {
+      map.flyTo([targetLat, targetLng], targetZoom ?? 11, {
         animate: true,
         duration: 0.8,
       });
     }
-  }, [map, selectedId, targetLat, targetLng, selectedBounds]);
+  }, [map, selectedId, targetLat, targetLng, targetZoom, selectedBounds]);
 
   return null;
 }
