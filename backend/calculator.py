@@ -355,6 +355,139 @@ def calculate_recovery_metrics(
         "recovery_time_days": recovery_days if recovery_days < len(daily_radiance_series) else "Not fully recovered"
     }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Regional Scoping & KPI Summary Aggregation
+# ─────────────────────────────────────────────────────────────────────────────
+
+PANAY_PROVINCE_SET = {"iloilo", "capiz", "aklan", "antique"}
+
+def is_panay_province(province: Optional[str]) -> bool:
+    """Checks if a province string belongs to Panay Island's 4 constituent provinces."""
+    if not province:
+        return False
+    return province.strip().lower() in PANAY_PROVINCE_SET
+
+def resolve_incident_scope(
+    current_region_key: Optional[str],
+    active_event: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Prevents accidental down-scoping:
+    Explicit user selections or island-wide defaults ('panay', 'panay_guimaras', etc.)
+    are NEVER unconditionally overwritten by active_event.epicenterProvince.
+    Only allows automatic down-scoping if the active filter is unset or 'all'.
+    """
+    current = (current_region_key or "").strip().lower()
+    if not current or current == "all":
+        if active_event and active_event.get("epicenterProvince"):
+            return str(active_event["epicenterProvince"]).strip().lower()
+    return current_region_key or "panay"
+
+def filter_scoped_municipalities(
+    municipalities: Sequence[Dict[str, Any]],
+    selected_region_key: Optional[str] = "panay"
+) -> List[Dict[str, Any]]:
+    """
+    Filters municipalities according to active geographic scope.
+    When 'panay' is selected, returns all municipalities across the 4 constituent provinces
+    (exactly 95 LGUs). Never conflates monitored scope with critical deficit lists.
+    """
+    if not municipalities:
+        return []
+
+    reg_key = (selected_region_key or "panay").strip().lower()
+
+    if not selected_region_key or reg_key == "panay":
+        panay_matches = [m for m in municipalities if is_panay_province(m.get("province"))]
+        return panay_matches if panay_matches else list(municipalities)
+
+    if reg_key in ("all", "philippines", "nationwide"):
+        return list(municipalities)
+
+    if reg_key == "panay_guimaras":
+        return [
+            m for m in municipalities
+            if is_panay_province(m.get("province")) or (m.get("province") or "").strip().lower() == "guimaras"
+        ]
+
+    prov_matches = [m for m in municipalities if (m.get("province") or "").strip().lower() == reg_key]
+    if prov_matches:
+        return prov_matches
+
+    reg_matches = [m for m in municipalities if (m.get("region") or "").strip().lower() == reg_key]
+    if reg_matches:
+        return reg_matches
+
+    return [m for m in municipalities if is_panay_province(m.get("province"))]
+
+def aggregate_kpi_metrics(
+    scoped_municipalities: Sequence[Dict[str, Any]],
+    selected_municipality: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Deterministically computes Summary KPI counters:
+    - Regional / Island Scope:
+      Total Monitored LGUs = len(scoped_municipalities) (95 for Panay)
+      Critical Deficit LGUs = count with R(t) < 60%
+      Affected Population = sum of population of critical LGUs (<60% R(t))
+    - Single Municipality Selected:
+      Total Monitored LGUs = 1
+      Targeted metrics for the selected municipality
+    """
+    def get_score(m: Dict[str, Any]) -> float:
+        val = m.get("recovery_score", m.get("recoveryScore", m.get("r_t")))
+        if val is None:
+            return 100.0
+        try:
+            val_f = float(val)
+            if 0 < val_f <= 1.0:
+                return val_f * 100.0
+            return val_f
+        except (ValueError, TypeError):
+            return 100.0
+
+    if selected_municipality:
+        score = get_score(selected_municipality)
+        is_crit = score < 60.0
+        critical_lgus = [selected_municipality] if is_crit else []
+        total_pop = int(selected_municipality.get("population") or 0)
+        critical_pop = total_pop if is_crit else 0
+        is_restored = score >= 90.0
+
+        return {
+            "total_monitored_lgus": 1,
+            "critical_lgus": critical_lgus,
+            "critical_count": 1 if is_crit else 0,
+            "is_critical": is_crit,
+            "total_scoped_population": total_pop,
+            "critical_population": critical_pop,
+            "affected_population": critical_pop,
+            "avg_recovery": round(score),
+            "restored_count": 1 if is_restored else 0,
+            "is_single_municipality": True,
+        }
+    else:
+        critical_lgus = [m for m in scoped_municipalities if get_score(m) < 60.0]
+        total_pop = sum(int(m.get("population") or 0) for m in scoped_municipalities)
+        critical_pop = sum(int(m.get("population") or 0) for m in critical_lgus)
+        restored_lgus = [m for m in scoped_municipalities if get_score(m) >= 90.0]
+        avg_rec = round(
+            sum(get_score(m) for m in scoped_municipalities) / len(scoped_municipalities)
+        ) if scoped_municipalities else 0
+
+        return {
+            "total_monitored_lgus": len(scoped_municipalities),
+            "critical_lgus": critical_lgus,
+            "critical_count": len(critical_lgus),
+            "is_critical": len(critical_lgus) > 0,
+            "total_scoped_population": total_pop,
+            "critical_population": critical_pop,
+            "affected_population": critical_pop,
+            "avg_recovery": avg_rec,
+            "restored_count": len(restored_lgus),
+            "is_single_municipality": False,
+        }
+
 if __name__ == "__main__":
     scores = compute_recovery_index()
     print(f"Computed {len(scores)} recovery score records from database.")

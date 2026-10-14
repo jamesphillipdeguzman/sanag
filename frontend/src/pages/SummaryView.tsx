@@ -21,6 +21,9 @@ import AiBriefingCard from '@/components/AiBriefingCard';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import PanaySilhouetteBackground from '@/components/PanaySilhouetteBackground';
 import type { TabId } from '@/components/Navbar';
+import { PANAY_PROVINCE_SET } from '@/utils/regionLookup';
+import { computeScopedMunicipalities, computeKpiMetrics } from '@/utils/kpiAggregation';
+import { getRegionDisplayName } from '@/utils/eventScope';
 
 interface SummaryViewProps {
   municipalities: Municipality[];
@@ -82,109 +85,46 @@ export default function SummaryView({
   recoveryDate,
   selectedMunicipality,
 }: SummaryViewProps) {
-  // Focus headline metrics on Panay Island LGUs by default
-  const PANAY_PROVINCE_SET = useMemo(() => new Set(['iloilo', 'capiz', 'aklan', 'antique']), []);
-  const PANAY_PCODE_PREFIXES = useMemo(() => ['ph0604', 'ph0606', 'ph0619', 'ph0630'], []);
+  // Scoped municipalities for active regional footprint (exactly 95 when 'panay' is scoped)
+  const scopedMunicipalities = useMemo(() => {
+    return computeScopedMunicipalities(municipalities, selectedRegionKey);
+  }, [municipalities, selectedRegionKey]);
 
-  const panayMunicipalities = useMemo(() => {
-    // 1. If an individual municipality is selected (e.g. Agoncillo on the map),
-    // scope to that municipality and its province
-    if (selectedMunicipality) {
-      const muniName = (selectedMunicipality.name || '').toLowerCase();
-      const muniPcode = (selectedMunicipality.pcode || '').toLowerCase();
-      const muniProv = (selectedMunicipality.province || '').toLowerCase();
+  // Clean, deterministic KPI metrics separation for Regional vs Single Municipality scope
+  const kpiMetrics = useMemo(() => {
+    return computeKpiMetrics(scopedMunicipalities, selectedMunicipality);
+  }, [scopedMunicipalities, selectedMunicipality]);
 
-      const matched = municipalities.filter((m) => {
-        if (muniProv && (m.province || '').toLowerCase() === muniProv) return true;
-        if (muniName && (m.name || '').toLowerCase() === muniName) return true;
-        if (muniPcode && (m.pcode || '').toLowerCase() === muniPcode) return true;
-        return false;
-      });
-
-      if (matched.length > 0) return matched;
-    }
-
-    // 2. If the active event defined critical/impacted LGUs, scope to those
-    const criticalList = activeEvent?.critical_municipalities ?? [];
-    if (criticalList.length > 0) {
-      const targetPcodes = new Set(
-        criticalList.map((c: any) => (c.pcode || c.code || '').toLowerCase()).filter(Boolean)
-      );
-      const targetNames = new Set(
-        criticalList.map((c: any) => (c.name || '').toLowerCase()).filter(Boolean)
-      );
-
-      const eventMatched = municipalities.filter(
-        (m) =>
-          (m.pcode && targetPcodes.has(m.pcode.toLowerCase())) ||
-          (m.name && targetNames.has(m.name.toLowerCase()))
-      );
-      if (eventMatched.length > 0) return eventMatched;
-    }
-
-    // 3. If a region or province dropdown key is selected
-    if (selectedRegionKey && selectedRegionKey !== 'all') {
-      const regMatched = municipalities.filter(
-        (m) => (m.province || '').toLowerCase() === selectedRegionKey.toLowerCase()
-      );
-      if (regMatched.length > 0) return regMatched;
-    }
-
-    // 4. Default baseline: Panay Island filter
-    const defaultGrid = municipalities.filter((m) => {
-      const prov = (m.province || '').toLowerCase().trim();
-      if (prov) return PANAY_PROVINCE_SET.has(prov);
-      if (m.pcode) {
-        const pcodeLower = m.pcode.toLowerCase();
-        return PANAY_PCODE_PREFIXES.some((prefix) => pcodeLower.startsWith(prefix));
-      }
-      return false;
-    });
-
-    return defaultGrid.length > 0 ? defaultGrid : municipalities;
-  }, [
-    municipalities,
-    activeEvent,
-    selectedMunicipality,
-    selectedRegionKey,
-    PANAY_PROVINCE_SET,
-    PANAY_PCODE_PREFIXES,
-  ]);
+  const {
+    totalMonitoredLgus,
+    criticalLgus,
+    criticalCount,
+    totalScopedPopulation,
+    criticalPopulation,
+    avgRecovery,
+    restoredCount,
+  } = kpiMetrics;
 
   const isPanayScope = useMemo(() => {
-    if (panayMunicipalities.length === 0) return true;
-    return panayMunicipalities.every((m) => {
+    if (scopedMunicipalities.length === 0) return true;
+    return scopedMunicipalities.every((m) => {
       const prov = (m.province || '').toLowerCase().trim();
       return prov ? PANAY_PROVINCE_SET.has(prov) : true;
     });
-  }, [panayMunicipalities, PANAY_PROVINCE_SET]);
+  }, [scopedMunicipalities]);
 
-  const totalPanayLgus = panayMunicipalities.length > 0 ? panayMunicipalities.length : 95;
-
-  const avgRecovery = panayMunicipalities.length > 0
-    ? Math.round(
-      panayMunicipalities.reduce((sum, m) => sum + (m.recoveryScore ?? 0), 0) /
-      panayMunicipalities.length
-    )
-    : 0;
-
-  const restoredCount = panayMunicipalities.filter((m) => m.status === 'restored').length;
-  const criticalCount = panayMunicipalities.filter((m) => m.status === 'critical').length;
-
-  const affectedPopulation = useMemo(() => {
-    const affectedLGUs = panayMunicipalities.filter((m) => {
-      const score = m.recoveryScore != null
-        ? (m.recoveryScore > 1 ? m.recoveryScore : m.recoveryScore * 100)
-        : 100;
-      return m.status === 'critical' || m.status === 'warning' || score < 60;
-    });
-
-    if (affectedLGUs.length > 0) {
-      return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0);
+  const regionDisplayName = useMemo(() => {
+    if (selectedMunicipality) {
+      return `${selectedMunicipality.name}, ${selectedMunicipality.province}`;
     }
+    return getRegionDisplayName(selectedRegionKey);
+  }, [selectedMunicipality, selectedRegionKey]);
 
-    return 0;
-  }, [panayMunicipalities]);
+  const regionBadge = useMemo(() => {
+    if (!selectedRegionKey || selectedRegionKey === 'panay') return 'Island-wide';
+    if (selectedRegionKey === 'all' || selectedRegionKey === 'philippines') return 'Nationwide';
+    return getRegionDisplayName(selectedRegionKey);
+  }, [selectedRegionKey]);
 
   const stationsByProvince = useMemo(() => {
     return getStationsByProvince();
@@ -240,7 +180,9 @@ export default function SummaryView({
               Executive Synthesis & Situational Briefing
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
-              Consolidated high-level power restoration totals across {totalPanayLgus} LGUs paired with LLM-synthesized disaster telemetry.
+              {selectedMunicipality
+                ? `Targeted power restoration metrics and satellite radiance telemetry for ${selectedMunicipality.name}, ${selectedMunicipality.province}.`
+                : `Consolidated high-level power restoration totals across ${totalMonitoredLgus} LGUs paired with LLM-synthesized disaster telemetry.`}
             </p>
           </div>
 
@@ -264,55 +206,94 @@ export default function SummaryView({
           </div>
         </div>
 
-        {/* TOP: Island-Wide KPI Metrics Cards Grid */}
+        {/* TOP: Island-Wide / Regional / Single Municipality KPI Metrics Cards Grid */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
               <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Island-Wide Telemetry KPIs
+                {selectedMunicipality ? `${selectedMunicipality.name} Telemetry KPIs` : 'Monitored Telemetry KPIs'}
               </h2>
             </div>
             <span className="text-xs text-slate-400 font-mono">
-              {panayMunicipalities.some(m => (m.province || '').toLowerCase().includes('batangas'))
-                ? 'Batangas Grid'
-                : 'Panay Grid'} · {totalPanayLgus} Monitored LGUs
+              {selectedMunicipality
+                ? `${selectedMunicipality.name}, ${selectedMunicipality.province} · 1 Monitored LGU`
+                : `${regionDisplayName} · ${totalMonitoredLgus} Monitored LGUs`}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={<Activity className="h-5 w-5 text-cyan-500" />}
-              label="Average Recovery"
-              value={`${avgRecovery}%`}
-              accent="text-cyan-600 dark:text-cyan-300"
-              badge="Island-wide"
-              subtext="Aggregated radiance restoration index"
-            />
-            <StatCard
-              icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
-              label="Restored LGUs"
-              value={`${restoredCount} / ${totalPanayLgus}`}
-              accent="text-emerald-600 dark:text-emerald-300"
-              badge="≥ 90% Recovered"
-              subtext="LGUs at near-normal nighttime light"
-            />
-            <StatCard
-              icon={<AlertTriangle className="h-5 w-5 text-rose-500" />}
-              label="Critical Deficit"
-              value={criticalCount.toString()}
-              accent="text-rose-600 dark:text-rose-300"
-              badge="< 60% Outages"
-              subtext="Severe blackout jurisdictions"
-            />
-            <StatCard
-              icon={<Users className="h-5 w-5 text-amber-500" />}
-              label="Affected Population"
-              value={formatAffectedPopulation(affectedPopulation)}
-              accent="text-amber-600 dark:text-amber-300"
-              badge="Impact Zone"
-              subtext="Citizens in affected municipal grids"
-            />
+            {selectedMunicipality ? (
+              <>
+                <StatCard
+                  icon={<Activity className="h-5 w-5 text-cyan-500" />}
+                  label="Restoration Index R(t)"
+                  value={`${avgRecovery}%`}
+                  accent={avgRecovery >= 90 ? 'text-emerald-600 dark:text-emerald-300' : avgRecovery >= 60 ? 'text-amber-600 dark:text-amber-300' : 'text-rose-600 dark:text-rose-300'}
+                  badge="Target LGU"
+                  subtext={`Restoration score for ${selectedMunicipality.name}`}
+                />
+                <StatCard
+                  icon={<Zap className="h-5 w-5 text-amber-500" />}
+                  label="Radiance Telemetry"
+                  value={`${Number(selectedMunicipality.currentRadiance ?? 0).toFixed(1)} / ${Number(selectedMunicipality.baselineRadiance ?? 0).toFixed(1)} nW`}
+                  accent="text-cyan-600 dark:text-cyan-300"
+                  badge="Current / Base"
+                  subtext="Nighttime satellite radiance"
+                />
+                <StatCard
+                  icon={<AlertTriangle className="h-5 w-5 text-rose-500" />}
+                  label="Critical Status"
+                  value={criticalCount > 0 ? 'Critical Deficit' : 'Operating Normal'}
+                  accent={criticalCount > 0 ? 'text-rose-600 dark:text-rose-300' : 'text-emerald-600 dark:text-emerald-300'}
+                  badge={criticalCount > 0 ? '< 60% Outage' : '≥ 60% Stable'}
+                  subtext={criticalCount > 0 ? 'Urgent grid restoration required' : 'Within normal operational recovery curve'}
+                />
+                <StatCard
+                  icon={<Users className="h-5 w-5 text-amber-500" />}
+                  label="LGU Population"
+                  value={formatAffectedPopulation(totalScopedPopulation)}
+                  accent="text-amber-600 dark:text-amber-300"
+                  badge="Target Pop"
+                  subtext={`Registered population of ${selectedMunicipality.name}`}
+                />
+              </>
+            ) : (
+              <>
+                <StatCard
+                  icon={<Activity className="h-5 w-5 text-cyan-500" />}
+                  label="Average Recovery"
+                  value={`${avgRecovery}%`}
+                  accent="text-cyan-600 dark:text-cyan-300"
+                  badge={regionBadge}
+                  subtext="Aggregated radiance restoration index"
+                />
+                <StatCard
+                  icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}
+                  label="Restored LGUs"
+                  value={`${restoredCount} / ${totalMonitoredLgus}`}
+                  accent="text-emerald-600 dark:text-emerald-300"
+                  badge="≥ 90% Recovered"
+                  subtext={`Out of ${totalMonitoredLgus} monitored footprint LGUs`}
+                />
+                <StatCard
+                  icon={<AlertTriangle className="h-5 w-5 text-rose-500" />}
+                  label="Critical Deficit"
+                  value={criticalCount.toString()}
+                  accent="text-rose-600 dark:text-rose-300"
+                  badge="< 60% Outages"
+                  subtext={`${criticalCount} of ${totalMonitoredLgus} LGUs below critical threshold`}
+                />
+                <StatCard
+                  icon={<Users className="h-5 w-5 text-amber-500" />}
+                  label="Affected Population"
+                  value={formatAffectedPopulation(criticalPopulation)}
+                  accent="text-amber-600 dark:text-amber-300"
+                  badge="Impact Zone"
+                  subtext="Citizens in critical deficit jurisdictions (<60% R(t))"
+                />
+              </>
+            )}
           </div>
         </div>
 
@@ -455,7 +436,7 @@ export default function SummaryView({
           </div>
 
           <ErrorBoundary name="Executive AI Situational Briefing" resetKey={activeEvent?.id}>
-            <AiBriefingCard event={activeEvent} municipalities={panayMunicipalities} />
+            <AiBriefingCard event={activeEvent} municipalities={scopedMunicipalities} />
           </ErrorBoundary>
         </div>
 

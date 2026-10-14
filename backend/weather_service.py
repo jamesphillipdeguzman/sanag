@@ -2,7 +2,7 @@ import logging
 import math
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,8 @@ REGION_COORDINATES: Dict[str, Tuple[float, float, str]] = {
 
 
 def resolve_location(
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
+    lat: Optional[Union[float, str]] = None,
+    lon: Optional[Union[float, str]] = None,
     region_name: Optional[str] = None
 ) -> Tuple[float, float, str]:
     """

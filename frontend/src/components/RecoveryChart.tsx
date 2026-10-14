@@ -22,11 +22,11 @@ export type ViewMode = 'hubs' | 'critical';
 export type ScopeFilter = 'panay' | 'nationwide';
 
 export const PANAY_PROVINCES = ['Aklan', 'Antique', 'Capiz', 'Iloilo'] as const;
+export const PANAY_PROVINCE_SET = new Set(['iloilo', 'capiz', 'aklan', 'antique']);
 
 export const isPanayProvince = (prov?: string): boolean => {
   if (!prov) return false;
-  const p = prov.trim().toLowerCase();
-  return p === 'aklan' || p === 'antique' || p === 'capiz' || p === 'iloilo';
+  return PANAY_PROVINCE_SET.has(prov.trim().toLowerCase());
 };
 
 interface RecoveryChartProps {

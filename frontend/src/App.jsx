@@ -28,6 +28,7 @@ import {
   calculateHaversineDistance,
   extractCentroid,
 } from './services/simulation.ts'
+import { resolveIncidentScope } from './utils/kpiAggregation.ts'
 import './App.css'
 
 const VALID_TABS = ['home', 'events', 'map', 'recovery', 'summary', 'guide', 'overview']
@@ -377,8 +378,18 @@ function App() {
       }
       setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, targetEvent))
       setIsMapLoading(true)
+
+      // Guard: Explicit user selections or island-wide defaults ('panay', 'panay_guimaras', etc.)
+      // are NOT unconditionally overwritten by targetEvent.epicenterProvince.
+      // Only allow automatic down-scoping if the active filter is unset or 'all'.
+      if (targetEvent.epicenterProvince) {
+        const resolved = resolveIncidentScope(selectedRegionKey, targetEvent)
+        if (resolved !== selectedRegionKey) {
+          setSelectedRegionKey(resolved)
+        }
+      }
     }
-  }, [events])
+  }, [events, selectedRegionKey])
 
   const handleImportGdacs = useCallback(async (alert, preconstructedEvent) => {
     if (!alert) return
