@@ -23,12 +23,12 @@ export default function Hero({ municipalities, activeEvent, onSelectEvent, event
   const totalPanayLgus = targetMunicipalities.length > 0 ? targetMunicipalities.length : 95;
 
   const avgRecovery = targetMunicipalities.length > 0
-    ? Math.round(targetMunicipalities.reduce((sum, m) => sum + m.recoveryScore, 0) / targetMunicipalities.length)
+    ? Math.round(targetMunicipalities.reduce((sum, m) => sum + (m.recoveryScore ?? 0), 0) / targetMunicipalities.length)
     : 0;
   const restoredCount = targetMunicipalities.filter((m) => m.status === 'restored').length;
   const criticalCount = targetMunicipalities.filter((m) => m.status === 'critical').length;
   const affectedLGUs = targetMunicipalities.filter(
-    (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
+    (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore != null && m.recoveryScore < 60)
   );
   const affectedPopulation = affectedLGUs.length > 0
     ? affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0)

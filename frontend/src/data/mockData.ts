@@ -200,20 +200,64 @@ export const events: DisasterEvent[] = [
     latitude: 11.1000,
     longitude: 125.3000,
     coordinates: [11.1000, 125.3000],
+    regionKey: 'eastern_visayas',
     affectedPopulation: 4200000,
     description: 'Catastrophic Category 5 super typhoon crossing the Visayas region with unprecedented storm surge and widespread grid destruction.',
     viirs_data_available: true,
   },
+  {
+    id: 'antique-coastal-flooding-2026',
+    name: 'Antique Coastal Flooding',
+    date: '2026-08-21',
+    startDate: '2026-08-21',
+    endDate: '2026-09-20',
+    severity: 'Moderate',
+    type: 'monsoon_flood',
+    category: 'Flood',
+    event_type: 'Coastal Flooding',
+    disaster_category: 'Monsoon Inundation',
+    latitude: 10.7000,
+    longitude: 121.5000,
+    coordinates: [10.7000, 121.5000],
+    regionKey: 'panay',
+    affectedPopulation: 85000,
+    description: 'Intense southwest monsoon rainfall combined with high tide surge inundating coastal feeders and low-lying distribution networks in Antique.',
+    viirs_data_available: true,
+  },
+  {
+    id: 'taal-volcano-eruption-2020',
+    name: 'Taal Volcano Eruption',
+    date: '2020-01-12',
+    startDate: '2020-01-12',
+    endDate: '2020-02-12',
+    severity: 'Severe',
+    type: 'volcano',
+    category: 'Volcanic Eruption',
+    event_type: 'Volcanic Eruption',
+    disaster_category: 'Volcanic Eruption',
+    latitude: 14.0020,
+    longitude: 120.9930,
+    coordinates: [14.0020, 120.9930],
+    regionKey: 'calabarzon',
+    affectedPopulation: 540000,
+    description: 'Phreatomagmatic eruption of Taal Volcano sending ash plumes over Calabarzon and Southern Tagalog, impacting regional distribution lines and transmission substations.',
+    viirs_data_available: true,
+  },
 ];
 
-export function getRecoveryColor(score: number): string {
-  if (score >= 90) return '#10b981';
-  if (score >= 60) return '#f59e0b';
-  return '#ef4444';
+export function getRecoveryColor(score?: number | null): string {
+  if (score == null || isNaN(Number(score))) return '#64748b'; // neutral slate
+  const num = Number(score);
+  if (num >= 90) return '#10B981'; // green restored
+  if (num >= 60) return '#f59e0b'; // amber intermediate
+  return '#EF4444'; // red critical
 }
 
-export function getRecoveryStatusColor(status: RecoveryStatus): string {
-  return getRecoveryColor(status === 'restored' ? 95 : status === 'recovering' || status === 'warning' ? 75 : 30);
+export function getRecoveryStatusColor(status?: RecoveryStatus | string | null): string {
+  if (!status || status === 'unavailable') return '#64748b';
+  if (status === 'restored') return '#10B981';
+  if (status === 'recovering' || status === 'warning') return '#f59e0b';
+  return '#EF4444';
 }
 
 export function getSeverityColor(severity?: string): string {
@@ -239,8 +283,18 @@ export function generateRecoveryCurve(baseline: number, startDay: number, days: 
 export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[] {
   return features.map((feature, index) => {
     const properties = feature.properties ?? {};
-    const recoveryScore = 100;
-    const status: RecoveryStatus = 'restored';
+    const rawScore = properties.recovery_score ?? properties.recoveryScore ?? properties.r_t;
+    const hasValidScore = rawScore != null && !isNaN(Number(rawScore));
+    const recoveryScore: number | null = hasValidScore
+      ? (Number(rawScore) <= 1.0 && Number(rawScore) > 0 ? Math.round(Number(rawScore) * 100) : Math.round(Number(rawScore)))
+      : null;
+    const status: RecoveryStatus = recoveryScore == null
+      ? 'unavailable'
+      : recoveryScore >= 90
+        ? 'restored'
+        : recoveryScore >= 60
+          ? 'recovering'
+          : 'critical';
     const area = Number(properties.AREA_SQKM ?? 50);
     const id = String(properties.ADM3_PCODE ?? properties.psgc_code ?? properties.ADM2_PCODE ?? index);
     const name = String(properties.ADM3_EN ?? properties.ADM2_EN ?? properties.ADM1_EN ?? 'Unnamed municipality');
@@ -284,8 +338,8 @@ export function createMunicipalities(features: GeoJSON.Feature[]): Municipality[
       population: pop,
       daysSinceEvent: 14,
       baselineRadiance: 8 + (index % 7),
-      currentRadiance: 4 + (recoveryScore / 100) * 8,
-      estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
+      currentRadiance: recoveryScore != null ? 4 + (recoveryScore / 100) * 8 : 4,
+      estimatedDaysToRecover: recoveryScore != null ? (recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8))) : 0,
       area,
       coordinates: lat != null && lng != null ? [lat, lng] : undefined,
       latitude: lat,

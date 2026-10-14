@@ -591,19 +591,19 @@ export default function PanayMap({
     if (activeFocusMunicipality) {
       if (
         activeFocusMunicipality.status === 'critical' ||
-        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 40)
+        (activeFocusMunicipality.recoveryScore != null && activeFocusMunicipality.recoveryScore < 40)
       ) {
         return 'critical';
       }
       if (
         activeFocusMunicipality.status === 'warning' ||
-        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 60)
+        (activeFocusMunicipality.recoveryScore != null && activeFocusMunicipality.recoveryScore < 60)
       ) {
         return 'warning';
       }
       if (
         activeFocusMunicipality.status === 'recovering' ||
-        (activeFocusMunicipality.recoveryScore !== undefined && activeFocusMunicipality.recoveryScore < 80)
+        (activeFocusMunicipality.recoveryScore != null && activeFocusMunicipality.recoveryScore < 80)
       ) {
         return 'recovering';
       }
@@ -832,10 +832,10 @@ export default function PanayMap({
                             className="h-2.5 w-2.5 rounded-full"
                             style={{
                               backgroundColor: nightGlowMode
-                                ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#121722')
+                                ? ((hovered.recoveryScore ?? 0) >= 90 ? '#ffaa33' : (hovered.recoveryScore ?? 0) >= 60 ? '#e08b18' : '#121722')
                                 : getRecoveryColor(hovered.recoveryScore),
-                              boxShadow: nightGlowMode && hovered.recoveryScore >= 60 ? '0 0 8px #ffaa33' : undefined,
-                              border: nightGlowMode && hovered.recoveryScore < 60 ? '1px solid rgba(255,255,255,0.2)' : undefined,
+                              boxShadow: nightGlowMode && (hovered.recoveryScore ?? 0) >= 60 ? '0 0 8px #ffaa33' : undefined,
+                              border: nightGlowMode && (hovered.recoveryScore ?? 0) < 60 ? '1px solid rgba(255,255,255,0.2)' : undefined,
                             }}
                           />
                           <span className="text-sm font-semibold text-gray-900 dark:text-white">{hovered.name}</span>
@@ -847,19 +847,19 @@ export default function PanayMap({
                       </div>
                       <div className="flex items-center gap-4 text-xs">
                         <span className="text-gray-600 dark:text-ink-300">
-                          Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore}%</span>
+                          Recovery: <span className="font-semibold text-gray-900 dark:text-white">{hovered.recoveryScore != null ? `${hovered.recoveryScore}%` : 'N/A'}</span>
                         </span>
                         <span className="text-gray-600 dark:text-ink-300">
                           Status: <span style={{
                             color: nightGlowMode
-                              ? (hovered.recoveryScore >= 90 ? '#ffaa33' : hovered.recoveryScore >= 60 ? '#e08b18' : '#94a3b8')
+                              ? ((hovered.recoveryScore ?? 0) >= 90 ? '#ffaa33' : (hovered.recoveryScore ?? 0) >= 60 ? '#e08b18' : '#94a3b8')
                               : getRecoveryStatusColor(hovered.status)
                           }}>
                             {nightGlowMode && hovered.status === 'restored'
                               ? 'Near-Full Recovery'
-                              : nightGlowMode && (hovered.status === 'critical' || hovered.recoveryScore < 60)
+                              : nightGlowMode && (hovered.status === 'critical' || (hovered.recoveryScore ?? 0) < 60)
                                 ? 'Critical Deficit'
-                                : statusLabels[hovered.status] || (hovered.recoveryScore >= 90 ? 'Near-Full Recovery' : hovered.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit')}
+                                : statusLabels[hovered.status] || ((hovered.recoveryScore ?? 0) >= 90 ? 'Near-Full Recovery' : (hovered.recoveryScore ?? 0) >= 60 ? 'Active Restoration' : 'Critical Deficit')}
                           </span>
                         </span>
                       </div>
@@ -867,7 +867,7 @@ export default function PanayMap({
                         <div className="flex items-center justify-between text-[11px] text-amber-600 dark:text-amber-300/90 mt-1 pt-1 border-t border-slate-200 dark:border-white/5">
                           <span>VIIRS Radiance:</span>
                           <span className="font-mono font-semibold">
-                            {(hovered.currentRadiance ?? (hovered.recoveryScore * 0.45)).toFixed(1)} nW/cm²/sr
+                            {(hovered.currentRadiance ?? ((hovered.recoveryScore ?? 0) * 0.45)).toFixed(1)} nW/cm²/sr
                           </span>
                         </div>
                       )}
@@ -1481,8 +1481,21 @@ function getPolygonStyle(
   const glow = Boolean(nightGlow);
   const ratio = simRecord != null
     ? simRecord.recovery_ratio
-    : (municipality?.recoveryScore != null ? municipality.recoveryScore / 100 : 1.0);
-  const score = Math.round(ratio * 100);
+    : (municipality?.recoveryScore != null ? municipality.recoveryScore / 100 : null);
+
+  if (ratio == null || isNaN(ratio)) {
+    // Unavailable / Neutral state: No valid satellite pass or missing baseline
+    return {
+      color: selected
+        ? (light ? '#0f172a' : '#ffffff')
+        : (light ? 'rgba(100, 116, 139, 0.45)' : 'rgba(148, 163, 184, 0.4)'),
+      weight: selected ? 2.5 : 1.0,
+      fillColor: '#64748b', // Neutral Slate
+      fillOpacity: selected ? 0.85 : (light ? 0.45 : 0.40),
+      lineJoin: 'round' as const,
+      lineCap: 'round' as const,
+    };
+  }
 
   if (glow) {
     if (ratio >= 0.90) {
@@ -1940,7 +1953,13 @@ function LeafletMap({
     const simData = (pcode && activeSimulationMapRef.current[pcode])
       || (props.id && activeSimulationMapRef.current[props.id])
       || (props.name && activeSimulationMapRef.current[props.name.toLowerCase().trim()]);
-    if (!simData) return '#10b981'; // default green
+    if (!simData) {
+      const muni = pcode ? municipalitiesByIdRef.current.get(pcode) : null;
+      if (muni?.recoveryScore != null) {
+        return muni.recoveryScore < 60 ? '#ef4444' : muni.recoveryScore < 90 ? '#f59e0b' : '#10b981';
+      }
+      return '#64748b'; // Neutral slate when unavailable
+    }
     if (simData.recovery_ratio < 0.60) return '#ef4444'; // Red: Critical
     if (simData.recovery_ratio < 0.90) return '#f59e0b'; // Amber: Active Restoration
     return '#10b981'; // Green: Near-Full Recovery
@@ -2049,10 +2068,10 @@ function LeafletMap({
         || (normName && simMap[normName]);
       if (m) {
         updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current, simRecord);
-        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${((m.recoveryScore ?? 0) * 0.45).toFixed(1)} nW`;
         const tip = nightGlowModeRef.current
-          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
-          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery`;
         layer.setTooltipContent(tip);
       }
       if (typeof (layer as any)._updatePath === 'function') {
@@ -3119,15 +3138,15 @@ function LeafletMap({
 
         const initialName = municipality?.name || rawName;
         const initialProvince = municipality?.province || String(props.ADM2_EN || props.province || '');
-        const initialScore = municipality?.recoveryScore ?? 50;
+        const scoreVal = municipality?.recoveryScore;
 
         const isNight = nightGlowModeRef.current;
-        const radVal = municipality?.currentRadiance ?? (initialScore * 0.45);
-        const tooltipText = isNight
-          ? `${initialName}${initialProvince ? ` (${initialProvince})` : ''} · ${initialScore}% recovery · ${radVal.toFixed(1)} nW radiance`
-          : initialProvince
-            ? `${initialName} (${initialProvince}) · ${initialScore}% recovery`
-            : `${initialName} · ${initialScore}% recovery`;
+        const radVal = municipality?.currentRadiance;
+        const scoreText = scoreVal != null ? `${scoreVal}% recovery` : 'Score Pending / Unavailable';
+        const radText = radVal != null ? ` · ${radVal.toFixed(1)} nW radiance` : '';
+        const tooltipText = initialProvince
+          ? `${initialName} (${initialProvince}) · ${scoreText}${isNight ? radText : ''}`
+          : `${initialName} · ${scoreText}${isNight ? radText : ''}`;
 
         featureLayer.bindTooltip(tooltipText, {
           sticky: true,
@@ -3182,12 +3201,12 @@ function LeafletMap({
 
             const ratio = simRecord != null
               ? simRecord.recovery_ratio
-              : (targetM?.currentRadiance != null && targetM?.baselineRadiance
+              : (targetM?.currentRadiance != null && targetM?.baselineRadiance && targetM.baselineRadiance > 0
                 ? (targetM.currentRadiance / targetM.baselineRadiance)
-                : (targetM?.recoveryScore ?? initialScore) / 100);
+                : (targetM?.recoveryScore != null ? targetM.recoveryScore / 100 : null));
 
-            const statusTier: 'critical' | 'restoration' | 'recovered' =
-              ratio < 0.60 ? 'critical' : ratio < 0.90 ? 'restoration' : 'recovered';
+            const statusTier: 'critical' | 'restoration' | 'recovered' | null =
+              ratio == null ? null : ratio < 0.60 ? 'critical' : ratio < 0.90 ? 'restoration' : 'recovered';
             onHoverRagStatusChangeRef.current?.(statusTier);
 
             if (typeof (featureLayer as any).setStyle === 'function') {
@@ -3196,7 +3215,7 @@ function LeafletMap({
                 color: '#ffffff',
                 fillOpacity: 0.95,
                 fillColor: activeNight
-                  ? (initialScore >= 90 ? '#ffc04d' : initialScore >= 60 ? '#f59e0b' : '#1e293b')
+                  ? (ratio == null ? '#64748b' : ratio >= 0.9 ? '#ffc04d' : ratio >= 0.6 ? '#f59e0b' : '#1e293b')
                   : undefined,
               });
             }
@@ -3258,10 +3277,10 @@ function LeafletMap({
           m.currentRadiance = simRecord.post_radiance;
         }
         updateLayerStyle(featureLayer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowModeRef.current, simRecord);
-        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${((m.recoveryScore ?? 0) * 0.45).toFixed(1)} nW`;
         const tip = nightGlowModeRef.current
-          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
-          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery`;
         featureLayer.setTooltipContent(tip);
       }
     });
@@ -3799,10 +3818,10 @@ function LeafletMap({
 
       if (m) {
         updateLayerStyle(layer, m, id === selectedIdRef.current || m.id === selectedIdRef.current, isLightRef.current, nightGlowMode, simRecord);
-        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${(m.recoveryScore * 0.45).toFixed(1)} nW`;
+        const radVal = m.currentRadiance ? `${m.currentRadiance.toFixed(1)} nW` : `${((m.recoveryScore ?? 0) * 0.45).toFixed(1)} nW`;
         const tip = nightGlowMode
-          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery · ${radVal} radiance`
-          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore}% recovery`;
+          ? `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery · ${radVal} radiance`
+          : `${m.name}${m.province ? ` (${m.province})` : ''} · ${m.recoveryScore != null ? `${m.recoveryScore}%` : 'N/A'} recovery`;
         layer.setTooltipContent(tip);
       }
     });
@@ -4219,10 +4238,10 @@ function LeafletMap({
 
       if (municipality) {
         updateLayerStyle(layer, municipality, id === selectedId || municipality.id === selectedId, isLightRef.current, nightGlowModeRef.current, simRecord);
-        const radVal = municipality?.currentRadiance ? `${municipality.currentRadiance.toFixed(1)} nW` : `${(municipality.recoveryScore * 0.45).toFixed(1)} nW`;
+        const radVal = municipality?.currentRadiance ? `${municipality.currentRadiance.toFixed(1)} nW` : `${((municipality.recoveryScore ?? 0) * 0.45).toFixed(1)} nW`;
         const tip = nightGlowModeRef.current
-          ? `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery · ${radVal} radiance`
-          : `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore}% recovery`;
+          ? `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore != null ? `${municipality.recoveryScore}%` : 'N/A'} recovery · ${radVal} radiance`
+          : `${municipality.name}${municipality.province ? ` (${municipality.province})` : ''} · ${municipality.recoveryScore != null ? `${municipality.recoveryScore}%` : 'N/A'} recovery`;
         layer.setTooltipContent(tip);
       }
     });

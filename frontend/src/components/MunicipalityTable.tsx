@@ -12,7 +12,7 @@ type SortKey = 'recoveryScore' | 'name' | 'province' | 'estimatedDaysToRecover';
 
 export default function MunicipalityTable({ municipalities, selectedId, onSelect }: MunicipalityTableProps) {
   const sorted = [...municipalities]
-    .sort((a, b) => a.recoveryScore - b.recoveryScore || a.name.localeCompare(b.name))
+    .sort((a, b) => (a.recoveryScore ?? 0) - (b.recoveryScore ?? 0) || a.name.localeCompare(b.name))
     .slice(0, 5);
 
   return (
@@ -77,13 +77,14 @@ export default function MunicipalityTable({ municipalities, selectedId, onSelect
                         backgroundColor: `${getRecoveryStatusColor(m.status)}15`,
                       }}
                     >
-                      {m.recoveryScore >= 90 ? 'Near-Full Recovery' :
+                      {m.recoveryScore == null ? 'Unavailable' :
+                       m.recoveryScore >= 90 ? 'Near-Full Recovery' :
                        m.recoveryScore >= 60 ? 'Active Restoration' : 'Critical Deficit'}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-right">
                     <span className="font-bold text-base" style={{ color: getRecoveryColor(m.recoveryScore) }}>
-                      {m.recoveryScore}
+                      {m.recoveryScore != null ? m.recoveryScore : '—'}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-right text-slate-500 dark:text-ink-400 hidden lg:table-cell">

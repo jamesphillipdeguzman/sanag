@@ -5,6 +5,7 @@ from backend.executive_summary import (
     generate_fallback_briefing,
     generate_recovery_briefing,
     _parse_event_context,
+    disaggregate_deficit_cohorts,
 )
 
 
@@ -229,3 +230,84 @@ class TestBackendAPISerialization:
         assert response.status_code == 200
         assert "image/jpeg" in response.headers.get("content-type", "")
         assert len(response.content) > 100000
+
+
+class TestDisaggregatedDeficitCohorts:
+    def test_disaggregate_deficit_cohorts_arithmetic_invariant(self):
+        # 142 total: 13 restored (>= 90%), 42 critical (< 60%), 87 warning (60-89%)
+        scoped_lgus = []
+        for i in range(13):
+            scoped_lgus.append({"name": f"Restored_{i}", "recovery_score": 92.0})
+        for i in range(42):
+            scoped_lgus.append({"name": f"Critical_{i}", "recovery_score": 45.0})
+        for i in range(87):
+            scoped_lgus.append({"name": f"Warning_{i}", "recovery_score": 75.0})
+
+        cohorts = disaggregate_deficit_cohorts(scoped_lgus)
+
+        assert cohorts["total_monitored"] == 142
+        assert cohorts["restored_count"] == 13
+        assert cohorts["critical_count"] == 42
+        assert cohorts["warning_count"] == 87
+        assert cohorts["non_restored_total"] == 129
+        # Sum invariant: 13 + 87 + 42 = 142
+        assert cohorts["restored_count"] + cohorts["warning_count"] + cohorts["critical_count"] == cohorts["total_monitored"]
+
+    def test_parse_event_context_disaggregated_metrics(self):
+        sample_context = """
+Disaster Incident: Eruption Kanlaon (2024-06-03)
+Incident Severity: High | Category: Volcanic Eruption
+Total Municipalities Monitored: 142
+Island-wide Average Recovery Score: 68%
+Municipalities >= 90% Restored: 13
+Municipalities in Warning/Active Restoration (60-89%): 87
+Municipalities in Critical Outage (<60%): 42
+Total Non-Restored LGUs: 129
+Top Critical Outage LGUs: Canlaon City; Vallehermoso; San Carlos City
+"""
+        data = _parse_event_context(sample_context)
+
+        assert data["total_monitored"] == "142"
+        assert data["restored_count"] == "13"
+        assert data["critical_count"] == "42"
+        assert data["warning_count"] == "87"
+        assert data["non_restored_total"] == "129"
+
+    def test_generate_fallback_briefing_exact_critical_count_and_no_conflation(self):
+        sample_context = """
+Disaster Incident: Eruption Kanlaon (2024-06-03)
+Incident Severity: High | Category: Volcanic Eruption
+Total Municipalities Monitored: 142
+Island-wide Average Recovery Score: 68%
+Municipalities >= 90% Restored: 13
+Municipalities in Warning/Active Restoration (60-89%): 87
+Municipalities in Critical Outage (<60%): 42
+Total Non-Restored LGUs: 129
+Top Critical Outage LGUs: Canlaon City; Vallehermoso; San Carlos City
+"""
+        briefing = generate_fallback_briefing(sample_context)
+
+        # 1. Critical Alerts reports strictly 42 municipalities under critical outage status (<60%)
+        assert "* **Severe Outage Clusters**: **42** municipalities remain under critical outage status (<60% baseline radiance)" in briefing
+
+        # 2. Executive summary accurately reports 42 critical and 87 warning
+        assert "While **13** municipalities have achieved near-full recovery (>= 90%), **42** jurisdictions remain in critical outage status (<60%) and **87** in moderate recovery/warning states (60–89%)" in briefing
+
+        # 3. Forbid conflating all 129 unrecovered with <60%
+        assert "129 municipalities remain under critical outage status" not in briefing
+        assert "129 jurisdictions remain in critical or warning states (<60%)" not in briefing
+
+    def test_generate_recovery_briefing_includes_disaggregated_cohort_rules(self):
+        sample_context = """
+Disaster Incident: Eruption Kanlaon (2024-06-03)
+Total Municipalities Monitored: 142
+Municipalities >= 90% Restored: 13
+Municipalities in Warning/Active Restoration (60-89%): 87
+Municipalities in Critical Outage (<60%): 42
+Total Non-Restored LGUs: 129
+"""
+        # Testing fallback briefing produced when API key is simulated absent
+        briefing = generate_recovery_briefing(sample_context)
+        assert "**42** municipalities remain under critical outage status (<60% baseline radiance)" in briefing
+        assert "129 municipalities remain under critical outage status" not in briefing
+

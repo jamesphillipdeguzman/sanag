@@ -429,32 +429,69 @@ def resolve_region_from_coordinates(lat: Any, lng: Any) -> str:
 
 def filter_scoped_municipalities(
     municipalities: Sequence[Dict[str, Any]],
-    selected_region_key: Optional[str] = "panay"
+    selected_region_key: Optional[str] = "panay",
+    selected_province_key: Optional[str] = None,
+    selected_municipality: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Filters municipalities according to active geographic scope.
-    When 'panay' is selected, returns all municipalities across the 4 constituent provinces
-    (exactly 95 LGUs). Never conflates monitored scope with critical deficit lists.
+    1. Single municipality: returns [selected_municipality]
+    2. Single province: returns matching province LGUs (e.g. 'iloilo', 'capiz', 'batangas', 'leyte')
+    3. Macro-region or single province in selected_region_key
+    When 'panay' is selected, returns all municipalities across the 4 constituent provinces.
+    Supports NIR, provinces, regions, nationwide. Never falls back silently to Panay.
     """
     if not municipalities:
         return []
 
-    reg_key = (selected_region_key or "panay").strip().lower()
+    if selected_municipality:
+        return [selected_municipality]
 
-    if not selected_region_key or reg_key == "panay":
-        panay_matches = [m for m in municipalities if is_panay_province(m.get("province"))]
-        return panay_matches if panay_matches else list(municipalities)
+    def _get_prov(m: Dict[str, Any]) -> str:
+        props = m.get("properties") or {}
+        p = props.get("province") or props.get("ADM2_EN") or m.get("province") or ""
+        return re.sub(r"\s+province$", "", str(p).strip().lower(), flags=re.IGNORECASE).strip()
+
+    # 2. Single province selected
+    if selected_province_key and selected_province_key.strip().lower() not in ("all", ""):
+        p_key = re.sub(r"\s+province$", "", selected_province_key.strip().lower(), flags=re.IGNORECASE).strip()
+        prov_matches = [m for m in municipalities if _get_prov(m) == p_key or p_key in _get_prov(m)]
+        return prov_matches
+
+    raw_reg_key = (selected_region_key or "panay").strip().lower()
+    reg_key = re.sub(r"\s+province$", "", raw_reg_key, flags=re.IGNORECASE).strip()
 
     if reg_key in ("all", "philippines", "nationwide"):
         return list(municipalities)
 
+    # Single province passed via selected_region_key (e.g. 'iloilo', 'capiz', 'aklan', 'antique')
+    if reg_key in PANAY_PROVINCE_SET or reg_key in ("batangas", "laguna", "cavite", "quezon", "leyte", "cebu", "bohol", "guimaras"):
+        prov_matches = [m for m in municipalities if _get_prov(m) == reg_key or reg_key in _get_prov(m)]
+        if prov_matches:
+            return prov_matches
+
+    if not selected_region_key or reg_key == "panay":
+        panay_matches = [m for m in municipalities if is_panay_province(_get_prov(m))]
+        return panay_matches if panay_matches else list(municipalities)
+
     if reg_key == "panay_guimaras":
         return [
             m for m in municipalities
-            if is_panay_province(m.get("province")) or (m.get("province") or "").strip().lower() == "guimaras"
+            if is_panay_province(_get_prov(m)) or _get_prov(m) == "guimaras"
         ]
 
-    prov_matches = [m for m in municipalities if (m.get("province") or "").strip().lower() == reg_key]
+    # NIR (Negros Island Region) support
+    if reg_key in ("nir", "negros", "negros_island", "negros_island_region"):
+        nir_provinces = {"negros occidental", "negros oriental", "siquijor"}
+        nir_matches = [
+            m for m in municipalities
+            if _get_prov(m) in nir_provinces
+            or (m.get("region") or "").strip().lower() in ("nir", "negros island region")
+        ]
+        if nir_matches:
+            return nir_matches
+
+    prov_matches = [m for m in municipalities if _get_prov(m) == reg_key]
     if prov_matches:
         return prov_matches
 
@@ -462,7 +499,7 @@ def filter_scoped_municipalities(
     if reg_matches:
         return reg_matches
 
-    return [m for m in municipalities if is_panay_province(m.get("province"))]
+    return list(municipalities)
 
 def aggregate_kpi_metrics(
     scoped_municipalities: Sequence[Dict[str, Any]],
@@ -470,65 +507,86 @@ def aggregate_kpi_metrics(
 ) -> Dict[str, Any]:
     """
     Deterministically computes Summary KPI counters:
-    - Regional / Island Scope:
-      Total Monitored LGUs = len(scoped_municipalities) (95 for Panay)
-      Critical Deficit LGUs = count with R(t) < 60%
-      Affected Population = sum of population of critical LGUs (<60% R(t))
-    - Single Municipality Selected:
-      Total Monitored LGUs = 1
-      Targeted metrics for the selected municipality
+    - Partitioned into strictly disjoint cohorts:
+      total_monitored_lgus = critical_count + intermediate_count + restored_count + unavailable_count
+    - Never defaults missing scores to 100.0%.
+    - Computes avg_recovery strictly over valid scores (None if no valid scores).
     """
-    def get_score(m: Dict[str, Any]) -> float:
+    def get_score(m: Dict[str, Any]) -> Optional[float]:
         val = m.get("recovery_score", m.get("recoveryScore", m.get("r_t")))
         if val is None:
-            return 100.0
+            return None
         try:
             val_f = float(val)
+            if val_f < 0:
+                return None
             if 0 < val_f <= 1.0:
                 return val_f * 100.0
-            return val_f
+            return min(100.0, val_f)
         except (ValueError, TypeError):
-            return 100.0
+            return None
 
     if selected_municipality:
         score = get_score(selected_municipality)
-        is_crit = score < 60.0
+        is_crit = score is not None and score < 60.0
         critical_lgus = [selected_municipality] if is_crit else []
         total_pop = int(selected_municipality.get("population") or 0)
         critical_pop = total_pop if is_crit else 0
-        is_restored = score >= 90.0
+        is_restored = score is not None and score >= 90.0
+        is_intermediate = score is not None and 60.0 <= score < 90.0
+        is_unavailable = score is None
 
         return {
             "total_monitored_lgus": 1,
             "critical_lgus": critical_lgus,
             "critical_count": 1 if is_crit else 0,
             "is_critical": is_crit,
+            "intermediate_count": 1 if is_intermediate else 0,
+            "restored_count": 1 if is_restored else 0,
+            "unavailable_count": 1 if is_unavailable else 0,
             "total_scoped_population": total_pop,
             "critical_population": critical_pop,
             "affected_population": critical_pop,
-            "avg_recovery": round(score),
-            "restored_count": 1 if is_restored else 0,
+            "avg_recovery": round(score) if score is not None else None,
             "is_single_municipality": True,
         }
     else:
-        critical_lgus = [m for m in scoped_municipalities if get_score(m) < 60.0]
+        critical_lgus = []
+        intermediate_lgus = []
+        restored_lgus = []
+        unavailable_lgus = []
+        valid_scores = []
+
+        for m in scoped_municipalities:
+            score = get_score(m)
+            if score is None:
+                unavailable_lgus.append(m)
+            elif score < 60.0:
+                critical_lgus.append(m)
+                valid_scores.append(score)
+            elif score < 90.0:
+                intermediate_lgus.append(m)
+                valid_scores.append(score)
+            else:
+                restored_lgus.append(m)
+                valid_scores.append(score)
+
         total_pop = sum(int(m.get("population") or 0) for m in scoped_municipalities)
         critical_pop = sum(int(m.get("population") or 0) for m in critical_lgus)
-        restored_lgus = [m for m in scoped_municipalities if get_score(m) >= 90.0]
-        avg_rec = round(
-            sum(get_score(m) for m in scoped_municipalities) / len(scoped_municipalities)
-        ) if scoped_municipalities else 0
+        avg_rec = round(sum(valid_scores) / len(valid_scores)) if valid_scores else None
 
         return {
             "total_monitored_lgus": len(scoped_municipalities),
             "critical_lgus": critical_lgus,
             "critical_count": len(critical_lgus),
+            "intermediate_count": len(intermediate_lgus),
+            "restored_count": len(restored_lgus),
+            "unavailable_count": len(unavailable_lgus),
             "is_critical": len(critical_lgus) > 0,
             "total_scoped_population": total_pop,
             "critical_population": critical_pop,
             "affected_population": critical_pop,
             "avg_recovery": avg_rec,
-            "restored_count": len(restored_lgus),
             "is_single_municipality": False,
         }
 

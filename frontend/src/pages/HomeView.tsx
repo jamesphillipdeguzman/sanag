@@ -189,7 +189,7 @@ export default function HomeView({
                 importedEventIds={importedEventIds}
                 onSelectEvent={onSelectEvent}
                 events={events}
-                onNavigateTab={onNavigateTab}
+                onNavigateTab={onNavigateTab ? (tab: string) => onNavigateTab(tab as TabId) : undefined}
               />
             </div>
           </div>
