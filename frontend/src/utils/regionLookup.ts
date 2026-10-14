@@ -274,6 +274,17 @@ export const REGIONAL_CHUNKS: RegionChunkMeta[] = [
 ];
 
 /**
+ * 4 Constituent Provinces of Panay Island (excluding Guimaras island province).
+ * Contains exactly 95 LGUs across Iloilo (44), Antique (18), Aklan (17), and Capiz (16).
+ */
+export const PANAY_PROVINCE_SET = new Set(['iloilo', 'capiz', 'aklan', 'antique']);
+
+export function isPanayProvince(prov?: string | null): boolean {
+  if (!prov) return false;
+  return PANAY_PROVINCE_SET.has(prov.trim().toLowerCase());
+}
+
+/**
  * Standard preset dictionary for quick camera jumps and selector bindings.
  */
 export const REGION_PRESETS: Record<string, RegionPreset> = {

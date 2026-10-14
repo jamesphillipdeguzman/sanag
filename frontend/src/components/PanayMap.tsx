@@ -2540,9 +2540,9 @@ function LeafletMap({
 
   // Asynchronous coordinate-to-region loader for on-demand chunk retrieval
   const loadRegionByCoordinates = async (lat: number, lng: number): Promise<boolean> => {
-    // Prevent reverse coordinate lookup from clobbering an explicitly selected sub-province or region
+    // Prevent reverse coordinate lookup from clobbering an explicitly selected sub-province or regional/island scope
     const currentKey = activeChunkKeyRef.current;
-    if (currentKey && currentKey !== 'philippines' && currentKey !== 'panay') {
+    if (currentKey && currentKey !== 'philippines' && currentKey !== 'nationwide' && currentKey !== 'all') {
       return false;
     }
 
@@ -3494,9 +3494,9 @@ function LeafletMap({
           return;
         }
 
-        // Do not auto-revert if an explicit province or sub-region is selected
+        // Guard against down-scoping broad regional/island scopes (like 'panay', 'panay_guimaras', etc.)
         const currentKey = activeChunkKeyRef.current;
-        if (currentKey && currentKey !== 'philippines' && currentKey !== 'panay') {
+        if (currentKey && currentKey !== 'philippines' && currentKey !== 'nationwide' && currentKey !== 'all') {
           checkViewportFeatures();
           return;
         }
@@ -4477,7 +4477,11 @@ function LeafletMap({
     const lng = matchingAlert?.longitude ?? activeEvent?.longitude;
 
     if (lat != null && lng != null && mapRef.current) {
+      isProgrammaticMoveRef.current = true;
       mapRef.current.flyTo([lat, lng], 8, { animate: true, duration: 0.8 });
+      setTimeout(() => {
+        isProgrammaticMoveRef.current = false;
+      }, 1200);
     }
   }, [activeEventId, isActiveTab]);
 
