@@ -4,8 +4,16 @@
     "name": "Antique Coastal Flooding",
     "startDate": "2026-08-21",
     "endDate": "2026-09-20",
+    "date": "2026-08-21",
     "type": "flood",
     "category": "Flood",
+    "latitude": 10.7000,
+    "longitude": 121.5000,
+    "coordinates": [
+      10.7000,
+      121.5000
+    ],
+    "regionKey": "panay",
     "event_type": "Coastal Flooding",
     "disaster_category": "Monsoon Inundation",
     "root_cause_summary": "Intense southwest monsoon rainfall combined with high tide surge inundating coastal feeders and low-lying distribution networks in Antique.",
@@ -166,8 +174,16 @@
     "name": "Taal Volcano Eruption",
     "startDate": "2020-01-12",
     "endDate": "2020-02-12",
+    "date": "2020-01-12",
     "type": "volcano",
     "category": "Volcanic Eruption",
+    "latitude": 14.0020,
+    "longitude": 120.9930,
+    "coordinates": [
+      14.0020,
+      120.9930
+    ],
+    "regionKey": "calabarzon",
     "event_type": "Volcanic Eruption",
     "disaster_category": "Volcanic Eruption",
     "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",

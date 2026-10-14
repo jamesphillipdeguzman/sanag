@@ -16,23 +16,18 @@ import { apiFetch, setHasLocalFallbackData, safeJsonParse } from './services/api
 import { useServerHealth } from './context/ServerHealthContext.tsx'
 import { useSettings } from './context/SettingsContext.tsx'
 import { createMunicipalities, events as mockEvents, PRIMARY_EVENT_ID } from './data/mockData.ts'
-import { PANAY_TRANSMISSION_STATIONS } from './data/transmissionStations.ts'
+import { PANAY_TRANSMISSION_STATIONS, REGION_PROVINCE_MAP } from './data/transmissionStations.ts'
 import {
   isPanayRegion,
   isNationwideRegion,
   isPanayExclusiveEvent,
   getRegionDisplayName,
 } from './utils/eventScope.ts'
-import {
-  computeDistanceDecayRatio,
-  calculateHaversineDistance,
-  extractCentroid,
-} from './services/simulation.ts'
 import { resolveIncidentScope } from './utils/kpiAggregation.ts'
 import { resolveRegionFromCoordinates } from './utils/regionLookup.ts'
 import './App.css'
 
-export function extractItemCoordinates(item) {
+function extractItemCoordinates(item) {
   if (!item) return null
   let lat = item.latitude != null ? Number(item.latitude) : null
   let lng = item.longitude != null ? Number(item.longitude) : null
@@ -60,7 +55,7 @@ export function extractItemCoordinates(item) {
   return null
 }
 
-export function resolveEventOrAlertRegion(item) {
+function resolveEventOrAlertRegion(item) {
   if (!item) return null
   if (item.regionKey) return item.regionKey
   const coords = extractItemCoordinates(item)
@@ -127,11 +122,6 @@ function applyRecoveryScores(municipalities, records, startDate, endDate, active
       })
   }
 
-  // Pre-calculate event coordinates if present
-  const evtLat = activeEvent?.latitude ?? activeEvent?.coordinates?.[0]
-  const evtLng = activeEvent?.longitude ?? activeEvent?.coordinates?.[1]
-  const hasEventCoords = evtLat != null && evtLng != null && !isNaN(evtLat) && !isNaN(evtLng)
-
   return municipalities.map((municipality) => {
     const pcode = municipality.pcode || municipality.id
     const rawName = (municipality.name || '').toLowerCase().trim()
@@ -143,39 +133,20 @@ function applyRecoveryScores(municipalities, records, startDate, endDate, active
       worstByName.get(rawName) ||
       (cleanName ? worstByName.get(cleanName) : null)
 
-    if (!score) {
-      // Dynamic distance-decay radiance fallback if active event has coordinates
-      if (hasEventCoords) {
-        const centroid = extractCentroid(municipality)
-        const dist = centroid ? calculateHaversineDistance(centroid[0], centroid[1], evtLat, evtLng) : 999
-        const { recovery_ratio, status } = computeDistanceDecayRatio(dist)
-        const recoveryScore = Math.max(0, Math.min(100, Math.round(recovery_ratio * 100)))
-        const baselineRadiance = municipality.baselineRadiance && municipality.baselineRadiance > 0 ? municipality.baselineRadiance : 15.0
-        const currentRadiance = Number((baselineRadiance * recovery_ratio).toFixed(2))
-        return {
-          ...municipality,
-          recoveryScore,
-          status,
-          baselineRadiance,
-          currentRadiance,
-          daysSinceEvent: activeEvent?.date ? Math.max(0, Math.round((Date.now() - new Date(activeEvent.date).getTime()) / 86400000)) : 0,
-          estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
-          recoveryDate: activeEvent?.date || null,
-        }
-      }
-
+    if (!score || score.r_t === null || score.r_t === undefined || isNaN(Number(score.r_t))) {
       return {
         ...municipality,
-        recoveryScore: municipality.recoveryScore ?? 100,
-        status: municipality.status ?? 'restored',
+        recoveryScore: null,
+        status: 'unavailable',
         baselineRadiance: municipality.baselineRadiance ?? 0,
         currentRadiance: municipality.currentRadiance ?? 0,
+        daysSinceEvent: activeEvent?.date ? Math.max(0, Math.round((Date.now() - new Date(activeEvent.date).getTime()) / 86400000)) : 0,
         estimatedDaysToRecover: 0,
-        recoveryDate: municipality.recoveryDate ?? null,
+        recoveryDate: null,
       }
     }
 
-    const recoveryScore = Math.max(0, Math.min(100, Math.round(score.r_t * 100)))
+    const recoveryScore = Math.max(0, Math.min(100, Math.round(Number(score.r_t) * 100)))
     const status = recoveryScore >= 90 ? 'restored' : recoveryScore >= 60 ? 'recovering' : 'critical'
 
     return {
@@ -184,9 +155,9 @@ function applyRecoveryScores(municipalities, records, startDate, endDate, active
       status,
       baselineRadiance: score.baseline_radiance ?? municipality.baselineRadiance,
       currentRadiance: score.daily_radiance ?? score.post_event_radiance ?? municipality.currentRadiance,
-      daysSinceEvent: Math.max(0, Math.round((Date.now() - new Date(score.date).getTime()) / 86400000)),
+      daysSinceEvent: score.date ? Math.max(0, Math.round((Date.now() - new Date(score.date).getTime()) / 86400000)) : 0,
       estimatedDaysToRecover: recoveryScore >= 90 ? 0 : Math.max(1, Math.round((100 - recoveryScore) / 8)),
-      recoveryDate: score.date,
+      recoveryDate: score.date || null,
     }
   })
 }
@@ -209,7 +180,7 @@ function mapApiEvent(event) {
   const mockMatch = mockEvents.find((e) => e.id === String(event.id) || e.name === event.name)
 
   const rawPop = event.affected_population ?? event.affectedPopulation;
-  let affectedPopulation = 0;
+  let affectedPopulation;
 
   const numRawPop = rawPop != null ? Number(rawPop) : 0;
   const numMockPop = mockMatch?.affectedPopulation ? Number(mockMatch.affectedPopulation) : 0;
@@ -306,6 +277,7 @@ function App() {
   const [recoveryDateRange, setRecoveryDateRange] = useState(null)
   const { settings } = useSettings()
   const [selectedRegionKey, setSelectedRegionKey] = useState(() => settings?.defaultRegion || 'panay')
+  const [selectedProvinceKey, setSelectedProvinceKey] = useState(null)
   const [activeTab, setActiveTab] = useState(getTabFromHash)
 
   // Synchronize region if default setting changes
@@ -416,7 +388,11 @@ function App() {
         setRecoveryDate(sDate)
       }
       setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, targetEvent))
-      setIsMapLoading(true)
+      if (targetEvent.id === activeEventId) {
+        setIsMapLoading(false)
+      } else {
+        setIsMapLoading(true)
+      }
 
       // Unify target region resolution from event coordinates / regionKey
       let targetRegion = targetEvent.regionKey || resolveEventOrAlertRegion(targetEvent)
@@ -425,6 +401,7 @@ function App() {
       }
       if (targetRegion && targetRegion !== selectedRegionKey) {
         setSelectedRegionKey(targetRegion)
+        setSelectedProvinceKey(null)
       }
 
       if (shouldNavigateToMap) {
@@ -476,7 +453,7 @@ function App() {
 
     // Severity mapping ('Severe' | 'High' | 'Moderate')
     const rawSev = (alert.severity_text || alert.alert_level || alert.severity || '').toLowerCase()
-    let severity = 'Moderate'
+    let severity;
     if (rawSev.includes('red') || rawSev.includes('severe') || rawSev.includes('catastrophic') || rawSev.includes('major')) {
       severity = 'Severe'
     } else if (rawSev.includes('orange') || rawSev.includes('high')) {
@@ -487,7 +464,7 @@ function App() {
 
     // Event type mapping
     const rawType = (alert.type || alert.category || title).toLowerCase()
-    let disasterType = 'disaster'
+    let disasterType;
     const isVolcanic =
       (alert.type || '').toUpperCase() === 'VO' ||
       rawType.includes('vo') ||
@@ -585,7 +562,11 @@ function App() {
     }
     setLatestObservationDate(null)
     setMunicipalities((curr) => applyRecoveryScores(curr, [], null, null, temporaryEvent))
-    setIsMapLoading(true)
+    if (temporaryEvent.id === activeEventId) {
+      setIsMapLoading(false)
+    } else {
+      setIsMapLoading(true)
+    }
 
     if (targetRegion && targetRegion !== selectedRegionKey) {
       setSelectedRegionKey(targetRegion)
@@ -634,115 +615,6 @@ function App() {
     }
   }, [events, handleSelectEvent, selectedRegionKey, handleSelectTab])
 
-  const baseActiveEvent = events.find((event) => String(event.id) === String(activeEventId)) ?? events[0] ?? null
-
-  // Calculate dynamic affected population for active event based on current municipality recovery statuses
-  const activeAffectedPopulation = useMemo(() => {
-    if (!municipalities || municipalities.length === 0) {
-      return baseActiveEvent?.affectedPopulation || 0
-    }
-    // Sum population of municipalities flagged as affected or under critical thresholds (<60% or critical/warning)
-    const affectedLGUs = municipalities.filter(
-      (m) => m.status === 'critical' || m.status === 'warning' || (m.recoveryScore !== undefined && m.recoveryScore < 60)
-    )
-    if (affectedLGUs.length > 0) {
-      return affectedLGUs.reduce((sum, m) => sum + (m.population || 0), 0)
-    }
-    const unrestored = municipalities.filter((m) => m.status !== 'restored')
-    if (unrestored.length > 0) {
-      return unrestored.reduce((sum, m) => sum + (m.population || 0), 0)
-    }
-    return baseActiveEvent?.affectedPopulation || 0
-  }, [municipalities, baseActiveEvent?.affectedPopulation])
-
-  const activeEvent = useMemo(() => {
-    if (!baseActiveEvent) return null
-    const defaultCoords = [11.0, 122.5]
-    const coords = baseActiveEvent.coordinates ?? (baseActiveEvent.latitude != null && baseActiveEvent.longitude != null ? [baseActiveEvent.latitude, baseActiveEvent.longitude] : defaultCoords)
-    const lat = baseActiveEvent.latitude ?? coords[0] ?? defaultCoords[0]
-    const lng = baseActiveEvent.longitude ?? coords[1] ?? defaultCoords[1]
-    return {
-      ...baseActiveEvent,
-      latitude: lat,
-      longitude: lng,
-      coordinates: [lat, lng],
-      affectedPopulation: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
-      impact_metrics: {
-        lgus: baseActiveEvent.critical_municipalities ?? [],
-        affected_population: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
-      },
-    }
-  }, [baseActiveEvent, activeAffectedPopulation])
-
-  const hasRecoveryDateRange = recoveryDateRange?.eventId === activeEvent?.id
-  const recoveryStartDate = activeEvent?.date
-    ? hasRecoveryDateRange ? formatIsoDate(recoveryDateRange.startDate) : formatIsoDate(activeEvent.date)
-    : ''
-  const isObservationDateValidForEvent = latestObservationDate && activeEvent?.date &&
-    latestObservationDate >= activeEvent.date &&
-    latestObservationDate <= addDays(activeEvent.date, 60)
-  const recoveryEndDate = activeEvent?.date
-    ? hasRecoveryDateRange
-      ? formatIsoDate(recoveryDateRange.endDate)
-      : (activeEvent.endDate && activeEvent.endDate !== activeEvent.date && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
-        ? formatIsoDate(activeEvent.endDate)
-        : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
-    : ''
-
-  const handleRegionChange = useCallback((newKey) => {
-    setSelectedRegionKey(newKey)
-
-    // If switching to a non-Panay region (e.g. 'r4a', 'ncr', 'r3', 'r7', etc.):
-    if (!isPanayRegion(newKey) && !isNationwideRegion(newKey)) {
-      // If currently active event is Panay-exclusive, automatically switch to a compatible incident
-      if (activeEvent && isPanayExclusiveEvent(activeEvent)) {
-        const compatible = events.find((e) => !isPanayExclusiveEvent(e))
-        if (compatible) {
-          handleSelectEvent(compatible.id)
-          setToastMessage(
-            `Geographic scope switched to ${getRegionDisplayName(newKey)}. Automatically selected "${compatible.name}" to prevent Panay blackout mismatch.`
-          )
-          setTimeout(() => setToastMessage(null), 6000)
-        }
-      }
-    }
-  }, [activeEvent, events, handleSelectEvent])
-
-  const handleSelectProvince = useCallback((regionKey) => {
-    if (!activeEventId) {
-      setActiveEventId(PRIMARY_EVENT_ID)
-    }
-    handleRegionChange(regionKey)
-    handleSelectTab('map')
-  }, [activeEventId, handleRegionChange, handleSelectTab])
-
-  const handleCreateCustomEvent = useCallback((newEvent) => {
-    setEvents((prev) => {
-      const filtered = prev.filter((e) => String(e.id) !== String(newEvent.id))
-      return [newEvent, ...filtered]
-    })
-    setActiveEventId(newEvent.id)
-    const sDate = formatIsoDate(newEvent.date)
-    const eDate = formatIsoDate(newEvent.endDate)
-    if (sDate && eDate) {
-      setRecoveryDateRange({ eventId: newEvent.id, startDate: sDate, endDate: eDate })
-    }
-  }, [])
-
-  useEffect(() => {
-    setLatestObservationDate(null)
-  }, [activeEventId])
-
-  // Ensure switching active event cleans up any lingering body locks / overflows from drawers/modals
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.body.style.overflow = ''
-      document.body.style.touchAction = ''
-      document.documentElement.style.overflow = ''
-      document.documentElement.style.touchAction = ''
-    }
-  }, [activeEventId])
-
   const selectMunicipality = useCallback((id) => setSelectedId(id), [])
 
   // Calculate uniform resilience ranks across all municipalities (1-based index from lowest score to highest)
@@ -781,6 +653,186 @@ function App() {
       ) || null
     )
   }, [municipalitiesWithRank, selectedId])
+
+  const baseActiveEvent = events.find((event) => String(event.id) === String(activeEventId)) ?? events[0] ?? null
+
+  // Scoped municipalities for active regional / provincial footprint (strictly respects single municipality, single province, and macro-regions)
+  const scopedMunicipalities = useMemo(() => {
+    // 1. Single municipality
+    if (selectedMunicipality) {
+      return [selectedMunicipality];
+    }
+
+    const cleanProv = (selectedProvinceKey && selectedProvinceKey !== 'all')
+      ? selectedProvinceKey.toLowerCase().replace(/\s+province$/i, '').trim()
+      : null;
+
+    // 2. Single province selected (e.g., 'iloilo', 'capiz', 'batangas', 'leyte')
+    if (cleanProv) {
+      return municipalities.filter((m) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return p === cleanProv || p.includes(cleanProv) || cleanProv.includes(p);
+      });
+    }
+
+    const rawRegKey = (selectedRegionKey || 'panay').toLowerCase().trim();
+    const regKey = rawRegKey.replace(/\s+province$/i, '').trim();
+
+    // 2b. Single province selected as selectedRegionKey (e.g. 'iloilo', 'capiz', 'aklan', 'antique')
+    if (
+      (REGION_PROVINCE_MAP[regKey] && REGION_PROVINCE_MAP[regKey].length === 1) ||
+      ['iloilo', 'capiz', 'aklan', 'antique', 'batangas', 'laguna', 'cavite', 'quezon', 'leyte', 'cebu', 'bohol'].includes(regKey)
+    ) {
+      const targetProv = (REGION_PROVINCE_MAP[regKey]?.[0] || regKey).toLowerCase().replace(/\s+province$/i, '').trim();
+      return municipalities.filter((m) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return p === targetProv || p.includes(targetProv) || targetProv.includes(p);
+      });
+    }
+
+    // 3. Macro-Region selected (e.g., 'panay', 'eastern_visayas')
+    if (selectedRegionKey && (REGION_PROVINCE_MAP[regKey] || REGION_PROVINCE_MAP[selectedRegionKey])) {
+      const provList = REGION_PROVINCE_MAP[regKey] || REGION_PROVINCE_MAP[selectedRegionKey];
+      const allowedProvinces = new Set(
+        provList.map((p) => p.toLowerCase().replace(/\s+province$/i, '').trim())
+      );
+      return municipalities.filter((m) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return allowedProvinces.has(p);
+      });
+    }
+
+    return municipalities;
+  }, [selectedMunicipality, selectedProvinceKey, selectedRegionKey, municipalities]);
+
+  // Calculate dynamic affected population for active event strictly based on critical deficit cohort (<60% R(t)) in scoped footprint
+  const activeAffectedPopulation = useMemo(() => {
+    if (!scopedMunicipalities || scopedMunicipalities.length === 0) {
+      return 0
+    }
+    // Sum population of municipalities under critical thresholds (<60% R(t)) strictly within scoped footprint
+    const criticalLGUs = scopedMunicipalities.filter(
+      (m) => m.recoveryScore != null && m.recoveryScore < 60
+    )
+    if (criticalLGUs.length > 0) {
+      return criticalLGUs.reduce((sum, m) => sum + (m.population || 0), 0)
+    }
+    // Never label the total population as affected when no valid critical deficits exist
+    return 0
+  }, [scopedMunicipalities])
+
+  const activeEvent = useMemo(() => {
+    if (!baseActiveEvent) return null
+    const defaultCoords = [11.0, 122.5]
+    const coords = baseActiveEvent.coordinates ?? (baseActiveEvent.latitude != null && baseActiveEvent.longitude != null ? [baseActiveEvent.latitude, baseActiveEvent.longitude] : defaultCoords)
+    const lat = baseActiveEvent.latitude ?? coords[0] ?? defaultCoords[0]
+    const lng = baseActiveEvent.longitude ?? coords[1] ?? defaultCoords[1]
+    return {
+      ...baseActiveEvent,
+      latitude: lat,
+      longitude: lng,
+      coordinates: [lat, lng],
+      affectedPopulation: activeAffectedPopulation,
+      impact_metrics: {
+        lgus: baseActiveEvent.critical_municipalities ?? [],
+        affected_population: activeAffectedPopulation || baseActiveEvent.affectedPopulation || 0,
+      },
+    }
+  }, [baseActiveEvent, activeAffectedPopulation])
+
+  const hasRecoveryDateRange = recoveryDateRange?.eventId === activeEvent?.id
+  const recoveryStartDate = activeEvent?.date
+    ? hasRecoveryDateRange ? formatIsoDate(recoveryDateRange.startDate) : formatIsoDate(activeEvent.date)
+    : ''
+  const isObservationDateValidForEvent = latestObservationDate && activeEvent?.date &&
+    latestObservationDate >= activeEvent.date &&
+    latestObservationDate <= addDays(activeEvent.date, 60)
+  const recoveryEndDate = activeEvent?.date
+    ? hasRecoveryDateRange
+      ? formatIsoDate(recoveryDateRange.endDate)
+      : (activeEvent.endDate && activeEvent.endDate !== activeEvent.date && activeEvent.endDate.length >= 10 && !isNaN(new Date(activeEvent.endDate).getTime())
+        ? formatIsoDate(activeEvent.endDate)
+        : (isObservationDateValidForEvent ? formatIsoDate(latestObservationDate) : formatIsoDate(addDays(activeEvent.date, 30))))
+    : ''
+
+  const handleRegionChange = useCallback((newKey) => {
+    const rawKey = (newKey || '').toLowerCase().trim();
+    const cleanKey = rawKey.replace(/\s+province$/i, '').trim();
+
+    setSelectedRegionKey(newKey);
+
+    if (
+      (REGION_PROVINCE_MAP[cleanKey] && REGION_PROVINCE_MAP[cleanKey].length === 1) ||
+      ['iloilo', 'capiz', 'aklan', 'antique', 'batangas', 'laguna', 'cavite', 'quezon', 'leyte', 'cebu', 'bohol', 'guimaras'].includes(cleanKey)
+    ) {
+      setSelectedProvinceKey(cleanKey);
+    } else {
+      setSelectedProvinceKey(null);
+    }
+
+    // If switching to a non-Panay region (e.g. 'r4a', 'ncr', 'r3', 'r7', etc.):
+    if (!isPanayRegion(newKey) && !isNationwideRegion(newKey)) {
+      // If currently active event is Panay-exclusive, automatically switch to a compatible incident
+      if (activeEvent && isPanayExclusiveEvent(activeEvent)) {
+        const compatible = events.find((e) => !isPanayExclusiveEvent(e))
+        if (compatible) {
+          handleSelectEvent(compatible.id)
+          setToastMessage(
+            `Geographic scope switched to ${getRegionDisplayName(newKey)}. Automatically selected "${compatible.name}" to prevent Panay blackout mismatch.`
+          );
+          setTimeout(() => setToastMessage(null), 6000);
+        }
+      }
+    }
+  }, [activeEvent, events, handleSelectEvent]);
+
+  const handleSelectProvince = useCallback((regionOrProvinceKey) => {
+    if (!activeEventId) {
+      setActiveEventId(PRIMARY_EVENT_ID);
+    }
+    const clean = (regionOrProvinceKey || '').toLowerCase().replace(/\s+province$/i, '').trim();
+    setSelectedProvinceKey(clean || null);
+    handleRegionChange(regionOrProvinceKey);
+    handleSelectTab('map');
+  }, [activeEventId, handleRegionChange, handleSelectTab]);
+
+  const handleCreateCustomEvent = useCallback((newEvent) => {
+    setEvents((prev) => {
+      const filtered = prev.filter((e) => String(e.id) !== String(newEvent.id))
+      return [newEvent, ...filtered]
+    })
+    setActiveEventId(newEvent.id)
+    const sDate = formatIsoDate(newEvent.date)
+    const eDate = formatIsoDate(newEvent.endDate)
+    if (sDate && eDate) {
+      setRecoveryDateRange({ eventId: newEvent.id, startDate: sDate, endDate: eDate })
+    }
+  }, [])
+
+  useEffect(() => {
+    setLatestObservationDate(null)
+  }, [activeEventId])
+
+  // Ensure switching active event cleans up any lingering body locks / overflows from drawers/modals
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = ''
+      document.body.style.touchAction = ''
+      document.documentElement.style.overflow = ''
+      document.documentElement.style.touchAction = ''
+    }
+  }, [activeEventId])
+
+
 
   const handleDismissEvent = useCallback(() => {
     setActiveEventId(null)
@@ -955,6 +1007,8 @@ function App() {
       if (!response.ok) return null
       const payload = await safeJsonParse(response)
       if (payload?.data && payload.data.length > 0) {
+        // Discard stale response if active event changed in the meantime
+        if (eventId !== activeEventRef.current?.id) return
         const records = payload.data.map((item) => ({
           ...item,
           daily_radiance: item.post_event_radiance ?? item.daily_radiance,
@@ -982,6 +1036,7 @@ function App() {
 
   const fetchRecoveryScores = useCallback(async (sDate, eDate, signal) => {
     if (!sDate || !eDate || sDate > eDate) return
+    const curEventId = activeEventRef.current?.id
     try {
       const params = new URLSearchParams({ start_date: sDate, end_date: eDate })
       const response = await apiFetch(`/api/v1/recovery-scores?${params}`, { signal })
@@ -991,6 +1046,8 @@ function App() {
         console.warn('[App] Recovery scores payload incomplete or truncated')
         return
       }
+      // Discard stale response if active event changed
+      if (curEventId && curEventId !== activeEventRef.current?.id) return
       setRecoveryRecords(payload.data)
       // Derive the latest observation date from returned records so the default
       // end-date tracks real data rather than the static event+30 fallback
@@ -1019,6 +1076,15 @@ function App() {
     fetchRecoveryScores(recoveryStartDate, recoveryEndDate, controller.signal)
     return () => controller.abort()
   }, [activeEventId, activeEvent?.date, recoveryEndDate, recoveryStartDate, fetchRecoveryScores])
+
+  // Watchdog timer: ensure map loading overlay never stays locked on "Connecting / Calibrating radiance..."
+  useEffect(() => {
+    if (!isMapLoading) return
+    const timer = setTimeout(() => {
+      setIsMapLoading(false)
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, [isMapLoading])
 
   // Register global refetch handler for server health reconnects
   useEffect(() => {
@@ -1364,6 +1430,7 @@ function App() {
             onSelectEvent={handleSelectEvent}
             onNavigateTab={handleSelectTab}
             selectedRegionKey={selectedRegionKey}
+            selectedProvinceKey={selectedProvinceKey}
             recoveryDate={recoveryDate}
             selectedMunicipality={selectedMunicipality}
           />

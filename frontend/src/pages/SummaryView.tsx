@@ -102,10 +102,62 @@ export default function SummaryView({
   selectedProvinceKey,
   selectedMunicipality,
 }: SummaryViewProps) {
-  // Scoped municipalities for active regional footprint (exactly 95 when 'panay' is scoped)
+  // Scoped municipalities for active regional footprint (strictly respects single municipality, single province, and macro-regions)
   const scopedMunicipalities = useMemo(() => {
-    return computeScopedMunicipalities(municipalities, selectedRegionKey);
-  }, [municipalities, selectedRegionKey]);
+    // 1. Single municipality
+    if (selectedMunicipality) {
+      return [selectedMunicipality];
+    }
+
+    const normProvKey = selectedProvinceKey && selectedProvinceKey !== 'all'
+      ? selectedProvinceKey.toLowerCase().replace(/\s+province$/i, '').trim()
+      : null;
+
+    // 2. Single province selected (e.g., 'iloilo', 'capiz', 'batangas', 'leyte')
+    if (normProvKey) {
+      return municipalities.filter((m: any) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return p === normProvKey || p.includes(normProvKey) || normProvKey.includes(p);
+      });
+    }
+
+    const rawRegKey = (selectedRegionKey || 'panay').toLowerCase().trim();
+    const regKey = rawRegKey.replace(/\s+province$/i, '').trim();
+
+    // 2b. Single province selected as selectedRegionKey (e.g. 'iloilo', 'capiz', 'aklan', 'antique')
+    if (
+      (REGION_PROVINCE_MAP[regKey] && REGION_PROVINCE_MAP[regKey].length === 1) ||
+      PANAY_PROVINCE_SET.has(regKey)
+    ) {
+      const targetProv = (REGION_PROVINCE_MAP[regKey]?.[0] || regKey).toLowerCase().replace(/\s+province$/i, '').trim();
+      return municipalities.filter((m: any) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return p === targetProv || p.includes(targetProv) || targetProv.includes(p);
+      });
+    }
+
+    // 3. Macro-Region selected (e.g., 'panay', 'eastern_visayas')
+    if (selectedRegionKey && REGION_PROVINCE_MAP[regKey]) {
+      const allowedProvinces = new Set(
+        REGION_PROVINCE_MAP[regKey].map((p) => p.toLowerCase().replace(/\s+province$/i, '').trim())
+      );
+      return municipalities.filter((m: any) => {
+        const p = (m.properties?.province || m.properties?.ADM2_EN || m.province || '')
+          .toLowerCase()
+          .replace(/\s+province$/i, '')
+          .trim();
+        return allowedProvinces.has(p);
+      });
+    }
+
+    return computeScopedMunicipalities(municipalities, selectedRegionKey, selectedProvinceKey, selectedMunicipality);
+  }, [selectedMunicipality, selectedProvinceKey, selectedRegionKey, municipalities]);
 
   // Clean, deterministic KPI metrics separation for Regional vs Single Municipality scope
   const kpiMetrics = useMemo(() => {
@@ -120,32 +172,53 @@ export default function SummaryView({
     criticalPopulation,
     avgRecovery,
     restoredCount,
+    unavailableCount,
+    validScoreCount,
   } = kpiMetrics;
 
   const regionDisplayName = useMemo(() => {
     if (selectedMunicipality) {
       return `${selectedMunicipality.name}, ${selectedMunicipality.province}`;
     }
+    const provKey = selectedProvinceKey && selectedProvinceKey !== 'all'
+      ? selectedProvinceKey.toLowerCase().replace(/\s+province$/i, '').trim()
+      : (selectedRegionKey && (REGION_PROVINCE_MAP[selectedRegionKey.toLowerCase()]?.length === 1 || PANAY_PROVINCE_SET.has(selectedRegionKey.toLowerCase())))
+        ? (REGION_PROVINCE_MAP[selectedRegionKey.toLowerCase()]?.[0] || selectedRegionKey.toLowerCase())
+        : null;
+
+    if (provKey) {
+      const provName = getRegionDisplayName(provKey);
+      if (provName && provName.toLowerCase().includes('province')) {
+        return provName;
+      }
+      return `${provKey.charAt(0).toUpperCase() + provKey.slice(1)} Province`;
+    }
     return getRegionDisplayName(selectedRegionKey);
-  }, [selectedMunicipality, selectedRegionKey]);
+  }, [selectedMunicipality, selectedProvinceKey, selectedRegionKey]);
 
   const regionBadge = useMemo(() => {
+    if (selectedMunicipality) return 'Single LGU';
+    if (selectedProvinceKey && selectedProvinceKey !== 'all') return 'Province Scope';
+    const regKey = (selectedRegionKey || '').toLowerCase().trim();
+    if (REGION_PROVINCE_MAP[regKey]?.length === 1 || PANAY_PROVINCE_SET.has(regKey)) {
+      return 'Province Scope';
+    }
     if (!selectedRegionKey || selectedRegionKey === 'panay') return 'Island-wide';
     if (selectedRegionKey === 'all' || selectedRegionKey === 'philippines') return 'Nationwide';
     return getRegionDisplayName(selectedRegionKey);
-  }, [selectedRegionKey]);
+  }, [selectedMunicipality, selectedProvinceKey, selectedRegionKey]);
 
   // Task 1: Conditional Population KPI Copy & Styling
   // Single LGU: Check if recovery score < 90% (active deficit)
-  const lguRecovery = selectedMunicipality ? normalizeRecoveryScore(selectedMunicipality) : 100;
-  const isLguDeficit = selectedMunicipality ? lguRecovery < 90 : false;
+  const lguRecovery = selectedMunicipality ? normalizeRecoveryScore(selectedMunicipality) : null;
+  const isLguDeficit = lguRecovery != null ? lguRecovery < 90 : false;
 
   const lguPopValue = isLguDeficit
     ? formatAffectedPopulation(totalScopedPopulation)
     : `${formatAffectedCompact(totalScopedPopulation)} total`;
 
   const lguPopAccent = isLguDeficit
-    ? lguRecovery < 60
+    ? (lguRecovery != null && lguRecovery < 60)
       ? 'text-rose-600 dark:text-rose-300'
       : 'text-amber-600 dark:text-amber-300'
     : 'text-slate-800 dark:text-slate-100';
@@ -188,9 +261,10 @@ export default function SummaryView({
     }
 
     // 2. Specific province scope
-    if (selectedProvinceKey) {
+    if (selectedProvinceKey && selectedProvinceKey !== 'all') {
+      const pKey = selectedProvinceKey.toLowerCase().replace(/\s+province$/i, '').trim();
       return ALL_SUBSTATIONS.filter(
-        (s) => s.province.toLowerCase() === selectedProvinceKey.toLowerCase()
+        (s) => s.province.toLowerCase() === pKey
       );
     }
 
@@ -329,16 +403,18 @@ export default function SummaryView({
                 <StatCard
                   icon={<Activity className="h-5 w-5 text-cyan-500" />}
                   label="Restoration Index R(t)"
-                  value={`${avgRecovery}%`}
+                  value={avgRecovery != null ? `${avgRecovery}%` : 'N/A'}
                   accent={
-                    avgRecovery >= 90
-                      ? 'text-emerald-600 dark:text-emerald-300'
-                      : avgRecovery >= 60
-                        ? 'text-amber-600 dark:text-amber-300'
-                        : 'text-rose-600 dark:text-rose-300'
+                    avgRecovery == null
+                      ? 'text-slate-500 dark:text-slate-400'
+                      : avgRecovery >= 90
+                        ? 'text-emerald-600 dark:text-emerald-300'
+                        : avgRecovery >= 60
+                          ? 'text-amber-600 dark:text-amber-300'
+                          : 'text-rose-600 dark:text-rose-300'
                   }
                   badge="Target LGU"
-                  subtext={`Restoration score for ${selectedMunicipality.name}`}
+                  subtext={avgRecovery != null ? `Restoration score for ${selectedMunicipality.name}` : `Observation data pending for ${selectedMunicipality.name}`}
                 />
                 <StatCard
                   icon={<Zap className="h-5 w-5 text-amber-500" />}
@@ -380,10 +456,10 @@ export default function SummaryView({
                 <StatCard
                   icon={<Activity className="h-5 w-5 text-cyan-500" />}
                   label="Average Recovery"
-                  value={`${avgRecovery}%`}
+                  value={avgRecovery != null ? `${avgRecovery}%` : 'N/A'}
                   accent="text-cyan-600 dark:text-cyan-300"
                   badge={regionBadge}
-                  subtext="Aggregated radiance restoration index"
+                  subtext={unavailableCount > 0 ? `${unavailableCount} unavailable · Valid: ${validScoreCount}` : "Aggregated radiance restoration index"}
                 />
                 <StatCard
                   icon={<TrendingUp className="h-5 w-5 text-emerald-500" />}

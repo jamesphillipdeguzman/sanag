@@ -10,8 +10,6 @@ import {
   CloudRain,
   CloudSnow,
   CloudLightning,
-  Wind,
-  Droplets,
   AlertTriangle,
 } from 'lucide-react'
 
@@ -271,7 +269,6 @@ export default function WeatherForecast({
   regionName: propRegionName,
   selectedMunicipality,
   selectedRegionKey,
-  selectedId,
 } = {}) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)

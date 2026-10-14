@@ -1,1 +1,1 @@
-export { ServerStatusBanner, default } from './ServerStatusBanner.tsx';
+export { default } from './ServerStatusBanner.tsx';

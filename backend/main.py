@@ -316,7 +316,7 @@ def compute_event_critical_municipalities(cursor: sqlite3.Cursor, event_date: Op
                 "pcode": r["pcode"] or "UNKNOWN",
                 "recovery_score": score,
                 "r_t": r_t,
-                "status": "critical" if score < 40 else "warning" if score < 60 else "recovering" if score < 90 else "restored"
+                "status": "critical" if score < 60 else "recovering" if score < 90 else "restored"
             })
 
         results.sort(key=lambda x: (x["r_t"], x["recovery_score"]))
@@ -1614,6 +1614,9 @@ class BriefingRequest(BaseModel):
     disaster_category: Optional[str] = None
     root_cause_summary: Optional[str] = None
     infrastructure_impact: Optional[str] = None
+    telemetry_context: Optional[Dict[str, Any]] = None
+    scoped_lgus: Optional[List[Dict[str, Any]]] = None
+    municipalities: Optional[List[Dict[str, Any]]] = None
 
 @app.post("/api/generate-briefing", tags=["AI Briefing"])
 @app.post("/api/v1/generate-briefing", tags=["AI Briefing"])
@@ -1635,6 +1638,8 @@ def api_generate_briefing(
             disaster_category=request.disaster_category if request else None,
             root_cause_summary=request.root_cause_summary if request else None,
             infrastructure_impact=request.infrastructure_impact if request else None,
+            telemetry_context=request.telemetry_context if request else None,
+            scoped_lgus=(request.scoped_lgus or request.municipalities) if request else None,
         )
         return {"status": "success", "briefing": briefing}
     except Exception as e:

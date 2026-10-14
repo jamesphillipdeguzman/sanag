@@ -17,6 +17,46 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 load_dotenv()
 
 
+def disaggregate_deficit_cohorts(scoped_lgus: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Explicitly bins municipalities into mutually exclusive tiers:
+    - critical_lgus: score < 60%
+    - warning_lgus: 60% <= score < 90%
+    - restored_lgus: score >= 90%
+    """
+    def _score(m: Dict[str, Any]) -> float:
+        val = m.get("recovery_score") if m.get("recovery_score") is not None else m.get("recoveryScore")
+        if val is None:
+            status = str(m.get("status") or "").lower()
+            if status == "critical":
+                return 0.0
+            if status in ("warning", "recovering"):
+                return 75.0
+            return 100.0
+        try:
+            num = float(val)
+            if 0 < num <= 1.0:
+                return num * 100.0
+            return num
+        except (ValueError, TypeError):
+            return 100.0
+
+    critical_lgus = [m for m in scoped_lgus if _score(m) < 60]
+    warning_lgus = [m for m in scoped_lgus if 60 <= _score(m) < 90]
+    restored_lgus = [m for m in scoped_lgus if _score(m) >= 90]
+
+    return {
+        "total_monitored": len(scoped_lgus),
+        "restored_count": len(restored_lgus),
+        "critical_count": len(critical_lgus),
+        "warning_count": len(warning_lgus),
+        "non_restored_total": len(critical_lgus) + len(warning_lgus),
+        "critical_lgus": critical_lgus,
+        "warning_lgus": warning_lgus,
+        "restored_lgus": restored_lgus,
+    }
+
+
 def filter_restored_municipalities(
     municipalities: List[Dict[str, Any]], 
     threshold: float = 90.0
@@ -139,6 +179,8 @@ def _parse_event_context(context: str) -> dict:
         "avg_recovery": None,
         "restored_count": None,
         "critical_count": None,
+        "warning_count": None,
+        "non_restored_total": None,
         "top_critical": None,
         "top_benchmark": None,
         "top_performing": None,
@@ -169,6 +211,8 @@ def _parse_event_context(context: str) -> dict:
                 data["avg_recovery"] = parsed.get("avg_recovery") or parsed.get("avg_score")
                 data["restored_count"] = parsed.get("restored_count") or parsed.get("restored")
                 data["critical_count"] = parsed.get("critical_count") or parsed.get("critical")
+                data["warning_count"] = parsed.get("warning_count") or parsed.get("warning") or parsed.get("moderate_count")
+                data["non_restored_total"] = parsed.get("non_restored_total")
                 data["top_critical"] = parsed.get("top_critical")
                 data["top_benchmark"] = parsed.get("top_benchmark")
                 data["top_performing"] = parsed.get("top_performing")
@@ -219,9 +263,31 @@ def _parse_event_context(context: str) -> dict:
     if m_res:
         data["restored_count"] = m_res.group(1).strip()
 
-    m_crit = re.search(r"(?:Municipalities in Critical/Warning State[^:]*|Critical LGUs|Critical Municipalities):\s*(\d+)", text, re.I)
+    m_warn = re.search(r"(?:Municipalities in Warning/Active Restoration[^:]*|Municipalities in Moderate / Warning State[^:]*|Warning/Active Restoration LGUs|Moderate / Warning Deficit[^:]*|Warning LGUs|Warning Municipalities|Active Restoration LGUs):\s*(\d+)", text, re.I)
+    if m_warn:
+        data["warning_count"] = m_warn.group(1).strip()
+
+    m_crit = re.search(r"(?:Municipalities in Critical Outage[^:]*|Critical Deficit[^:]*|Municipalities in Critical/Warning State[^:]*|Critical LGUs|Critical Municipalities):\s*(\d+)", text, re.I)
     if m_crit:
         data["critical_count"] = m_crit.group(1).strip()
+
+    m_non_res = re.search(r"(?:Total Non-Restored LGUs|Non-Restored Total|Unrecovered LGUs|Total Non-Restored|Non-Restored Municipalities):\s*(\d+)", text, re.I)
+    if m_non_res:
+        data["non_restored_total"] = m_non_res.group(1).strip()
+
+    # Calculate arithmetic balance if warning_count or non_restored_total not explicitly given
+    if data.get("total_monitored") and data.get("restored_count") and data.get("critical_count"):
+        try:
+            tot = int(data["total_monitored"])
+            res = int(data["restored_count"])
+            crit = int(data["critical_count"])
+            if data["warning_count"] is None:
+                data["warning_count"] = str(max(0, tot - res - crit))
+            if data["non_restored_total"] is None:
+                warn = int(data["warning_count"])
+                data["non_restored_total"] = str(crit + warn)
+        except (ValueError, TypeError):
+            pass
 
     m_top_crit = re.search(r"Top Critical Outage LGUs:\s*([^\n\r]+)", text, re.I)
     if m_top_crit:
@@ -378,7 +444,11 @@ def _resolve_default_event_profile(data: dict) -> Tuple[str, str, str, str]:
     )
 
 
-def generate_fallback_briefing(context: str) -> str:
+def generate_fallback_briefing(
+    context: str,
+    telemetry_context: Optional[Dict[str, Any]] = None,
+    scoped_lgus: Optional[List[Dict[str, Any]]] = None,
+) -> str:
     """
     Generates a structured, professional situational markdown briefing incorporating 
     live disaster event context without raw dump references when external AI is unavailable.
@@ -398,9 +468,30 @@ def generate_fallback_briefing(context: str) -> str:
         critical_num = 0
 
     try:
+        warning_num = int(data["warning_count"]) if data["warning_count"] is not None and str(data["warning_count"]).isdigit() else 0
+    except (ValueError, TypeError):
+        warning_num = 0
+
+    try:
         total_num = int(data["total_monitored"]) if data["total_monitored"] is not None and str(data["total_monitored"]).isdigit() else 95
     except (ValueError, TypeError):
         total_num = 95
+
+    if scoped_lgus:
+        cohorts = disaggregate_deficit_cohorts(scoped_lgus)
+        total_num = cohorts["total_monitored"]
+        restored_num = cohorts["restored_count"]
+        critical_num = cohorts["critical_count"]
+        warning_num = cohorts["warning_count"]
+    elif telemetry_context:
+        if telemetry_context.get("total_monitored") is not None:
+            total_num = int(telemetry_context["total_monitored"])
+        if telemetry_context.get("restored_count") is not None:
+            restored_num = int(telemetry_context["restored_count"])
+        if telemetry_context.get("critical_count") is not None:
+            critical_num = int(telemetry_context["critical_count"])
+        if telemetry_context.get("warning_count") is not None:
+            warning_num = int(telemetry_context["warning_count"])
 
     # Always enforce 95 LGUs for Panay scope
     if total_num == 93:
@@ -409,6 +500,9 @@ def generate_fallback_briefing(context: str) -> str:
     # If all 93 legacy municipalities were restored, normalize to all 95
     if restored_num == 93 and total_num == 95:
         restored_num = 95
+
+    if warning_num == 0 and total_num > restored_num + critical_num:
+        warning_num = max(0, total_num - restored_num - critical_num)
 
     # 2. Critical Alerts Synthesis: dynamically check for actual deficits (< 60%)
     has_active_critical = critical_num > 0 or (
@@ -442,18 +536,36 @@ def generate_fallback_briefing(context: str) -> str:
         else:
             lead_sentence = "Following active disaster event conditions across the region,"
 
-        effective_total = "95" if (data["total_monitored"] in ["93", 93] or total_num == 95 or not data["total_monitored"]) else str(total_num)
+        if total_num != 95:
+            effective_total = str(total_num)
+            reg_scope_word = "regional"
+        elif data.get("total_monitored") in ["93", 93] or total_num == 95 or not data.get("total_monitored"):
+            effective_total = "95"
+            reg_scope_word = "island-wide"
+        else:
+            effective_total = str(total_num)
+            reg_scope_word = "regional"
+
         if data["avg_recovery"]:
-            telemetry_sentence = f"satellite nightlight observations report an island-wide average recovery score of **{data['avg_recovery']}** across **{effective_total}** monitored LGUs."
+            telemetry_sentence = f"satellite nightlight observations report a {reg_scope_word} average recovery score of **{data['avg_recovery']}** across **{effective_total}** monitored LGUs."
         else:
             telemetry_sentence = f"satellite nightlight telemetry indicates evolving recovery trajectories across **{effective_total}** monitored LGUs."
 
         if restored_num > 0 and critical_num > 0:
-            status_sentence = f"While **{restored_num}** municipalities have achieved near-full recovery (>= 90%), **{critical_num}** jurisdictions remain in critical or warning states (<60%), requiring targeted technical and logistical reinforcement."
+            if warning_num > 0:
+                status_sentence = f"While **{restored_num}** municipalities have achieved near-full recovery (>= 90%), **{critical_num}** jurisdictions remain in critical outage status (<60%) and **{warning_num}** in moderate recovery/warning states (60–89%), requiring targeted technical and logistical reinforcement."
+            else:
+                status_sentence = f"While **{restored_num}** municipalities have achieved near-full recovery (>= 90%), **{critical_num}** jurisdictions remain in critical outage status (<60%), requiring targeted technical and logistical reinforcement."
         elif restored_num > 0:
-            status_sentence = f"Encouragingly, **{restored_num}** municipalities have achieved benchmark restoration (>= 90%), with 0 jurisdictions remaining under critical outage thresholds (<60%)."
+            if warning_num > 0:
+                status_sentence = f"Encouragingly, **{restored_num}** municipalities have achieved benchmark restoration (>= 90%), with 0 jurisdictions remaining under critical outage thresholds (<60%), while **{warning_num}** jurisdictions continue active restoration (60–89%)."
+            else:
+                status_sentence = f"Encouragingly, **{restored_num}** municipalities have achieved benchmark restoration (>= 90%), with 0 jurisdictions remaining under critical outage thresholds (<60%)."
         elif critical_num > 0:
-            status_sentence = f"Currently, **{critical_num}** municipalities remain under critical outage thresholds (<60%), with 0 municipalities having crossed the >= 90% near-full recovery benchmark."
+            if warning_num > 0:
+                status_sentence = f"Currently, **{critical_num}** municipalities remain under critical outage thresholds (<60%) and **{warning_num}** in moderate recovery/warning states (60–89%), with 0 municipalities having crossed the >= 90% near-full recovery benchmark."
+            else:
+                status_sentence = f"Currently, **{critical_num}** municipalities remain under critical outage thresholds (<60%), with 0 municipalities having crossed the >= 90% near-full recovery benchmark."
         else:
             status_sentence = "All monitored municipal jurisdictions have surpassed baseline recovery thresholds, with local distribution grids operating at full or near-full capacity."
 
@@ -464,7 +576,7 @@ def generate_fallback_briefing(context: str) -> str:
             crit_summary = _clean_lgu_summary(data["top_critical"])
             outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities remain under critical outage status (<60% baseline radiance). Most acute deficits recorded in: {crit_summary}."
         elif critical_num > 0:
-            outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities continue to record operational metrics significantly below baseline standards (<60% recovery)."
+            outage_cluster_bullet = f"* **Severe Outage Clusters**: **{critical_num}** municipalities remain under critical outage status (<60% baseline radiance)."
         else:
             crit_summary = _clean_lgu_summary(data["top_critical"])
             outage_cluster_bullet = f"* **Severe Outage Clusters**: Radiance deficits remain concentrated in: {crit_summary}."
@@ -591,11 +703,14 @@ def generate_recovery_briefing(
     disaster_category: Optional[str] = None,
     root_cause_summary: Optional[str] = None,
     infrastructure_impact: Optional[str] = None,
+    telemetry_context: Optional[Dict[str, Any]] = None,
+    scoped_lgus: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Sends disaster recovery context to Gemini for an automated briefing.
     Falls back gracefully to high-quality telemetry synthesis if external API is unreachable.
     Integrates Event Profile & Root Cause metadata alongside VIIRS nocturnal radiance observations.
+    Guarantees strict deficit cohort disaggregation (<60% critical vs 60-89% warning).
     """
     # Normalize event_context so that legacy 93 LGU strings strictly become 95 LGUs
     clean_event_context = re.sub(
@@ -645,6 +760,53 @@ def generate_recovery_briefing(
     ):
         infra_impact = def_infra
 
+    try:
+        restored_count_val = int(parsed_ctx["restored_count"]) if parsed_ctx.get("restored_count") is not None and str(parsed_ctx["restored_count"]).isdigit() else 0
+    except (ValueError, TypeError):
+        restored_count_val = 0
+
+    try:
+        critical_count_val = int(parsed_ctx["critical_count"]) if parsed_ctx.get("critical_count") is not None and str(parsed_ctx["critical_count"]).isdigit() else 0
+    except (ValueError, TypeError):
+        critical_count_val = 0
+
+    try:
+        warning_count_val = int(parsed_ctx["warning_count"]) if parsed_ctx.get("warning_count") is not None and str(parsed_ctx["warning_count"]).isdigit() else None
+    except (ValueError, TypeError):
+        warning_count_val = None
+
+    try:
+        total_monitored_val = int(parsed_ctx["total_monitored"]) if parsed_ctx.get("total_monitored") is not None and str(parsed_ctx["total_monitored"]).isdigit() else 95
+    except (ValueError, TypeError):
+        total_monitored_val = 95
+
+    if warning_count_val is None:
+        warning_count_val = max(0, total_monitored_val - restored_count_val - critical_count_val)
+
+    non_restored_total_val = critical_count_val + warning_count_val
+
+    if telemetry_context:
+        if telemetry_context.get("total_monitored") is not None:
+            total_monitored_val = int(telemetry_context["total_monitored"])
+        if telemetry_context.get("restored_count") is not None:
+            restored_count_val = int(telemetry_context["restored_count"])
+        if telemetry_context.get("critical_count") is not None:
+            critical_count_val = int(telemetry_context["critical_count"])
+        if telemetry_context.get("warning_count") is not None:
+            warning_count_val = int(telemetry_context["warning_count"])
+        if telemetry_context.get("non_restored_total") is not None:
+            non_restored_total_val = int(telemetry_context["non_restored_total"])
+        else:
+            non_restored_total_val = critical_count_val + warning_count_val
+
+    if scoped_lgus:
+        cohorts = disaggregate_deficit_cohorts(scoped_lgus)
+        total_monitored_val = cohorts["total_monitored"]
+        restored_count_val = cohorts["restored_count"]
+        critical_count_val = cohorts["critical_count"]
+        warning_count_val = cohorts["warning_count"]
+        non_restored_total_val = cohorts["non_restored_total"]
+
     api_key = os.getenv("GEMINI_API_KEY")
     prompt = f"""
 Analyze the following disaster recovery scenario in the Philippines.
@@ -652,9 +814,27 @@ Provide a concise, professional briefing suitable for a disaster response comman
 
 PROJECT SANAG OFFICIAL 3-TIER OPERATIONAL BENCHMARKS (R(t) = L(t) / L_baseline):
 - Near-Full Recovery (Normal Operating Conditions): R(t) >= 0.90 (>= 90% baseline radiance)
-- Active Restoration: 0.60 <= R(t) < 0.90 (60% to 89% baseline radiance)
-- Critical Deficit / Severe Blackout: R(t) < 0.60 (< 60% baseline radiance)
+- Active Restoration / Moderate Warning Deficit: 0.60 <= R(t) < 0.90 (60% to 89% baseline radiance)
+- Critical Outage Status / Severe Deficit: R(t) < 0.60 (< 60% baseline radiance)
 - No Data / Cloud Masked: None
+
+COHORT TELEMETRY CONTEXT & METRIC DISAGGREGATION:
+- Total Monitored: {total_monitored_val} LGUs
+- Near-Full Restoration (>= 90%): {restored_count_val} jurisdictions
+- Moderate / Active Restoration / Warning Deficit (60% <= R(t) < 90%): {warning_count_val} jurisdictions
+- Critical Outage Status (< 60%): {critical_count_val} jurisdictions (STRICTLY < 60%)
+- Non-Restored Total (Sum of Critical + Warning): {non_restored_total_val} jurisdictions
+
+STRICT METRIC CLASSIFICATION & COHORT CONSISTENCY RULES:
+1. Critical Outage Status (< 60%): MUST reference strictly {critical_count_val} jurisdictions. NEVER use {non_restored_total_val} for the <60% threshold.
+2. Moderate / Warning Deficit (60% <= R(t) < 90%): MUST reference strictly {warning_count_val} jurisdictions.
+3. Near-Full Restoration (>= 90%): MUST reference strictly {restored_count_val} jurisdictions.
+4. CONSISTENCY RULE - NO CONFLATION:
+   - FORBIDDEN: NEVER apply the "<60%" or "critical outage" label to {non_restored_total_val}. The <60% label belongs strictly to the {critical_count_val} jurisdictions.
+   - If discussing unrecovered areas as a group in the Executive Summary, you MUST describe them accurately as:
+     "{critical_count_val} in critical outage (<60%) and {warning_count_val} in moderate recovery/warning (60–89%)".
+   - In "CRITICAL ALERTS", the "Severe Outage Clusters" bullet MUST report strictly {critical_count_val} municipalities under critical outage status (<60% baseline radiance).
+   - Arithmetic Cohort Invariant: {restored_count_val} (Restored) + {warning_count_val} (Warning) + {critical_count_val} (Critical) = {total_monitored_val} Total Monitored LGUs.
 
 EVENT PROFILE & ROOT CAUSE PARAMETERS:
 - Classification: {ev_type} ({dis_cat})
@@ -677,34 +857,34 @@ A concise overview distinguishing between physical disaster damage and operation
 
 ### Executive Summary
 A 2-3 sentence overview of grid restoration progress.
-- Note on scope: Panay Island comprises exactly 95 monitored Local Government Units (LGUs)—including 17 in Aklan, 18 in Antique, 16 in Capiz, and 44 in Iloilo (encompassing Iloilo City as a highly urbanized city and Passi City as a component city, alongside Roxas City and all component municipalities). Always report the monitored scope as 95 LGUs (never 93).
-- When Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. Instead, it must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
-- Jurisdictions with scores from 60% to 89% (0.60 to 0.89) are in "Active Restoration", while scores under 60% (< 0.60) are "Critical Deficits".
+- Note on scope: If scope is Panay Island, it comprises exactly 95 monitored Local Government Units (LGUs)—including 17 in Aklan, 18 in Antique, 16 in Capiz, and 44 in Iloilo (encompassing Iloilo City as a highly urbanized city and Passi City as a component city, alongside Roxas City and all component municipalities). Always report the monitored scope as 95 LGUs (never 93).
+- When Critical Outage Status (<60%) is 0 (or all municipalities have reached benchmark recovery >= 90%), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. Instead, it must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all {total_monitored_val} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
+- When deficit municipalities exist, accurately distinguish between the {critical_count_val} jurisdictions in critical outage (<60%) and the {warning_count_val} jurisdictions in moderate recovery/warning (60–89%). Never label all {non_restored_total_val} unrecovered municipalities as critical (<60%).
 
 ### Critical Alerts
-Bullet points highlighting the most severely affected municipalities (< 60% baseline radiance), persistent feeder outages, and vulnerable coastal or rural communities. If Municipalities in Critical/Warning State (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
+Bullet points highlighting the most severely affected municipalities (< 60% baseline radiance, strictly referencing the {critical_count_val} critical jurisdictions), persistent feeder outages, and vulnerable coastal or rural communities. If Critical Outage Status (<60%) is 0 ({critical_count_val} == 0) or all municipalities have reached benchmark recovery (>= 90%), completely suppress any outage warnings, severe cluster counts, or vulnerable community deficits; instead, confirm zero active outages, stable grid voltage, and fully restored community power lines.
 
 ### Restoration Benchmarks
-Key milestones, municipalities that have reached >= 90% restoration (or if 0 municipalities have crossed >= 90%, accurately designate the section or bullet as "Top Performing Hubs" reflecting their actual sub-90% recovery scores in the Active Restoration band 60%–89% without falsely claiming any municipality reached >= 90%), and regional recovery baselines.
+Key milestones, municipalities that have reached >= 90% restoration ({restored_count_val} jurisdictions, or if 0 municipalities have crossed >= 90%, accurately designate the section or bullet as "Top Performing Hubs" reflecting their actual sub-90% recovery scores in the Active Restoration band 60%–89% without falsely claiming any municipality reached >= 90%), and regional recovery baselines.
 
 ### Priority Recommendations
 3 actionable next steps for disaster response teams and electric cooperatives. When all monitored municipalities achieve benchmark restoration (>= 90%) with 0 active critical deficits, adjust recommendations to focus on ongoing telemetry re-assessment, long-term grid stability monitoring, and routine utility reporting (instead of emergency generators, lineman mutual aid, or line repairs).
 
 CRITICAL FACTUAL CONSISTENCY RULES:
 - Strictly obey the scenario data numbers and definitions.
-- MONITORED SCOPE: Exactly 95 LGUs across Panay Island. Never state 93 monitored LGUs. Always specify and count 95 LGUs being monitored, including Iloilo City as a highly urbanized city and Passi City as a component city.
+- MONITORED SCOPE: Exactly {total_monitored_val} LGUs being monitored. For Panay Island, never state 93 monitored LGUs; always count 95 LGUs.
 - OPERATIONAL BENCHMARK TIERS: Harmonize all evaluations to the official 3-tier benchmarks:
-  * Near-Full Recovery (>= 90%): >= 0.90 baseline radiance
-  * Active Restoration (60% to 89%): 0.60 to 0.89 baseline radiance
-  * Critical Deficit (< 60%): < 0.60 baseline radiance. All values under 0.60 are critical deficits; never classify 0.60–0.89 as critical outages.
-- EXECUTIVE SUMMARY RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. It must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all 95 monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
-- CRITICAL ALERTS RULE: Check if "Municipalities in Critical/Warning State (<60%)" is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 (or all municipalities meet recovery benchmarks), the Critical Alerts section MUST completely suppress any outage warnings, severe cluster counts, infrastructure bottleneck claims, or vulnerable community deficit texts. NEVER list fully recovered municipalities (scores >= 60% or >= 90%) as having outages, blackouts, or deficits. Instead, the Critical Alerts section MUST render clean, positive steady-state bullet points confirming:
+  * Near-Full Recovery (>= 90%): >= 0.90 baseline radiance ({restored_count_val} LGUs)
+  * Active Restoration / Warning Deficit (60% to 89%): 0.60 to 0.89 baseline radiance ({warning_count_val} LGUs)
+  * Critical Deficit (< 60%): < 0.60 baseline radiance ({critical_count_val} LGUs). All values under 0.60 are critical deficits; never classify 0.60–0.89 as critical outages.
+- EXECUTIVE SUMMARY RULE: Check if Critical Outage Status (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0 ({critical_count_val} == 0), the Executive Summary MUST entirely discard words like "critical or warning states", "requiring targeted technical and logistical reinforcement", or low average recovery percentages. It must dynamically output a positive, steady-state narrative: "Following the impact of [Event Name], satellite nightlight observations confirm that all {total_monitored_val} monitored LGUs have achieved benchmark restoration (>= 90%) with zero active outage clusters. The regional power grid operates at stable baseline capacity, requiring only routine maintenance and telemetry monitoring."
+- CRITICAL ALERTS RULE: Check if Critical Outage Status (<60%) is 0 or all municipalities have reached benchmark recovery (>= 90%). When active critical deficits equal 0, the Critical Alerts section MUST completely suppress any outage warnings, severe cluster counts, infrastructure bottleneck claims, or vulnerable community deficit texts. NEVER list fully recovered municipalities (scores >= 60% or >= 90%) as having outages, blackouts, or deficits. Under "Severe Outage Clusters", strictly reference the {critical_count_val} municipalities under critical outage status (<60% baseline radiance), NEVER {non_restored_total_val}. Instead, if deficits equal 0, the Critical Alerts section MUST render clean, positive steady-state bullet points confirming:
   1. Zero Active Outages: Confirmation that no active outage clusters remain and all monitored LGUs have surpassed baseline recovery.
   2. Stable Grid Voltage: High-voltage transmission corridors and localized distribution feeders report balanced phase loading and steady-state voltage stability.
   3. Fully Restored Community Lines: Full re-energization across public facilities, healthcare centers, water pumping stations, and residential distribution lines without emergency generator dependencies.
 - Only state that a municipality has reached or exceeded 90% restoration / near-full recovery if its score is actually >= 90%.
 - If Municipalities >= 90% Restored is 0, state that 0 municipalities have achieved >= 90% recovery and describe the highest-performing municipalities as "Top Performing Hubs" with their exact reported scores. Never round up sub-90% scores (such as 82% or 88%) to 90% or claim they met the 90% benchmark.
-- PRIORITY RECOMMENDATIONS / RESPONSE ACTIONS RULE: Check if ALL monitored municipalities have achieved benchmark restoration (>= 90%) (i.e. 'Municipalities >= 90% Restored' equals 'Total Municipalities Monitored' or is 100%) with 0 active critical deficits ('Municipalities in Critical/Warning State (<60%)' is 0 or 'Top Critical Outage LGUs' indicates no deficits). When all monitored municipalities have crossed >= 90% restoration with 0 active critical deficits, DO NOT advise emergency generator deployment, mobile substation dispatch, lineman mutual aid teams, or line repairs, as emergency restoration is complete. Instead, the 3 recommendations MUST explicitly advise:
+- PRIORITY RECOMMENDATIONS / RESPONSE ACTIONS RULE: Check if ALL monitored municipalities have achieved benchmark restoration (>= 90%) with 0 active critical deficits ({critical_count_val} == 0). When all monitored municipalities have crossed >= 90% restoration with 0 active critical deficits, DO NOT advise emergency generator deployment, mobile substation dispatch, lineman mutual aid teams, or line repairs, as emergency restoration is complete. Instead, the 3 recommendations MUST explicitly advise:
   1. Ongoing telemetry re-assessment (continued automated satellite radiance tracking and daily situational monitoring to verify sustained power delivery across all restored jurisdictions).
   2. Long-term grid stability monitoring (maintaining continuous monitoring of high-voltage transmission backbones, distribution substations, and feeder balancing to ensure grid stability).
   3. Routine utility reporting (transitioning electric cooperatives and municipal disaster councils from emergency disaster response protocols to routine utility reporting and scheduled preventative maintenance).
@@ -715,6 +895,11 @@ Event Type: {ev_type}
 Disaster Category: {dis_cat}
 Primary Driver: {rc_summary}
 Physical Grid Impact: {infra_impact}
+Total Monitored: {total_monitored_val}
+Restored Count (>= 90%): {restored_count_val}
+Critical Count (< 60%): {critical_count_val}
+Warning Count (60-89%): {warning_count_val}
+Non-Restored Total: {non_restored_total_val}
 """
 
     if api_key:
@@ -815,7 +1000,7 @@ Physical Grid Impact: {infra_impact}
             print(f"Gemini client initialization failed: {e}")
 
     # Dynamic contextual fallback synthesis reflecting the passed event data
-    return generate_fallback_briefing(clean_event_context)
+    return generate_fallback_briefing(clean_event_context, telemetry_context=telemetry_context, scoped_lgus=scoped_lgus)
 
 # Alias for compatibility with executive_summary generator naming
 generate_executive_summary = generate_recovery_briefing

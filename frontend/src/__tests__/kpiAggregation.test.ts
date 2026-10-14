@@ -102,7 +102,9 @@ describe('Phase 2 Unit Tests: KPI Aggregation & Hierarchical Scoping', () => {
 
     // Critical LGU count <= 95 (only those with R(t) < 60%)
     expect(kpis.criticalCount).toBeLessThanOrEqual(95);
-    expect(kpis.criticalCount).toBe(scoped.filter((m) => m.recoveryScore < 60).length);
+    expect(kpis.criticalCount).toBe(
+      scoped.filter((m) => m.recoveryScore != null && m.recoveryScore < 60).length
+    );
 
     // Affected population aggregates only critical LGUs across all 4 provinces
     const expectedAffectedPop = kpis.criticalLgus.reduce((sum, m) => sum + (m.population || 0), 0);
@@ -281,5 +283,72 @@ describe('Phase 2 Unit Tests: KPI Aggregation & Hierarchical Scoping', () => {
     expect(resolveRegionFromCoordinates(0.0, 0.0)).toBe('nationwide');
     expect(resolveRegionFromCoordinates(NaN, NaN)).toBe('nationwide');
   });
+
+  it('Test 17: Disaggregated Deficit Cohorts - 142 LGUs (13 Restored, 87 Warning, 42 Critical)', () => {
+    const lgus: Municipality[] = [];
+    // 13 Restored (>= 90%)
+    for (let i = 0; i < 13; i++) {
+      lgus.push({
+        id: `res-${i}`,
+        name: `Restored ${i}`,
+        province: 'Cebu',
+        region: 'Region VII',
+        pcode: `ph07000${i}`,
+        recoveryScore: 92,
+        status: 'restored',
+        population: 50000,
+        daysSinceEvent: 10,
+        baselineRadiance: 10.0,
+        currentRadiance: 9.2,
+        estimatedDaysToRecover: 0,
+        area: 100,
+      });
+    }
+    // 42 Critical (< 60%)
+    for (let i = 0; i < 42; i++) {
+      lgus.push({
+        id: `crit-${i}`,
+        name: `Critical ${i}`,
+        province: 'Negros Oriental',
+        region: 'Region VII',
+        pcode: `ph07100${i}`,
+        recoveryScore: 45,
+        status: 'critical',
+        population: 30000,
+        daysSinceEvent: 10,
+        baselineRadiance: 10.0,
+        currentRadiance: 4.5,
+        estimatedDaysToRecover: 14,
+        area: 120,
+      });
+    }
+    // 87 Warning / Intermediate (60% to 89%)
+    for (let i = 0; i < 87; i++) {
+      lgus.push({
+        id: `warn-${i}`,
+        name: `Warning ${i}`,
+        province: 'Bohol',
+        region: 'Region VII',
+        pcode: `ph07200${i}`,
+        recoveryScore: 78,
+        status: 'warning',
+        population: 25000,
+        daysSinceEvent: 10,
+        baselineRadiance: 10.0,
+        currentRadiance: 7.8,
+        estimatedDaysToRecover: 5,
+        area: 110,
+      });
+    }
+
+    const metrics = computeKpiMetrics(lgus);
+
+    expect(metrics.totalMonitoredLgus).toBe(142);
+    expect(metrics.restoredCount).toBe(13);
+    expect(metrics.criticalCount).toBe(42);
+    expect(metrics.intermediateCount).toBe(87);
+    expect(metrics.restoredCount + metrics.intermediateCount + metrics.criticalCount).toBe(142);
+  });
 });
+
 

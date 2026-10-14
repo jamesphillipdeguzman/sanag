@@ -631,13 +631,14 @@ export default function RecoveryChart({
     const points: HoveredPoint[] = series.map((s, idx) => {
       const pt = getInterpolatedPoint(s, targetDate);
       const color = lineColors[idx % lineColors.length];
+      const fallbackScore = s.municipality.recoveryScore ?? 0;
       return {
         municipalityId: s.municipality.id,
         name: s.municipality.name,
         province: s.municipality.province,
-        score: pt ? pt.recoveryScore : s.municipality.recoveryScore,
+        score: pt ? pt.recoveryScore : fallbackScore,
         x: targetX,
-        y: pt ? pt.y : yScale(s.municipality.recoveryScore),
+        y: pt ? pt.y : yScale(fallbackScore),
         color,
       };
     });
@@ -686,13 +687,14 @@ export default function RecoveryChart({
     const points: HoveredPoint[] = series.map((s, idx) => {
       const pt = getInterpolatedPoint(s, targetDate);
       const color = lineColors[idx % lineColors.length];
+      const fallbackScore = s.municipality.recoveryScore ?? 0;
       return {
         municipalityId: s.municipality.id,
         name: s.municipality.name,
         province: s.municipality.province,
-        score: pt ? pt.recoveryScore : s.municipality.recoveryScore,
+        score: pt ? pt.recoveryScore : fallbackScore,
         x: targetX,
-        y: pt ? pt.y : yScale(s.municipality.recoveryScore),
+        y: pt ? pt.y : yScale(fallbackScore),
         color,
       };
     });

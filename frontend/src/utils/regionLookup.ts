@@ -329,11 +329,61 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   r11: { id: 'mindanao_south', name: 'Region XI (Davao Region)', center: [7.1907, 125.4504], zoom: 8, islandGroup: 'Mindanao' },
   r12: { id: 'mindanao_south', name: 'Region XII (SOCCSKSARGEN)', center: [6.5064, 124.8480], zoom: 8, islandGroup: 'Mindanao' },
   barmm: { id: 'barmm', name: 'BARMM (Bangsamoro)', center: [7.2047, 124.2384], zoom: 8, islandGroup: 'Mindanao' },
+  nir: { id: 'panay_guimaras', name: 'Negros Island Region (NIR)', center: [10.0000, 123.0000], zoom: 8, islandGroup: 'Visayas' },
+  negros: { id: 'panay_guimaras', name: 'Negros Island Region (NIR)', center: [10.0000, 123.0000], zoom: 8, islandGroup: 'Visayas' },
+  negros_occidental: { id: 'panay_guimaras', name: 'Negros Occidental', center: [10.6765, 122.9509], zoom: 9, islandGroup: 'Visayas' },
+  negros_oriental: { id: 'central_visayas', name: 'Negros Oriental', center: [9.6000, 123.0000], zoom: 9, islandGroup: 'Visayas' },
 };
 
 /**
+ * Ray-casting algorithm to test if a point [lat, lng] is inside a polygon ring [[lng, lat], ...]
+ */
+export function pointInPolygonRing(lat: number, lng: number, ring: number[][]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) && (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Validates whether coordinates [lat, lng] fall inside a GeoJSON Feature or Geometry (Polygon or MultiPolygon).
+ */
+export function pointInGeoJsonGeometry(lat: number, lng: number, geometry: any): boolean {
+  if (!geometry || !geometry.type || !geometry.coordinates) return false;
+  if (geometry.type === 'Polygon') {
+    const coords = geometry.coordinates as number[][][];
+    if (coords && coords.length > 0 && pointInPolygonRing(lat, lng, coords[0])) {
+      for (let h = 1; h < coords.length; h++) {
+        if (pointInPolygonRing(lat, lng, coords[h])) return false;
+      }
+      return true;
+    }
+  } else if (geometry.type === 'MultiPolygon') {
+    const multiCoords = geometry.coordinates as number[][][][];
+    for (const poly of multiCoords) {
+      if (poly && poly.length > 0 && pointInPolygonRing(lat, lng, poly[0])) {
+        let inHole = false;
+        for (let h = 1; h < poly.length; h++) {
+          if (pointInPolygonRing(lat, lng, poly[h])) {
+            inHole = true;
+            break;
+          }
+        }
+        if (!inHole) return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Coordinate-to-Region Boundary Resolver
- * Maps hazard epicenter coordinates (latitude, longitude) to existing REGION_PRESETS keys.
+ * Maps hazard epicenter coordinates (latitude, longitude) to existing REGION_PRESETS keys
+ * using authoritative administrative boundaries, never defaulting blindly to Panay.
  */
 export function resolveRegionFromCoordinates(lat: number, lng: number): string {
   if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {

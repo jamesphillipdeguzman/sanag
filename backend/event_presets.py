@@ -6,6 +6,26 @@ PRESETS_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "da
 
 PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
     {
+        "id": "antique-coastal-flooding-2026",
+        "name": "Antique Coastal Flooding",
+        "startDate": "2026-08-21",
+        "endDate": "2026-09-20",
+        "date": "2026-08-21",
+        "type": "flood",
+        "severity": "Moderate",
+        "affected_population": 85000,
+        "description": "Intense southwest monsoon rainfall combined with high tide surge inundating coastal feeders and low-lying distribution networks in Antique.",
+        "category": "Flood",
+        "event_type": "Coastal Flooding",
+        "disaster_category": "Monsoon Inundation",
+        "latitude": 10.7000,
+        "longitude": 121.5000,
+        "coordinates": [10.7000, 121.5000],
+        "regionKey": "panay",
+        "root_cause_summary": "Intense southwest monsoon rainfall combined with high tide surge inundating coastal feeders and low-lying distribution networks in Antique.",
+        "infrastructure_impact": "Localized pole washouts and precautionary de-energization of sub-transmission lines along coastal corridors."
+    },
+    {
         "id": "typhoon-kalmaegi-2025",
         "name": "Typhoon Kalmaegi (Tino)",
         "startDate": "2025-11-03",
@@ -193,6 +213,7 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "name": "Taal Volcano Eruption",
         "startDate": "2020-01-12",
         "endDate": "2020-02-12",
+        "date": "2020-01-12",
         "type": "volcano",
         "severity": "Severe",
         "affected_population": 540000,
@@ -200,6 +221,10 @@ PANAY_EVENT_PRESETS: List[Dict[str, Any]] = [
         "category": "Volcanic Eruption",
         "event_type": "Volcanic Eruption",
         "disaster_category": "Volcanic Eruption",
+        "latitude": 14.0020,
+        "longitude": 120.9930,
+        "coordinates": [14.0020, 120.9930],
+        "regionKey": "calabarzon",
         "root_cause_summary": "Heavy tephra/ashfall accumulation on sub-transmission insulators causing flashover trips, acidic ash corrosion, and visibility-restricted emergency repair corridors.",
         "infrastructure_impact": "De-energization and high-pressure water washing of substation transformer bushings and insulator strings to clear conductive ash deposits before safe re-energization."
     }

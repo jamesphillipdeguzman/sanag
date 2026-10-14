@@ -174,6 +174,73 @@ class TestKpiAggregationAndScoping:
         scoped = filter_scoped_municipalities(panay_municipalities, resolved_key)
         assert len(scoped) == 95, f"Expected 95 LGUs for Panay, got {len(scoped)}"
 
+    def test_single_province_scope_iloilo(self, panay_municipalities):
+        """
+        Input: selectedRegionKey = 'panay', selectedProvinceKey = 'iloilo'.
+        Assert: Scoped municipalities count matches Iloilo LGUs exactly (44).
+        Assert: Every item in scoped list has province === 'iloilo'.
+        Assert: Total monitored LGUs in KPIs equals scoped list length.
+        Assert: Critical deficits and affected population derived strictly from Iloilo subset.
+        """
+        selected_region_key = "panay"
+        selected_province_key = "iloilo"
+
+        scoped = filter_scoped_municipalities(
+            panay_municipalities,
+            selected_region_key=selected_region_key,
+            selected_province_key=selected_province_key,
+        )
+        iloilo_expected_count = len([m for m in panay_municipalities if m["province"].lower() == "iloilo"])
+        assert len(scoped) == iloilo_expected_count
+        assert all(m["province"].lower() == "iloilo" for m in scoped)
+
+        kpis = aggregate_kpi_metrics(scoped)
+        assert kpis["total_monitored_lgus"] == iloilo_expected_count
+        assert kpis["critical_count"] <= iloilo_expected_count
+        assert kpis["critical_count"] == len([m for m in scoped if m["recovery_score"] < 60])
+        expected_affected = sum(m["population"] for m in scoped if m["recovery_score"] < 60)
+        assert kpis["affected_population"] == expected_affected
+
+    def test_single_province_as_region_key_iloilo(self, panay_municipalities):
+        """Selecting 'iloilo' directly as selected_region_key filters strictly to Iloilo."""
+        scoped = filter_scoped_municipalities(panay_municipalities, selected_region_key="iloilo")
+        assert len(scoped) == 44
+        assert all(m["province"].lower() == "iloilo" for m in scoped)
+
+    def test_single_province_scoping_excludes_cross_region_in_memory_features(self, panay_municipalities):
+        """
+        Simulate an in-memory collection containing both Eastern Visayas (143 LGUs) and Panay (95 LGUs).
+        Selecting 'iloilo' must strictly exclude all Eastern Visayas LGUs.
+        """
+        mock_eastern_visayas = [
+            {
+                "id": f"ev-{i}",
+                "name": f"Leyte LGU {i}",
+                "province": "Leyte",
+                "region": "Region VIII",
+                "population": 30000,
+                "recovery_score": 40.0,
+            }
+            for i in range(143)
+        ]
+        all_active_features = panay_municipalities + mock_eastern_visayas
+        assert len(all_active_features) == len(panay_municipalities) + 143
+
+        scoped = filter_scoped_municipalities(
+            all_active_features,
+            selected_region_key="panay",
+            selected_province_key="iloilo",
+        )
+        assert len(scoped) == 44
+        assert all(m["province"].lower() == "iloilo" for m in scoped)
+
+        kpis = aggregate_kpi_metrics(scoped)
+        assert kpis["total_monitored_lgus"] == 44
+        assert kpis["critical_count"] <= 44
+        # Population reflects only critical Iloilo LGUs, never adding the 143 * 30000 Leyte pop
+        iloilo_crit_pop = sum(m["population"] for m in scoped if m["recovery_score"] < 60)
+        assert kpis["affected_population"] == iloilo_crit_pop
+
     def test_incident_selection_allows_downscoping_only_when_unset_or_all(self):
         """Down-scoping is permitted only when filter is unset or 'all'."""
         active_event = {

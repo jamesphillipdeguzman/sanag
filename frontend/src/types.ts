@@ -1,13 +1,14 @@
-export type RecoveryStatus = 'restored' | 'recovering' | 'warning' | 'critical';
+export type RecoveryStatus = 'restored' | 'recovering' | 'warning' | 'critical' | 'unavailable';
 
 export interface Municipality {
   id: string;
   name: string;
   province: string;
   region?: string;
+  properties?: Record<string, any>;
   pcode?: string;
   psgc?: string;
-  recoveryScore: number;
+  recoveryScore?: number | null;
   status: RecoveryStatus;
   population: number;
   daysSinceEvent: number;
@@ -59,6 +60,7 @@ export interface GdacsAlert {
   event_id: string | number;
   id?: string;
   name: string;
+  title?: string;
   type: string;
   category?: string;
   alert_level: 'Red' | 'Orange' | 'Green' | string;
@@ -69,6 +71,7 @@ export interface GdacsAlert {
   pubDate?: string;
   todate?: string;
   description: string;
+  severity?: string;
   severity_text?: string;
   country?: string;
   url?: string;
