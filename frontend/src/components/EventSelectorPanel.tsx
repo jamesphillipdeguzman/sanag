@@ -31,6 +31,7 @@ import {
   isPanayRegion,
   isNationwideRegion,
 } from '@/utils/eventScope';
+import { resolveRegionFromCoordinates } from '@/utils/regionLookup';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,8 @@ export interface EventSelectorPanelProps {
   importedEventIds?: Set<string>;
   /** Currently active geographic region key (e.g., 'panay', 'r4a', 'ncr', 'philippines') */
   selectedRegionKey?: string;
+  onNavigateTab?: (tab: string) => void;
+  gdacsAlerts?: GdacsAlert[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -240,12 +243,12 @@ export function getEventTypeBadge(type?: string) {
 
 /**
  * Constructs a temporary DisasterEvent object matching the historical event catalog structure
- * from live GDACS hazard telemetry (title, coordinates, severity, event type, and date).
+ * from GDACS hazard telemetry (title, coordinates, severity, event type, and date).
  */
 export function createTemporaryEventFromGdacs(alert: GdacsAlert): DisasterEvent {
   const rawAlertId = alert.event_id != null ? String(alert.event_id) : '';
   const id = alert.id ? String(alert.id) : (rawAlertId ? `gdacs-${rawAlertId}` : `gdacs-sim-${Date.now()}`);
-  const title = alert.name || alert.description?.slice(0, 30) || 'Live GDACS Hazard Event';
+  const title = alert.name || alert.description?.slice(0, 30) || 'GDACS Alert';
 
   // 1. Coordinates extraction (ensuring valid [lat, lng])
   let lat: number | null = alert.latitude != null ? Number(alert.latitude) : null;
@@ -259,6 +262,9 @@ export function createTemporaryEventFromGdacs(alert: GdacsAlert): DisasterEvent 
       lat = Number(c0);
       lng = Number(c1);
     }
+  } else if ((lat == null || lng == null) && Array.isArray(alert.geometry?.coordinates) && alert.geometry.coordinates.length >= 2) {
+    lng = Number(alert.geometry.coordinates[0]);
+    lat = Number(alert.geometry.coordinates[1]);
   }
 
   // 2. Severity mapping ('Severe' | 'High' | 'Moderate')
@@ -310,6 +316,8 @@ export function createTemporaryEventFromGdacs(alert: GdacsAlert): DisasterEvent 
     ? Math.round(Number(alert.alert_score) * 200000)
     : severity === 'Severe' ? 750000 : severity === 'High' ? 320000 : 95000;
 
+  const targetRegion = alert.regionKey || (lat != null && lng != null ? resolveRegionFromCoordinates(lat, lng) : 'panay');
+
   return {
     id,
     name: title,
@@ -318,7 +326,7 @@ export function createTemporaryEventFromGdacs(alert: GdacsAlert): DisasterEvent 
     severity,
     type: disasterType,
     affectedPopulation,
-    description: alert.description || `${title} — Real-time GDACS hazard monitoring alert detected in the Philippines.`,
+    description: alert.description || `${title} — GDACS natural hazard alert detected in the Philippines.`,
     category: isVolcanic ? 'Volcanic Eruption' : (alert.category || (alert.type ? String(alert.type) : 'Hazard')),
     alert_level: alert.alert_level || (severity === 'Severe' ? 'Red' : severity === 'High' ? 'Orange' : 'Green'),
     viirs_data_available: true,
@@ -327,6 +335,7 @@ export function createTemporaryEventFromGdacs(alert: GdacsAlert): DisasterEvent 
     longitude: lng,
     coordinates: (lat != null && lng != null) ? [lat, lng] : null,
     is_live_simulated: true,
+    regionKey: targetRegion,
     event_type: isVolcanic ? 'Volcanic Eruption' : undefined,
     disaster_category: isVolcanic ? 'Volcanic Eruption' : undefined,
     root_cause_summary: isVolcanic
@@ -349,9 +358,19 @@ export default function EventSelectorPanel({
   importingGdacsId = null,
   importedEventIds = new Set(),
   selectedRegionKey,
+  onNavigateTab,
+  gdacsAlerts,
 }: EventSelectorPanelProps) {
   const [activeTab, setActiveTab] = useState<Tab>('historical');
   const [mediaModalEvent, setMediaModalEvent] = useState<MediaEventData | null>(null);
+  const [gdacsAlertsCount, setGdacsAlertsCount] = useState<number>(gdacsAlerts?.length ?? 0);
+
+  useEffect(() => {
+    if (gdacsAlerts && gdacsAlerts.length > 0) {
+      setGdacsAlertsCount(gdacsAlerts.length);
+    }
+  }, [gdacsAlerts]);
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -457,7 +476,8 @@ export default function EventSelectorPanel({
             active={activeTab === 'gdacs'}
             onClick={() => setActiveTab('gdacs')}
             icon={<Radio className="h-3.5 w-3.5 shrink-0" />}
-            label="Live GDACS Hazards"
+            label="GDACS Alert"
+            badge={gdacsAlertsCount > 0 ? String(gdacsAlertsCount) : undefined}
             liveIndicator
           />
         </div>
@@ -479,6 +499,7 @@ export default function EventSelectorPanel({
             onOpenMedia={setMediaModalEvent}
             selectedRegionKey={selectedRegionKey}
             viewMode={viewMode}
+            onNavigateTab={onNavigateTab}
           />
         </ErrorBoundary>
       </div>
@@ -489,7 +510,7 @@ export default function EventSelectorPanel({
         aria-labelledby="tab-gdacs"
         hidden={activeTab !== 'gdacs'}
       >
-        <ErrorBoundary name="Live GDACS Hazards Panel" resetKey={activeEvent?.id}>
+        <ErrorBoundary name="GDACS Alert Panel" resetKey={activeEvent?.id}>
           <GdacsPanel
             events={events}
             activeEvent={activeEvent}
@@ -499,6 +520,9 @@ export default function EventSelectorPanel({
             importingGdacsId={importingGdacsId}
             importedEventIds={importedEventIds}
             viewMode={viewMode}
+            onNavigateTab={onNavigateTab}
+            initialAlerts={gdacsAlerts}
+            onAlertsCountChange={setGdacsAlertsCount}
           />
         </ErrorBoundary>
       </div>
@@ -586,6 +610,7 @@ function HistoricalPanel({
   onOpenMedia,
   selectedRegionKey,
   viewMode = 'grid',
+  onNavigateTab,
 }: {
   events: DisasterEvent[];
   activeEvent?: DisasterEvent | null;
@@ -594,6 +619,7 @@ function HistoricalPanel({
   onOpenMedia: (data: MediaEventData) => void;
   selectedRegionKey?: string;
   viewMode?: ViewMode;
+  onNavigateTab?: (tab: string) => void;
 }) {
   // Strictly sort historical presets in reverse chronological order (newest / most recent first)
   const sortedEvents = useMemo(() => {
@@ -861,7 +887,10 @@ function HistoricalPanel({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isCompatible) onSelectEvent(event.id);
+                          if (isCompatible) {
+                            onSelectEvent(event.id);
+                            onNavigateTab?.('map');
+                          }
                         }}
                         disabled={!isCompatible}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50"
@@ -1019,7 +1048,10 @@ function HistoricalPanel({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (isCompatible) onSelectEvent(event.id);
+                          if (isCompatible) {
+                            onSelectEvent(event.id);
+                            onNavigateTab?.('map');
+                          }
                         }}
                         disabled={!isCompatible}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-950/30 transition-all cursor-pointer disabled:opacity-50 shrink-0"
@@ -1062,6 +1094,9 @@ function GdacsPanel({
   importingGdacsId,
   importedEventIds,
   viewMode = 'grid',
+  onNavigateTab,
+  initialAlerts,
+  onAlertsCountChange,
 }: {
   events: DisasterEvent[];
   activeEvent?: DisasterEvent | null;
@@ -1071,6 +1106,9 @@ function GdacsPanel({
   importingGdacsId?: string | null;
   importedEventIds?: Set<string>;
   viewMode?: ViewMode;
+  onNavigateTab?: (tab: string) => void;
+  initialAlerts?: GdacsAlert[];
+  onAlertsCountChange?: (count: number) => void;
 }) {
   const resolveImportedId = (alert: GdacsAlert): string | null => {
     const candidates = [
@@ -1086,10 +1124,18 @@ function GdacsPanel({
     if (byName) return byName.id;
     return null;
   };
-  const [alerts,    setAlerts]    = useState<GdacsAlert[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
-  const [lastFetch, setLastFetch] = useState<Date | null>(null);
+
+  const [gdacsEvents, setGdacsEvents] = useState<GdacsAlert[]>(initialAlerts || []);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState<string | null>(null);
+  const [lastFetch,   setLastFetch]   = useState<Date | null>(null);
+  const [selectedAlertId, setSelectedAlertId] = useState<string>('');
+
+  useEffect(() => {
+    if (initialAlerts && initialAlerts.length > 0) {
+      setGdacsEvents(initialAlerts);
+    }
+  }, [initialAlerts]);
 
   const fetchAlerts = useCallback(async () => {
     setLoading(true);
@@ -1104,49 +1150,79 @@ function GdacsPanel({
         ? json.alerts
         : [];
 
-      // Strictly sort normalized GDACS events in reverse chronological order (newest first)
+      // Strictly sort descending by timestamp/date (newest first)
       const sortedList = [...list].sort((a, b) => {
-        const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0;
-        const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0;
-        return dateB - dateA;
+        const timeA = new Date(a.date || a.fromdate || a.startDate || a.pubDate || 0).getTime() || 0;
+        const timeB = new Date(b.date || b.fromdate || b.startDate || b.pubDate || 0).getTime() || 0;
+        return timeB - timeA;
       });
 
-      setAlerts(sortedList);
+      setGdacsEvents(sortedList);
+      onAlertsCountChange?.(sortedList.length);
       setLastFetch(new Date());
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load live alerts');
+      setError(err instanceof Error ? err.message : 'Failed to load GDACS alerts');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onAlertsCountChange]);
 
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
-  // Memoize sorted alerts with fallback protection
-  const sortedAlerts = useMemo(() => {
-    return [...alerts].sort((a, b) => {
-      const dateA = new Date(a.fromdate || a.startDate || a.date || a.pubDate || 0).getTime() || 0;
-      const dateB = new Date(b.fromdate || b.startDate || b.date || b.pubDate || 0).getTime() || 0;
-      return dateB - dateA; // Descending (latest first)
+  // Memoize sorted GDACS events in descending chronological order (newest first)
+  const sortedGdacsEvents = useMemo(() => {
+    return [...gdacsEvents].sort((a, b) => {
+      const timeA = new Date(a.date || a.fromdate || a.startDate || a.pubDate || 0).getTime() || 0;
+      const timeB = new Date(b.date || b.fromdate || b.startDate || b.pubDate || 0).getTime() || 0;
+      return timeB - timeA; // Descending (latest first)
     });
-  }, [alerts]);
+  }, [gdacsEvents]);
+
+  // Dropdown Default Synchronization:
+  // When GDACS alerts are loaded or selected, automatically synchronize with the
+  // first (newest) event in the sorted array (sortedGdacsEvents[0]), rather than an older event from 2025.
+  useEffect(() => {
+    if (sortedGdacsEvents.length === 0) return;
+
+    // Check if activeEvent is a simulated GDACS event currently active
+    const isSimulatedActive = activeEvent && (activeEvent.is_live_simulated || String(activeEvent.id).startsWith('gdacs-'));
+    if (isSimulatedActive) {
+      const activeMatch = sortedGdacsEvents.find((a) => {
+        const rawId = String(a.event_id ?? a.id ?? '');
+        return rawId === String(activeEvent.id) || `gdacs-${rawId}` === String(activeEvent.id) || String(a.id) === String(activeEvent.id);
+      });
+      if (activeMatch) {
+        setSelectedAlertId(String(activeMatch.event_id ?? activeMatch.id ?? ''));
+        return;
+      }
+    }
+
+    // Default to first (newest) event if not set or invalid
+    setSelectedAlertId((prev) => {
+      const exists = sortedGdacsEvents.some((a) => String(a.event_id ?? a.id ?? '') === prev);
+      if (!prev || !exists) {
+        return String(sortedGdacsEvents[0].event_id ?? sortedGdacsEvents[0].id ?? '');
+      }
+      return prev;
+    });
+  }, [sortedGdacsEvents, activeEvent]);
 
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter alerts dynamically by search query (name, type, alert level, description, country, date)
   const filteredAlerts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return sortedAlerts;
+    if (!q) return sortedGdacsEvents;
 
-    return sortedAlerts.filter((alert) => {
+    return sortedGdacsEvents.filter((alert) => {
       const alertAny = alert as any;
       const name = (alert.name || alertAny.eventname || alertAny.title || '').toLowerCase();
       const type = (alertAny.eventtype || alert.type || '').toLowerCase();
       const level = (alert.alert_level || alertAny.severity || '').toLowerCase();
       const desc = (alert.description || '').toLowerCase();
       const country = (alert.country || '').toLowerCase();
-      const rawDate = String(alert.fromdate || alert.startDate || alert.date || alert.pubDate || '').toLowerCase();
-      const formattedDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate).toLowerCase();
+      const rawDate = String(alert.date || alert.fromdate || alert.startDate || alert.pubDate || '').toLowerCase();
+      const formattedDate = formatGdacsDate(alert.date || alert.fromdate || alert.startDate || alert.pubDate).toLowerCase();
 
       return (
         name.includes(q) ||
@@ -1158,28 +1234,15 @@ function GdacsPanel({
         formattedDate.includes(q)
       );
     });
-  }, [sortedAlerts, searchQuery]);
-
-  // Identify which alert matches the currently active event
-  const activeAlertId = useMemo(() => {
-    if (!activeEvent) return '';
-    const match = sortedAlerts.find((a) => {
-      const importedId = resolveImportedId(a);
-      if (importedId && String(importedId) === String(activeEvent.id)) return true;
-      const rawId = String(a.event_id ?? a.id ?? '');
-      return rawId === String(activeEvent.id) || `gdacs-${rawId}` === String(activeEvent.id);
-    });
-    return match ? String(match.event_id ?? match.id ?? '') : '';
-  }, [activeEvent, sortedAlerts, events, importedEventIds]);
-
-  const lastFetchLabel = lastFetch
-    ? lastFetch.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    : null;
+  }, [sortedGdacsEvents, searchQuery]);
 
   const handleCardClick = (alert: GdacsAlert) => {
+    const alertIdStr = String(alert.event_id ?? alert.id ?? '');
+    setSelectedAlertId(alertIdStr);
     const importedId = resolveImportedId(alert);
     if (importedId) {
       onSelectEvent(importedId);
+      onNavigateTab?.('map');
       return;
     }
 
@@ -1187,6 +1250,7 @@ function GdacsPanel({
 
     if (onSimulateGdacs) {
       onSimulateGdacs(alert, tempEvent);
+      onNavigateTab?.('map');
     }
   };
 
@@ -1195,9 +1259,9 @@ function GdacsPanel({
       {/* Sub-header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
         <p className="text-[11px] text-slate-500 dark:text-ink-400">
-          Real-time GDACS natural hazard alerts filtered for the Philippines. Select an alert from the dropdown or click{' '}
+          GDACS natural hazard alerts filtered for the Philippines. Select an alert from the dropdown or click{' '}
           <span className="font-semibold text-amber-600 dark:text-amber-300">Simulate</span>{' '}
-          to load a live event into the recovery engine.
+          to load an event into the recovery engine.
         </p>
       </div>
 
@@ -1211,12 +1275,13 @@ function GdacsPanel({
           <div className="flex items-center gap-2 w-full min-w-0">
             <select
               id="gdacs-event-select"
-              value={filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) ? activeAlertId : ''}
+              value={selectedAlertId || (sortedGdacsEvents.length > 0 ? String(sortedGdacsEvents[0].event_id ?? sortedGdacsEvents[0].id ?? '') : '')}
               onChange={(e) => {
                 const val = e.target.value;
                 if (!val) return;
+                setSelectedAlertId(val);
                 const chosen = filteredAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val)
-                  || sortedAlerts.find((a) => String(a.event_id ?? a.id ?? '') === val);
+                  || sortedGdacsEvents.find((a) => String(a.event_id ?? a.id ?? '') === val);
                 if (chosen) {
                   handleCardClick(chosen);
                   const el = document.getElementById(`gdacs-alert-card-${val}`);
@@ -1225,18 +1290,18 @@ function GdacsPanel({
                   }
                 }
               }}
-              disabled={loading || sortedAlerts.length === 0}
+              disabled={loading || sortedGdacsEvents.length === 0}
               className="flex-1 min-w-0 w-full truncate rounded-xl px-4 py-2.5 text-xs sm:text-sm font-medium transition-all bg-white text-slate-800 border border-slate-300 shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700/80 dark:shadow-none dark:hover:border-slate-600 dark:focus:ring-cyan-500/30 dark:focus:border-cyan-500 cursor-pointer disabled:opacity-50"
             >
-              {!filteredAlerts.some((a) => String(a.event_id ?? a.id ?? '') === activeAlertId) && (
+              {sortedGdacsEvents.length === 0 && (
                 <option value="" disabled className="bg-white dark:bg-slate-900 text-slate-500">
-                  {loading ? 'Loading live hazards...' : filteredAlerts.length === 0 ? 'No matching live hazards' : 'Choose a live hazard...'}
+                  {loading ? 'Loading GDACS alerts...' : 'No matching GDACS alerts'}
                 </option>
               )}
               {filteredAlerts.map((alert) => {
                 const alertAny = alert as any;
                 const alertId = String(alert.event_id ?? alert.id ?? '');
-                const alertName = alert.name || alertAny.eventname || alertAny.title || 'Live Hazard';
+                const alertName = alert.name || alertAny.eventname || alertAny.title || 'GDACS Alert';
                 const alertLevel = (alert.alert_level || alertAny.severity || 'Alert').toUpperCase();
                 const alertDate = formatGdacsDate(alert.fromdate || alert.startDate || alert.date || alert.pubDate);
                 return (
@@ -1259,7 +1324,7 @@ function GdacsPanel({
           </div>
         </div>
 
-        {/* Row 2: Live Hazards Search Bar */}
+        {/* Row 2: Search Bar */}
         <div className="relative w-full max-w-full box-border">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
           <input
@@ -1267,8 +1332,8 @@ function GdacsPanel({
             id="gdacs-event-search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search live hazards by name, type, or alert level..."
-            disabled={loading || sortedAlerts.length === 0}
+            placeholder="Search GDACS alerts by name, type, or alert level..."
+            disabled={loading || sortedGdacsEvents.length === 0}
             className="w-full max-w-full box-border text-xs sm:text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-8 pr-7 text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20 focus:outline-none transition-colors disabled:opacity-50"
           />
           {searchQuery && (
@@ -1286,7 +1351,7 @@ function GdacsPanel({
       </div>
 
       {/* Loading skeleton */}
-      {loading && sortedAlerts.length === 0 && (
+      {loading && sortedGdacsEvents.length === 0 && (
         <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" : "flex flex-col gap-2.5"}>
           {Array.from({ length: 6 }).map((_, i) => (
             <div
@@ -1301,7 +1366,7 @@ function GdacsPanel({
       {error && !loading && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
           <AlertTriangle className="h-8 w-8 text-amber-400" />
-          <p className="text-sm font-semibold text-slate-700 dark:text-ink-200">Could not load live alerts</p>
+          <p className="text-sm font-semibold text-slate-700 dark:text-ink-200">Could not load GDACS alerts</p>
           <p className="text-xs text-slate-500 dark:text-ink-400 max-w-xs">{error}</p>
           <button
             type="button"
@@ -1314,24 +1379,24 @@ function GdacsPanel({
       )}
 
       {/* Empty state (No alerts fetched from backend) */}
-      {!loading && !error && sortedAlerts.length === 0 && (
+      {!loading && !error && sortedGdacsEvents.length === 0 && (
         <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
           <Radio className="h-8 w-8 text-ink-500" />
           <p className="text-sm font-semibold text-slate-700 dark:text-ink-200">No active GDACS alerts</p>
           <p className="text-xs text-slate-500 dark:text-ink-400">
-            No live natural hazard alerts for the Philippines at this time.
+            No active GDACS hazard alerts for the Philippines at this time.
           </p>
         </div>
       )}
 
       {/* Search Filter Empty State */}
-      {!loading && !error && sortedAlerts.length > 0 && filteredAlerts.length === 0 && (
+      {!loading && !error && sortedGdacsEvents.length > 0 && filteredAlerts.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 px-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 text-center">
           <div className="h-10 w-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-3">
             <Search className="h-5 w-5" />
           </div>
           <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-            No live hazards match &ldquo;{searchQuery}&rdquo;
+            No GDACS alerts match &ldquo;{searchQuery}&rdquo;
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
             Try adjusting your search query, or search by hazard type (e.g., cyclone, earthquake) or alert level.
@@ -1354,8 +1419,10 @@ function GdacsPanel({
             const isImporting  = importingGdacsId === alertId;
             const importedId   = resolveImportedId(alert);
             const isImported   = importedId !== null || !!alert.is_imported;
+            const isSimulatedActive = Boolean(activeEvent && (activeEvent.is_live_simulated || String(activeEvent.id).startsWith('gdacs-')));
             const isActiveCard = Boolean(
-              activeEvent && (
+              activeEvent &&
+              isSimulatedActive && (
                 (importedId !== null && String(importedId) === String(activeEvent.id)) ||
                 String(activeEvent.id) === alertId ||
                 String(activeEvent.id) === `gdacs-${alertId}` ||

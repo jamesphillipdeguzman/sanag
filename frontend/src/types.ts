@@ -52,6 +52,7 @@ export interface DisasterEvent {
   root_cause_summary?: string;
   infrastructure_impact?: string;
   epicenterProvince?: string;
+  regionKey?: string;
 }
 
 export interface GdacsAlert {
@@ -78,4 +79,5 @@ export interface GdacsAlert {
   geometry?: any;
   is_imported?: boolean;
   viirs_data_available?: boolean;
+  regionKey?: string;
 }

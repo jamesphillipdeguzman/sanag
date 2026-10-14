@@ -14,6 +14,7 @@ import ViirsScaleRuler from '@/components/ViirsScaleRuler';
 import { findRegionTreeNode, getRegionNodeBounds, PHILIPPINES_BOUNDS } from '@/utils/philippinesHierarchy';
 import {
   findRegionByCoordinates,
+  resolveRegionFromCoordinates,
   REGIONAL_CHUNKS,
   REGION_PRESETS,
   getAllRegisteredRegions,
@@ -725,10 +726,10 @@ export default function PanayMap({
                       ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 shadow-sm shadow-rose-500/20'
                       : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-ink-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white'
                       }`}
-                    title="Toggle live GDACS hazard epicenter markers on map"
+                    title="Toggle GDACS hazard epicenter markers on map"
                   >
                     <Radio className={`h-3 w-3 ${showGdacsMarkers ? 'text-rose-500 dark:text-rose-400 animate-pulse' : 'text-slate-500 dark:text-ink-400'}`} />
-                    <span>Live Hazards ({alertsWithCoords.length})</span>
+                    <span>GDACS Hazards ({alertsWithCoords.length})</span>
                   </button>
                 )}
               </div>
@@ -787,6 +788,13 @@ export default function PanayMap({
                     showImpactBuffers={showImpactBuffers}
                     onToggleImpactBuffers={setShowImpactBuffers}
                   />
+
+                  {/* Regional Boundary Streaming Loader Skeleton */}
+                  {(isRegionChunkLoading || isLoadingRegion) && (
+                    <div className="absolute inset-0 z-[1050] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center animate-fade-in pointer-events-none">
+                      <MapLoadingSkeleton regionKey={currentRegionKey} />
+                    </div>
+                  )}
 
                   {/* Night Glow Fallback Notification Toast — positioned top-16 so it never collides with top-3 toolbar */}
                   {nightGlowMode && !hasRenderedFeatures && (
@@ -2226,11 +2234,42 @@ function LeafletMap({
     let epicLng: number | null = null;
 
     if (activeEvent) {
-      epicLat = activeEvent.latitude ?? activeEvent.coordinates?.[0] ?? null;
-      epicLng = activeEvent.longitude ?? activeEvent.coordinates?.[1] ?? null;
-    } else if (selectedGdacsAlert) {
-      epicLat = selectedGdacsAlert.latitude ?? selectedGdacsAlert.coordinates?.[0] ?? null;
-      epicLng = selectedGdacsAlert.longitude ?? selectedGdacsAlert.coordinates?.[1] ?? null;
+      if (activeEvent.latitude != null && activeEvent.longitude != null) {
+        epicLat = Number(activeEvent.latitude);
+        epicLng = Number(activeEvent.longitude);
+      } else if (Array.isArray(activeEvent.coordinates) && activeEvent.coordinates.length >= 2) {
+        const [c0, c1] = activeEvent.coordinates;
+        if (c0 >= 100 && c1 < 50) {
+          epicLng = Number(c0);
+          epicLat = Number(c1);
+        } else {
+          epicLat = Number(c0);
+          epicLng = Number(c1);
+        }
+      } else if (activeEvent.coordinates && typeof activeEvent.coordinates === 'object') {
+        epicLat = Number((activeEvent.coordinates as any).lat);
+        epicLng = Number((activeEvent.coordinates as any).lng);
+      }
+    }
+    if (epicLat == null || epicLng == null) {
+      if (selectedGdacsAlert) {
+        if (selectedGdacsAlert.latitude != null && selectedGdacsAlert.longitude != null) {
+          epicLat = Number(selectedGdacsAlert.latitude);
+          epicLng = Number(selectedGdacsAlert.longitude);
+        } else if (Array.isArray(selectedGdacsAlert.coordinates) && selectedGdacsAlert.coordinates.length >= 2) {
+          const [c0, c1] = selectedGdacsAlert.coordinates;
+          if (c0 >= 100 && c1 < 50) {
+            epicLng = Number(c0);
+            epicLat = Number(c1);
+          } else {
+            epicLat = Number(c0);
+            epicLng = Number(c1);
+          }
+        } else if (Array.isArray(selectedGdacsAlert.geometry?.coordinates) && selectedGdacsAlert.geometry.coordinates.length >= 2) {
+          epicLng = Number(selectedGdacsAlert.geometry.coordinates[0]);
+          epicLat = Number(selectedGdacsAlert.geometry.coordinates[1]);
+        }
+      }
     }
 
     if (epicLat != null && epicLng != null && !isNaN(epicLat) && !isNaN(epicLng)) {
@@ -2539,25 +2578,26 @@ function LeafletMap({
   };
 
   // Asynchronous coordinate-to-region loader for on-demand chunk retrieval
-  const loadRegionByCoordinates = async (lat: number, lng: number): Promise<boolean> => {
-    // Prevent reverse coordinate lookup from clobbering an explicitly selected sub-province or regional/island scope
+  const loadRegionByCoordinates = async (lat: number, lng: number, force: boolean = false): Promise<boolean> => {
+    // Prevent reverse coordinate lookup from clobbering an explicitly selected sub-province during passive panning
     const currentKey = activeChunkKeyRef.current;
-    if (currentKey && currentKey !== 'philippines' && currentKey !== 'nationwide' && currentKey !== 'all') {
+    if (!force && currentKey && currentKey !== 'philippines' && currentKey !== 'nationwide' && currentKey !== 'all') {
       return false;
     }
 
+    const targetKey = resolveRegionFromCoordinates(lat, lng);
     const chunk = findRegionByCoordinates(lat, lng);
-    if (!chunk) return false;
+    const resolvedKey = (targetKey && targetKey !== 'nationwide') ? targetKey : (chunk?.key || 'nationwide');
 
-    if (activeChunkKeyRef.current === chunk.key && geoJsonLayerRef.current) {
+    if (activeChunkKeyRef.current === resolvedKey && geoJsonLayerRef.current) {
       return true;
     }
 
-    const data = await fetchRegionChunk(chunk.key);
+    const data = await fetchRegionChunk(resolvedKey);
     if (data) {
-      activeChunkKeyRef.current = chunk.key;
-      onRegionChange?.(chunk.key);
-      renderRegionGeoJson(chunk.key, data);
+      activeChunkKeyRef.current = resolvedKey;
+      onRegionChange?.(resolvedKey);
+      renderRegionGeoJson(resolvedKey, data);
       checkViewportFeatures();
       return true;
     }
@@ -4063,14 +4103,18 @@ function LeafletMap({
           if (selectedRegionKey === 'philippines' || selectedRegionKey === 'nationwide') {
             activeRegionBoundsRef.current = L.latLngBounds(PHILIPPINES_BOUNDS);
             setCameraBounds(L.latLngBounds(PHILIPPINES_BOUNDS));
+            currentMap.flyToBounds(PHILIPPINES_BOUNDS, { duration: 1.5, padding: [40, 40] });
           } else if (selectedRegionKey === 'panay') {
             activeRegionBoundsRef.current = PANAY_BOUNDS;
             setCameraBounds(PANAY_BOUNDS);
+            currentMap.flyToBounds(PANAY_BOUNDS, { duration: 1.5, padding: [40, 40] });
           } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
             activeRegionBoundsRef.current = provinceBounds;
             setCameraBounds(provinceBounds);
+            currentMap.flyToBounds(provinceBounds, { duration: 1.5, padding: [40, 40] });
           } else if (preset) {
             setCameraTarget({ lat: preset.center[0], lng: preset.center[1], zoom: preset.zoom || 10 });
+            currentMap.flyTo(preset.center, preset.zoom || 10, { duration: 1.5 });
           }
         } else if (provinceBounds && provinceBounds.isValid && provinceBounds.isValid()) {
           activeRegionBoundsRef.current = provinceBounds;
@@ -4085,7 +4129,7 @@ function LeafletMap({
 
       setTimeout(() => {
         isProgrammaticMoveRef.current = false;
-      }, 1000);
+      }, 1800);
     });
 
     return () => {
@@ -4416,7 +4460,14 @@ function LeafletMap({
             },
           })
         );
-        const success = await loadRegionByCoordinates(lat, lng);
+        const targetRegion = alert.regionKey || resolveRegionFromCoordinates(lat, lng);
+        if (targetRegion && targetRegion !== activeChunkKeyRef.current) {
+          onRegionChange?.(targetRegion);
+        }
+        if (mapRef.current) {
+          mapRef.current.flyTo([lat, lng], 8, { animate: true, duration: 1.5 });
+        }
+        const success = await loadRegionByCoordinates(lat, lng, true);
         if (!success) {
           drawEpicenterBuffer(lat, lng);
         } else {
@@ -4460,7 +4511,7 @@ function LeafletMap({
 
       group.addLayer(marker);
     });
-  }, [gdacsAlerts, showGdacsMarkers, activeEventId, onSimulateGdacs]);
+  }, [gdacsAlerts, showGdacsMarkers, activeEventId, onSimulateGdacs, onRegionChange]);
 
   // Smoothly center/fly map to active hazard coordinates whenever active event updates
   useEffect(() => {
@@ -4473,17 +4524,43 @@ function LeafletMap({
     const matchingAlert = gdacsAlerts?.find(
       (a) => String(activeEventId) === String(a.id) || String(activeEventId) === `gdacs-${a.event_id}`
     );
-    const lat = matchingAlert?.latitude ?? activeEvent?.latitude;
-    const lng = matchingAlert?.longitude ?? activeEvent?.longitude;
-
-    if (lat != null && lng != null && mapRef.current) {
-      isProgrammaticMoveRef.current = true;
-      mapRef.current.flyTo([lat, lng], 8, { animate: true, duration: 0.8 });
-      setTimeout(() => {
-        isProgrammaticMoveRef.current = false;
-      }, 1200);
+    let lat = matchingAlert?.latitude ?? activeEvent?.latitude;
+    let lng = matchingAlert?.longitude ?? activeEvent?.longitude;
+    if ((lat == null || lng == null) && Array.isArray(activeEvent?.coordinates) && activeEvent.coordinates.length >= 2) {
+      const [c0, c1] = activeEvent.coordinates;
+      if (c0 >= 100 && c1 < 50) {
+        lng = Number(c0);
+        lat = Number(c1);
+      } else {
+        lat = Number(c0);
+        lng = Number(c1);
+      }
+    } else if ((lat == null || lng == null) && Array.isArray(matchingAlert?.coordinates) && matchingAlert.coordinates.length >= 2) {
+      const [c0, c1] = matchingAlert.coordinates;
+      if (c0 >= 100 && c1 < 50) {
+        lng = Number(c0);
+        lat = Number(c1);
+      } else {
+        lat = Number(c0);
+        lng = Number(c1);
+      }
     }
-  }, [activeEventId, isActiveTab]);
+
+    if (lat != null && lng != null) {
+      const targetRegion = activeEvent?.regionKey || matchingAlert?.regionKey || resolveRegionFromCoordinates(lat, lng);
+      if (targetRegion && targetRegion !== activeChunkKeyRef.current) {
+        onRegionChange?.(targetRegion);
+      }
+
+      if (mapRef.current) {
+        isProgrammaticMoveRef.current = true;
+        mapRef.current.flyTo([lat, lng], 8, { animate: true, duration: 1.5 });
+        setTimeout(() => {
+          isProgrammaticMoveRef.current = false;
+        }, 1800);
+      }
+    }
+  }, [activeEventId, isActiveTab, activeEvent, gdacsAlerts, onRegionChange]);
 
   return (
     <div
@@ -4518,8 +4595,26 @@ function LeafletMap({
               setSelectedGdacsAlert(null);
               return;
             }
-            const alertLat = alert.latitude ?? alert.coordinates?.[0];
-            const alertLng = alert.longitude ?? alert.coordinates?.[1];
+            let alertLat = alert.latitude != null ? Number(alert.latitude) : null;
+            let alertLng = alert.longitude != null ? Number(alert.longitude) : null;
+            if ((alertLat == null || alertLng == null) && Array.isArray(alert.coordinates) && alert.coordinates.length >= 2) {
+              const [c0, c1] = alert.coordinates;
+              if (c0 >= 100 && c1 < 50) {
+                alertLng = Number(c0);
+                alertLat = Number(c1);
+              } else {
+                alertLat = Number(c0);
+                alertLng = Number(c1);
+              }
+            } else if ((alertLat == null || alertLng == null) && Array.isArray(alert.geometry?.coordinates) && alert.geometry.coordinates.length >= 2) {
+              alertLng = Number(alert.geometry.coordinates[0]);
+              alertLat = Number(alert.geometry.coordinates[1]);
+            }
+
+            const targetRegion = alert.regionKey || (alertLat != null && alertLng != null ? resolveRegionFromCoordinates(alertLat, alertLng) : 'panay');
+            if (targetRegion && targetRegion !== activeChunkKeyRef.current) {
+              onRegionChange?.(targetRegion);
+            }
 
             // 1. Synchronously apply simulation styling to active layers immediately (0-delay 1-click response)
             activeEventRef.current = alert;
@@ -4542,7 +4637,10 @@ function LeafletMap({
 
             // 3. Coordinate mesh streaming for hazard region if coordinates are present
             if (alertLat != null && alertLng != null) {
-              const success = await loadRegionByCoordinates(alertLat, alertLng);
+              if (mapRef.current) {
+                mapRef.current.flyTo([alertLat, alertLng], 8, { duration: 1.5 });
+              }
+              const success = await loadRegionByCoordinates(alertLat, alertLng, true);
               if (!success) {
                 drawEpicenterBuffer(alertLat, alertLng);
               } else {

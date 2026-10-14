@@ -298,6 +298,7 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   bohol: { id: 'central_visayas', name: 'Bohol Province', center: [9.8500, 124.1435], zoom: 10, islandGroup: 'Visayas' },
   davao: { id: 'mindanao_south', name: 'Davao Region', center: [7.1907, 125.4504], zoom: 9, islandGroup: 'Mindanao' },
   philippines: { id: 'philippines', name: 'Nationwide (Philippines)', center: [12.8797, 121.7740], zoom: 6, islandGroup: 'Nationwide' },
+  nationwide: { id: 'philippines', name: 'Nationwide (Philippines)', center: [12.8797, 121.7740], zoom: 6, islandGroup: 'Nationwide' },
   ncr: { id: 'ncr', name: 'NCR (Metro Manila)', center: [14.5995, 121.0364], zoom: 11, islandGroup: 'Luzon' },
   car: { id: 'car', name: 'CAR (Cordillera)', center: [17.0754, 121.0028], zoom: 8, islandGroup: 'Luzon' },
   ilocos_cagayan: { id: 'ilocos_cagayan', name: 'Northern Luzon (Ilocos & Cagayan)', center: [17.2000, 121.1000], zoom: 7, islandGroup: 'Luzon' },
@@ -306,6 +307,7 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   central_luzon: { id: 'central_luzon', name: 'Region III (Central Luzon)', center: [15.4828, 120.7120], zoom: 8, islandGroup: 'Luzon' },
   r3: { id: 'central_luzon', name: 'Region III (Central Luzon)', center: [15.4828, 120.7120], zoom: 8, islandGroup: 'Luzon' },
   calabarzon_mimaropa: { id: 'calabarzon_mimaropa', name: 'Southern Tagalog & MIMAROPA', center: [13.8000, 121.1000], zoom: 8, islandGroup: 'Luzon' },
+  calabarzon: { id: 'calabarzon_mimaropa', name: 'Region IV-A (CALABARZON)', center: [14.1008, 121.0794], zoom: 8, islandGroup: 'Luzon' },
   ncr_southern_tagalog: { id: 'calabarzon_mimaropa', name: 'NCR & Southern Tagalog', center: [14.2000, 121.2000], zoom: 9, islandGroup: 'Luzon' },
   r4a: { id: 'calabarzon_mimaropa', name: 'Region IV-A (CALABARZON)', center: [14.1008, 121.0794], zoom: 8, islandGroup: 'Luzon' },
   r4b: { id: 'calabarzon_mimaropa', name: 'MIMAROPA (Region IV-B)', center: [12.0000, 120.0000], zoom: 7, islandGroup: 'Luzon' },
@@ -316,7 +318,7 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   central_visayas: { id: 'central_visayas', name: 'Central Visayas (Cebu / Bohol)', center: [10.1000, 123.9000], zoom: 9, islandGroup: 'Visayas' },
   cebu_bohol: { id: 'central_visayas', name: 'Central Visayas (Cebu / Bohol)', center: [10.1000, 123.9000], zoom: 9, islandGroup: 'Visayas' },
   r7: { id: 'central_visayas', name: 'Region VII (Central Visayas / Cebu)', center: [10.3157, 123.8854], zoom: 9, islandGroup: 'Visayas' },
-  eastern_visayas: { id: 'eastern_visayas', name: 'Region VIII (Eastern Visayas / Leyte)', center: [11.2443, 125.0039], zoom: 8, islandGroup: 'Visayas' },
+  eastern_visayas: { id: 'eastern_visayas', name: 'Eastern Visayas (Region VIII - Leyte, Samar)', center: [11.2443, 125.0039], zoom: 8, islandGroup: 'Visayas' },
   r8: { id: 'eastern_visayas', name: 'Region VIII (Eastern Visayas / Leyte)', center: [11.2443, 125.0039], zoom: 8, islandGroup: 'Visayas' },
   zamboanga_peninsula: { id: 'zamboanga_peninsula', name: 'Region IX (Zamboanga Peninsula)', center: [7.8385, 122.7560], zoom: 8, islandGroup: 'Mindanao' },
   r9: { id: 'zamboanga_peninsula', name: 'Region IX (Zamboanga Peninsula)', center: [7.8385, 122.7560], zoom: 8, islandGroup: 'Mindanao' },
@@ -328,6 +330,41 @@ export const REGION_PRESETS: Record<string, RegionPreset> = {
   r12: { id: 'mindanao_south', name: 'Region XII (SOCCSKSARGEN)', center: [6.5064, 124.8480], zoom: 8, islandGroup: 'Mindanao' },
   barmm: { id: 'barmm', name: 'BARMM (Bangsamoro)', center: [7.2047, 124.2384], zoom: 8, islandGroup: 'Mindanao' },
 };
+
+/**
+ * Coordinate-to-Region Boundary Resolver
+ * Maps hazard epicenter coordinates (latitude, longitude) to existing REGION_PRESETS keys.
+ */
+export function resolveRegionFromCoordinates(lat: number, lng: number): string {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) {
+    return 'nationwide';
+  }
+
+  // Metro Manila (NCR) - check tight metropolitan box first before broad CALABARZON
+  if (lat >= 14.35 && lat <= 14.80 && lng >= 120.90 && lng <= 121.15) return 'ncr';
+
+  // Eastern Visayas (Leyte, Samar - e.g. Yolanda)
+  if (lat >= 9.8 && lat <= 12.8 && lng >= 124.0 && lng <= 126.0) return 'eastern_visayas';
+
+  // Central Visayas / Negros / Cebu (e.g. Kanlaon) - check before Panay to capture Negros/Cebu correctly
+  if (lat >= 9.0 && lat <= 11.5 && lng >= 122.8 && lng <= 124.5) return 'central_visayas';
+
+  // Western Visayas / Panay Island (e.g. Kalmaegi, Panay Grid)
+  if (lat >= 10.4 && lat <= 12.3 && lng >= 121.8 && lng <= 123.3) return 'panay';
+
+  // CALABARZON / Southern Tagalog / Batangas (e.g. Taal)
+  if (lat >= 13.5 && lat <= 15.0 && lng >= 120.5 && lng <= 122.0) return 'calabarzon';
+
+  // Northern / Central Luzon
+  if (lat > 15.0 && lng >= 119.5 && lng <= 122.5) return 'central_luzon';
+
+  // Fallback to finer-grained bounding box search if candidate matches
+  const candidate = findRegionByCoordinates(lat, lng);
+  if (candidate) return candidate.key;
+
+  // Default fallback if outside specific bounding boxes
+  return 'nationwide';
+}
 
 /**
  * Coordinate-to-region resolver: maps point latitude/longitude to the most fitting regional chunk.

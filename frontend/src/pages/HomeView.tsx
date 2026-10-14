@@ -164,7 +164,7 @@ export default function HomeView({
         </div>
 
         {/* ========================================================================= */}
-        {/* SLIM ENVIRONMENTAL RIBBON (Weather + Live GDACS Ticker)                  */}
+        {/* SLIM ENVIRONMENTAL RIBBON (Weather + GDACS Ticker)                        */}
         {/* ========================================================================= */}
         <div className="relative z-10 w-full">
           <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 p-2.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl shadow-xs">
@@ -177,7 +177,7 @@ export default function HomeView({
               />
             </div>
 
-            {/* Right: Live GDACS Hazard Alert Banner */}
+            {/* Right: GDACS Hazard Alert Banner */}
             <div className="flex-1 min-w-0 border-t xl:border-t-0 xl:border-l border-slate-200/80 dark:border-slate-800/80 pt-2 xl:pt-0 xl:pl-3">
               <GdacsAlertBanner
                 alerts={gdacsAlerts}
@@ -189,6 +189,7 @@ export default function HomeView({
                 importedEventIds={importedEventIds}
                 onSelectEvent={onSelectEvent}
                 events={events}
+                onNavigateTab={onNavigateTab}
               />
             </div>
           </div>

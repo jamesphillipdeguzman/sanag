@@ -383,6 +383,50 @@ def resolve_incident_scope(
             return str(active_event["epicenterProvince"]).strip().lower()
     return current_region_key or "panay"
 
+def resolve_region_from_coordinates(lat: Any, lng: Any) -> str:
+    """
+    Coordinate-to-Region Boundary Resolver
+    Maps hazard epicenter coordinates (latitude, longitude) to existing REGION_PRESETS keys:
+    - Eastern Visayas (Leyte, Samar - e.g. Yolanda): lat 9.8..12.8, lng 124.0..126.0 -> 'eastern_visayas'
+    - Western Visayas / Panay Island (e.g. Kalmaegi): lat 10.4..12.3, lng 121.8..123.3 -> 'panay'
+    - Central Visayas / Negros / Cebu (e.g. Kanlaon): lat 9.0..11.5, lng 122.8..124.5 -> 'central_visayas'
+    - CALABARZON / Southern Tagalog / Batangas (e.g. Taal): lat 13.5..15.0, lng 120.5..122.0 -> 'calabarzon'
+    - Metro Manila (NCR): lat 14.35..14.80, lng 120.90..121.15 -> 'ncr'
+    - Northern / Central Luzon: lat > 15.0, lng 119.5..122.5 -> 'central_luzon'
+    - Default fallback: 'nationwide'
+    """
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return "nationwide"
+
+    # Metro Manila (NCR) - check tight metropolitan box first before broad CALABARZON
+    if 14.35 <= lat_f <= 14.80 and 120.90 <= lng_f <= 121.15:
+        return "ncr"
+
+    # Eastern Visayas (Leyte, Samar - e.g. Yolanda)
+    if 9.8 <= lat_f <= 12.8 and 124.0 <= lng_f <= 126.0:
+        return "eastern_visayas"
+
+    # Central Visayas / Negros / Cebu (e.g. Kanlaon) - check before Panay to capture Negros/Cebu correctly
+    if 9.0 <= lat_f <= 11.5 and 122.8 <= lng_f <= 124.5:
+        return "central_visayas"
+
+    # Western Visayas / Panay Island (e.g. Kalmaegi, Panay Grid)
+    if 10.4 <= lat_f <= 12.3 and 121.8 <= lng_f <= 123.3:
+        return "panay"
+
+    # CALABARZON / Southern Tagalog / Batangas (e.g. Taal)
+    if 13.5 <= lat_f <= 15.0 and 120.5 <= lng_f <= 122.0:
+        return "calabarzon"
+
+    # Northern / Central Luzon
+    if lat_f > 15.0 and 119.5 <= lng_f <= 122.5:
+        return "central_luzon"
+
+    return "nationwide"
+
 def filter_scoped_municipalities(
     municipalities: Sequence[Dict[str, Any]],
     selected_region_key: Optional[str] = "panay"

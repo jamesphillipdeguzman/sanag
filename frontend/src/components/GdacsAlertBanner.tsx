@@ -26,6 +26,7 @@ interface GdacsAlertBannerProps {
   importedEventIds?: Set<string>;
   onSelectEvent?: (id: string) => void;
   events?: DisasterEvent[];
+  onNavigateTab?: (tab: string) => void;
 }
 
 export default function GdacsAlertBanner({
@@ -38,6 +39,7 @@ export default function GdacsAlertBanner({
   importedEventIds = new Set(),
   onSelectEvent,
   events = [],
+  onNavigateTab,
 }: GdacsAlertBannerProps) {
   const getHazardIcon = (type: string, name: string) => {
     const t = (type || '').toUpperCase();
@@ -68,12 +70,17 @@ export default function GdacsAlertBanner({
     return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
   };
 
-  // Duplicate alerts to create a smooth, seamless CSS marquee loop
+  // Sort descending by date and duplicate alerts to create a smooth, seamless CSS marquee loop
   const displayAlerts = useMemo(() => {
     if (!alerts || alerts.length === 0) return [];
-    let list = [...alerts];
+    const sorted = [...alerts].sort((a, b) => {
+      const timeA = new Date(a.date || a.fromdate || a.startDate || a.pubDate || 0).getTime() || 0;
+      const timeB = new Date(b.date || b.fromdate || b.startDate || b.pubDate || 0).getTime() || 0;
+      return timeB - timeA;
+    });
+    let list = [...sorted];
     while (list.length < 5) {
-      list = [...list, ...alerts];
+      list = [...list, ...sorted];
     }
     return [...list, ...list];
   }, [alerts]);
@@ -81,7 +88,7 @@ export default function GdacsAlertBanner({
   return (
     <div 
       className="relative rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-slate-950/70 backdrop-blur-md overflow-hidden shadow-xs dark:shadow-sm transition-all"
-      title="Live GDACS Hazard Telemetry — Hover to pause scrolling"
+      title="GDACS Alert Telemetry — Hover to pause scrolling"
     >
       <div className="flex items-center h-9 sm:h-10 px-2 sm:px-3 text-xs">
         {/* Fixed Left Telemetry Anchor */}
@@ -107,7 +114,7 @@ export default function GdacsAlertBanner({
           {isLoading && alerts.length === 0 ? (
             <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 px-4">
               <Loader2 className="h-3 w-3 animate-spin text-ocean-600 dark:text-ocean-400" />
-              <span>Connecting to live GDACS disaster alert telemetry...</span>
+              <span>Connecting to GDACS disaster alert telemetry...</span>
             </div>
           ) : alerts.length === 0 ? (
             <div className="text-[11px] text-slate-500 dark:text-ink-400 px-4 italic">
@@ -154,11 +161,16 @@ export default function GdacsAlertBanner({
                 const viirsAvailable = alert.viirs_data_available ?? false;
 
                 const handleTileClick = () => {
-                  if (isActive) return;
+                  if (isActive) {
+                    onNavigateTab?.('map');
+                    return;
+                  }
                   if (isImported || matchingEvent) {
                     onSelectEvent?.(resolvedEventId);
-                  } else if (viirsAvailable && onImport) {
+                    onNavigateTab?.('map');
+                  } else if (onImport) {
                     onImport(alert);
+                    onNavigateTab?.('map');
                   }
                 };
 
@@ -232,6 +244,7 @@ export default function GdacsAlertBanner({
                           onClick={(e) => {
                             e.stopPropagation();
                             onSelectEvent?.(resolvedEventId);
+                            onNavigateTab?.('map');
                           }}
                           className="inline-flex items-center gap-1 text-[10px] font-medium text-ocean-700 hover:text-ocean-900 bg-ocean-50 hover:bg-ocean-100 border border-ocean-200 dark:text-ocean-300 dark:hover:text-white dark:bg-ocean-500/15 dark:hover:bg-ocean-500/30 dark:border-ocean-500/30 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
                           title="View simulation on grid"
@@ -245,6 +258,7 @@ export default function GdacsAlertBanner({
                           onClick={(e) => {
                             e.stopPropagation();
                             onImport?.(alert);
+                            onNavigateTab?.('map');
                           }}
                           disabled={isImporting}
                           className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-ocean-600 hover:bg-ocean-500 border border-ocean-400/40 px-2 py-0.5 rounded shadow-xs hover:shadow-ocean-500/20 cursor-pointer transition-all disabled:opacity-50"
@@ -311,7 +325,7 @@ export default function GdacsAlertBanner({
               onClick={onRefresh}
               disabled={isLoading}
               className="flex items-center gap-1 text-[10px] text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-slate-100 hover:bg-slate-200 dark:text-ink-300 dark:hover:text-white dark:border-white/10 dark:hover:border-white/20 dark:bg-white/5 dark:hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors disabled:opacity-40 cursor-pointer"
-              title="Sync live GDACS feed"
+              title="Sync GDACS feed"
             >
               <RefreshCw className={`h-2.5 w-2.5 ${isLoading ? 'animate-spin text-ocean-500 dark:text-ocean-400' : ''}`} />
               <span className="hidden sm:inline">Sync</span>
